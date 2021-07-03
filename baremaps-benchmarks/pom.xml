@@ -13,7 +13,7 @@
   </parent>
 
   <properties>
-    <jmh.version>1.30</jmh.version>
+    <jmh.version>1.32</jmh.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <uberjar.name>benchmarks</uberjar.name>
   </properties>
