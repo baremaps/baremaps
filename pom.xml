@@ -66,7 +66,7 @@
     <version.lib.picocli>4.5.2</version.lib.picocli>
     <version.lib.postgresql>42.2.19</version.lib.postgresql>
     <version.lib.proj4j>1.1.2</version.lib.proj4j>
-    <version.lib.protobuf>3.16.0</version.lib.protobuf>
+    <version.lib.protobuf>3.17.3</version.lib.protobuf>
     <version.lib.s3mock>2.1.28</version.lib.s3mock>
     <version.lib.selenium>3.141.59</version.lib.selenium>
     <version.lib.servicetalk>0.40.1</version.lib.servicetalk>
