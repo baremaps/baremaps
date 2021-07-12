@@ -87,6 +87,7 @@
     <sonar.organization>baremaps</sonar.organization>
     <sonar.projectKey>baremaps_baremaps</sonar.projectKey>
     <sonar.moduleKey>${project.groupId}:${project.artifactId}</sonar.moduleKey>
+    <version.lib.junit-vintage>5.7.2</version.lib.junit-vintage>
   </properties>
 
   <modules>
@@ -456,7 +457,17 @@
       </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-core</artifactId>
+        <version>${version.lib.jackson}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
+        <version>${version.lib.jackson}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-annotations</artifactId>
         <version>${version.lib.jackson}</version>
       </dependency>
       <dependency>
@@ -500,21 +511,6 @@
         <version>${version.lib.servicetalk}</version>
       </dependency>
       <dependency>
-        <groupId>org.glassfish.jersey.media</groupId>
-        <artifactId>jersey-media-multipart</artifactId>
-        <version>${version.lib.jersey}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.glassfish.jersey.inject</groupId>
-        <artifactId>jersey-hk2</artifactId>
-        <version>${version.lib.jersey}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.glassfish.jersey.media</groupId>
-        <artifactId>jersey-media-sse</artifactId>
-        <version>${version.lib.jersey}</version>
-      </dependency>
-      <dependency>
         <groupId>io.swagger</groupId>
         <artifactId>swagger-annotations</artifactId>
         <version>${version.lib.swagger}</version>
@@ -535,6 +531,11 @@
         <groupId>com.github.jsqlparser</groupId>
         <artifactId>jsqlparser</artifactId>
         <version>${version.lib.jsqlparser}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.googlecode.json-simple</groupId>
+        <artifactId>json-simple</artifactId>
+        <version>1.1.1</version>
       </dependency>
 
       <!-- Logging libraries -->
@@ -558,6 +559,14 @@
         <artifactId>log4j-core</artifactId>
         <version>${version.lib.log4j}</version>
       </dependency>
+      <dependency>
+        <groupId>org.glassfish.jersey</groupId>
+        <artifactId>jersey-bom</artifactId>
+        <version>${version.lib.jersey}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
 
       <!-- Testing libraries -->
       <dependency>
@@ -578,6 +587,7 @@
         <scope>test</scope>
         <version>${version.lib.junit}</version>
       </dependency>
+
       <dependency>
         <artifactId>selenium-java</artifactId>
         <groupId>org.seleniumhq.selenium</groupId>
@@ -634,6 +644,12 @@
         <groupId>com.fasterxml.jackson.dataformat</groupId>
         <artifactId>jackson-dataformat-xml</artifactId>
         <version>${version.lib.jackson}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.glassfish.jersey.test-framework.providers</groupId>
+        <artifactId>jersey-test-framework-provider-inmemory</artifactId>
+        <version>${version.lib.jersey}</version>
         <scope>test</scope>
       </dependency>
     </dependencies>
