@@ -79,49 +79,49 @@ limitations under the License.
     <sonar.moduleKey>${project.groupId}:${project.artifactId}</sonar.moduleKey>
     <sonar.organization>apache</sonar.organization>
     <sonar.projectKey>apache_baremaps</sonar.projectKey>
-    <version.lib.armeria>1.32.5</version.lib.armeria>
+    <version.lib.armeria>1.41.0</version.lib.armeria>
     <version.lib.awaitility>4.3.0</version.lib.awaitility>
-    <version.lib.awssdk>2.31.47</version.lib.awssdk>
-    <version.lib.brotli4j>1.18.0</version.lib.brotli4j>
-    <version.lib.caffeine>3.2.0</version.lib.caffeine>
-    <version.lib.calcite>1.39.0</version.lib.calcite>
-    <version.lib.commons-compress>1.27.1</version.lib.commons-compress>
-    <version.lib.fastutil>8.5.15</version.lib.fastutil>
+    <version.lib.awssdk>2.54.6</version.lib.awssdk>
+    <version.lib.brotli4j>1.23.0</version.lib.brotli4j>
+    <version.lib.caffeine>3.2.4</version.lib.caffeine>
+    <version.lib.calcite>1.42.0</version.lib.calcite>
+    <version.lib.commons-compress>1.28.0</version.lib.commons-compress>
+    <version.lib.fastutil>8.5.19</version.lib.fastutil>
     <version.lib.flatgeobuf>3.27.1</version.lib.flatgeobuf>
     <version.lib.geopackage>6.6.5</version.lib.geopackage>
-    <version.lib.graalvm>23.0.8</version.lib.graalvm>
-    <version.lib.guava>33.4.8-jre</version.lib.guava>
-    <version.lib.hadoop>3.4.1</version.lib.hadoop>
-    <version.lib.hikari>6.3.0</version.lib.hikari>
+    <version.lib.graalvm>25.0.2</version.lib.graalvm>
+    <version.lib.guava>33.7.1-jre</version.lib.guava>
+    <version.lib.hadoop>3.5.0</version.lib.hadoop>
+    <version.lib.hikari>7.1.0</version.lib.hikari>
     <version.lib.ipresource>1.52</version.lib.ipresource>
-    <version.lib.jackson>2.19.0</version.lib.jackson>
+    <version.lib.jackson>2.22.2</version.lib.jackson>
     <version.lib.jts>1.20.0</version.lib.jts>
     <version.lib.junit>5.12.2</version.lib.junit>
     <version.lib.log4j>3.0.0-beta2</version.lib.log4j>
     <version.lib.lucene>9.12.1</version.lib.lucene>
-    <version.lib.parquet>1.15.2</version.lib.parquet>
+    <version.lib.parquet>1.18.0</version.lib.parquet>
     <version.lib.pgbulkinsert>8.1.5</version.lib.pgbulkinsert>
     <version.lib.picocli>4.7.7</version.lib.picocli>
-    <version.lib.postgresql>42.7.5</version.lib.postgresql>
-    <version.lib.proj4j>1.4.0</version.lib.proj4j>
-    <version.lib.protobuf>4.31.0</version.lib.protobuf>
-    <version.lib.roaringbitmap>1.3.0</version.lib.roaringbitmap>
-    <version.lib.sis>1.4</version.lib.sis>
+    <version.lib.postgresql>42.7.13</version.lib.postgresql>
+    <version.lib.proj4j>1.4.3</version.lib.proj4j>
+    <version.lib.protobuf>4.36.0</version.lib.protobuf>
+    <version.lib.roaringbitmap>1.6.20</version.lib.roaringbitmap>
+    <version.lib.sis>1.6</version.lib.sis>
     <version.lib.slf4j>2.0.17</version.lib.slf4j>
-    <version.lib.sqlite>3.50.3.0</version.lib.sqlite>
-    <version.lib.testcontainers>1.21.0</version.lib.testcontainers>
-    <version.plugin.jacoco-maven-plugin>0.8.11</version.plugin.jacoco-maven-plugin>
+    <version.lib.sqlite>3.53.4.0</version.lib.sqlite>
+    <version.lib.testcontainers>1.21.4</version.lib.testcontainers>
+    <version.plugin.jacoco-maven-plugin>0.8.15</version.plugin.jacoco-maven-plugin>
     <version.plugin.jib-maven-plugin>3.0.0</version.plugin.jib-maven-plugin>
-    <version.plugin.maven-compiler-plugin>3.14.0</version.plugin.maven-compiler-plugin>
+    <version.plugin.maven-compiler-plugin>3.15.0</version.plugin.maven-compiler-plugin>
     <version.plugin.maven-exec-plugin>3.0.0</version.plugin.maven-exec-plugin>
-    <version.plugin.maven-gpg-plugin>1.6</version.plugin.maven-gpg-plugin>
-    <version.plugin.maven-jar-plugin>3.4.2</version.plugin.maven-jar-plugin>
-    <version.plugin.maven-javadoc-plugin>3.11.2</version.plugin.maven-javadoc-plugin>
-    <version.plugin.maven-jxr-plugin>3.3.1</version.plugin.maven-jxr-plugin>
-    <version.plugin.maven-release-plugin>3.1.1</version.plugin.maven-release-plugin>
+    <version.plugin.maven-gpg-plugin>3.2.8</version.plugin.maven-gpg-plugin>
+    <version.plugin.maven-jar-plugin>3.5.1</version.plugin.maven-jar-plugin>
+    <version.plugin.maven-javadoc-plugin>3.12.0</version.plugin.maven-javadoc-plugin>
+    <version.plugin.maven-jxr-plugin>3.6.0</version.plugin.maven-jxr-plugin>
+    <version.plugin.maven-release-plugin>3.3.1</version.plugin.maven-release-plugin>
     <version.plugin.maven-scm-plugin>1.11.2</version.plugin.maven-scm-plugin>
-    <version.plugin.maven-source-plugin>3.3.1</version.plugin.maven-source-plugin>
-    <version.plugin.maven-surefire-plugin>3.2.1</version.plugin.maven-surefire-plugin>
+    <version.plugin.maven-source-plugin>3.4.0</version.plugin.maven-source-plugin>
+    <version.plugin.maven-surefire-plugin>3.5.4</version.plugin.maven-surefire-plugin>
     <version.plugin.maven-surefire-plugin.provider.junit>1.3.2</version.plugin.maven-surefire-plugin.provider.junit>
     <version.plugin.nexus-staging-maven-plugin>1.6.13</version.plugin.nexus-staging-maven-plugin>
     <version.plugin.os-maven-plugin>1.7.0</version.plugin.os-maven-plugin>
@@ -162,35 +162,16 @@ limitations under the License.
         <version>${version.lib.brotli4j}</version>
       </dependency>
       <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-annotations</artifactId>
+        <groupId>com.fasterxml.jackson</groupId>
+        <artifactId>jackson-bom</artifactId>
         <version>${version.lib.jackson}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-core</artifactId>
-        <version>${version.lib.jackson}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-databind</artifactId>
-        <version>${version.lib.jackson}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.fasterxml.jackson.dataformat</groupId>
-        <artifactId>jackson-dataformat-csv</artifactId>
-        <version>${version.lib.jackson}</version>
+        <type>pom</type>
+        <scope>import</scope>
       </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.dataformat</groupId>
         <artifactId>jackson-dataformat-xml</artifactId>
-        <version>${version.lib.jackson}</version>
         <scope>test</scope>
-      </dependency>
-      <dependency>
-        <groupId>com.fasterxml.jackson.dataformat</groupId>
-        <artifactId>jackson-dataformat-yaml</artifactId>
-        <version>${version.lib.jackson}</version>
       </dependency>
       <dependency>
         <groupId>com.github.ben-manes.caffeine</groupId>
@@ -439,18 +420,14 @@ limitations under the License.
         <scope>test</scope>
       </dependency>
       <dependency>
-        <groupId>org.graalvm.js</groupId>
+        <groupId>org.graalvm.polyglot</groupId>
         <artifactId>js</artifactId>
         <version>${version.lib.graalvm}</version>
+        <type>pom</type>
       </dependency>
       <dependency>
-        <groupId>org.graalvm.js</groupId>
-        <artifactId>js-scriptengine</artifactId>
-        <version>${version.lib.graalvm}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.graalvm.sdk</groupId>
-        <artifactId>graal-sdk</artifactId>
+        <groupId>org.graalvm.polyglot</groupId>
+        <artifactId>polyglot</artifactId>
         <version>${version.lib.graalvm}</version>
       </dependency>
       <dependency>
@@ -714,7 +691,7 @@ limitations under the License.
       <plugin>
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
-        <version>0.16.1</version>
+        <version>0.18</version>
         <configuration>
           <excludeSubProjects>false</excludeSubProjects>
           <excludes>
