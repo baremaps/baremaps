@@ -3,7 +3,7 @@
 Baremaps is a toolkit for creating custom vector tiles from OpenStreetMap
 and other data sources with Postgis and Java.
 
-In order to build Baremaps from source, you first need to install Java 17 and Maven 3.8.1.
+In order to build Baremaps from source, you first need to install Java 25 and Maven 3.9.
 Then, from this directory, you can build Baremaps with the following command:
 
     $ mvn clean install

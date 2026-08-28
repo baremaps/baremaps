@@ -53,7 +53,7 @@ corrected!
 
 ## Development Environment
 
-Baremaps is developed and tested with Java 17, Maven 3.6, Postgres 13 and Postgis 3.
+Baremaps is developed and tested with Java 25, Maven 3.9, PostgreSQL 18 and PostGIS 3.6.
 
 The repository contains several sets of directories with code:
 The source code of Baremaps is organized in modules:
@@ -81,7 +81,7 @@ The following commands can be used to run all the tests:
 mvn test
 ``` 
 
-Given a local and properly configured install of Postgres, the following command can be used to run the integration tests.
+The integration tests rely on [Testcontainers](https://testcontainers.com/) to start a PostgreSQL/PostGIS database in a Docker container (`imresamu/postgis:18-3.6`, a multi-arch image that runs natively on both x86_64 and ARM machines such as Apple Silicon Macs). Given a running Docker daemon, the following command can be used to run the integration tests.
 
 ```bash
 mvn install -P integration

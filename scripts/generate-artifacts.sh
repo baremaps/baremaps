@@ -23,11 +23,11 @@ read -s GPG_PASSPHRASE
 # Extract the current version with Maven
 version=$(./mvnw -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive exec:exec)
 
-# Clean and install the project with java 17 in a docker container
+# Clean and install the project with java 25 in a docker container
 docker run \
   -v $(pwd):/baremaps \
   -w /baremaps \
-  eclipse-temurin:17-jdk \
+  eclipse-temurin:25-jdk \
   ./mvnw clean install -DskipTests
 
 # Go to the target directory

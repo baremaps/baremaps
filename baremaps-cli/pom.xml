@@ -70,7 +70,7 @@ limitations under the License.
         <version>${version.plugin.jib-maven-plugin}</version>
         <configuration>
           <from>
-            <image>eclipse-temurin:17</image>
+            <image>eclipse-temurin:25</image>
           </from>
           <to>
             <image>registry.hub.docker.com/baremaps/baremaps</image>
