@@ -62,6 +62,14 @@ limitations under the License.
     <url>scm:git:git@github.com:baremaps/baremaps.git</url>
   </scm>
 
+  <distributionManagement>
+    <repository>
+      <id>github</id>
+      <name>GitHub Packages</name>
+      <url>https://maven.pkg.github.com/baremaps/baremaps</url>
+    </repository>
+  </distributionManagement>
+
   <properties>
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.outputTimestamp>2025-02-26T10:10:41Z</project.build.outputTimestamp>
@@ -105,16 +113,12 @@ limitations under the License.
     <version.plugin.jib-maven-plugin>3.0.0</version.plugin.jib-maven-plugin>
     <version.plugin.maven-compiler-plugin>3.15.0</version.plugin.maven-compiler-plugin>
     <version.plugin.maven-exec-plugin>3.0.0</version.plugin.maven-exec-plugin>
-    <version.plugin.maven-gpg-plugin>3.2.8</version.plugin.maven-gpg-plugin>
     <version.plugin.maven-jar-plugin>3.5.1</version.plugin.maven-jar-plugin>
     <version.plugin.maven-javadoc-plugin>3.12.0</version.plugin.maven-javadoc-plugin>
     <version.plugin.maven-jxr-plugin>3.6.0</version.plugin.maven-jxr-plugin>
-    <version.plugin.maven-release-plugin>3.3.1</version.plugin.maven-release-plugin>
-    <version.plugin.maven-scm-plugin>1.11.2</version.plugin.maven-scm-plugin>
     <version.plugin.maven-source-plugin>3.4.0</version.plugin.maven-source-plugin>
     <version.plugin.maven-surefire-plugin>3.5.4</version.plugin.maven-surefire-plugin>
     <version.plugin.maven-surefire-plugin.provider.junit>1.3.2</version.plugin.maven-surefire-plugin.provider.junit>
-    <version.plugin.nexus-staging-maven-plugin>1.6.13</version.plugin.nexus-staging-maven-plugin>
     <version.plugin.os-maven-plugin>1.7.0</version.plugin.os-maven-plugin>
     <version.plugin.protobuf-maven-plugin>0.6.1</version.plugin.protobuf-maven-plugin>
     <version.plugin.spotless-maven-plugin>2.43.0</version.plugin.spotless-maven-plugin>
@@ -783,26 +787,6 @@ limitations under the License.
         <plugins>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-gpg-plugin</artifactId>
-            <version>${version.plugin.maven-gpg-plugin}</version>
-            <executions>
-              <execution>
-                <id>sign-artifacts</id>
-                <goals>
-                  <goal>sign</goal>
-                </goals>
-                <phase>verify</phase>
-                <configuration>
-                  <gpgArguments>
-                    <arg>--pinentry-mode</arg>
-                    <arg>loopback</arg>
-                  </gpgArguments>
-                </configuration>
-              </execution>
-            </executions>
-          </plugin>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-javadoc-plugin</artifactId>
             <version>${version.plugin.maven-javadoc-plugin}</version>
             <configuration>
@@ -816,18 +800,6 @@ limitations under the License.
                 </goals>
               </execution>
             </executions>
-          </plugin>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-release-plugin</artifactId>
-            <version>${version.plugin.maven-release-plugin}</version>
-            <dependencies>
-              <dependency>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-scm-plugin</artifactId>
-                <version>${version.plugin.maven-scm-plugin}</version>
-              </dependency>
-            </dependencies>
           </plugin>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>

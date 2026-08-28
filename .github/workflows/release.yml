@@ -3,11 +3,16 @@ name: Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+  packages: write
 
 jobs:
-  publish-candidate:
-    name: Publish candidate
+  release:
+    name: Release
     runs-on: ubuntu-latest
     steps:
 
@@ -15,52 +20,43 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Java 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: 17
           distribution: temurin
           cache: maven
-          server-username: NEXUS_USER
-          server-password: NEXUS_PW
-          gpg-private-key: ${{ secrets.BAREMAPS_GPG_SECRET_KEY }}
+          server-id: github
 
       - name: Extract variables
         id: variables
         run: |
-          echo "git_tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          echo "git_version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-          echo "mvn_version=$(mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive exec:exec)" >> $GITHUB_OUTPUT
+          git_tag="${GITHUB_REF#refs/tags/}"
+          echo "git_tag=$git_tag" >> $GITHUB_OUTPUT
+          echo "git_version=${git_tag#v}" >> $GITHUB_OUTPUT
+          if [[ "$git_tag" == *-* ]]; then
+            echo "prerelease=--prerelease" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Build release candidate
-        run: mvn install -DskipTests -Dmaven.javadoc.skip=true -B -V
+      - name: Set the project version from the tag
+        run: ./mvnw -B versions:set -DnewVersion=${{ steps.variables.outputs.git_version }} -DgenerateBackupPoms=false
 
-      - name: Set up GPG
-        run: |
-          echo "${{ secrets.BAREMAPS_GPG_SECRET_KEY }}" | gpg --batch --import
-          gpg --list-keys
+      - name: Build and publish Maven artifacts to GitHub Packages
         env:
-          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./mvnw -B -V deploy -Prelease -DskipTests
 
-      - name: Sign and hash release candidate
+      - name: Hash the archives
+        working-directory: ./baremaps-cli/target
         run: |
-          cd ./baremaps-cli/target
-          mv baremaps-${{ steps.variables.outputs.mvn_version }}-src.tar.gz baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz
-          shasum -a 512 "./baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz" > "./baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz.sha512"
-          gpg --no-tty --quiet --pinentry-mode loopback --default-key "${{ secrets.GPG_KEY_ID }}" --batch --yes --output "./baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz.asc" --detach-sign --armor "./baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz"
-          mv baremaps-${{ steps.variables.outputs.mvn_version }}-bin.tar.gz baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz
-          shasum -a 512 "./baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz" > "./baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz.sha512"
-          gpg --no-tty --quiet --pinentry-mode loopback --default-key "${{ secrets.GPG_KEY_ID }}" --batch --yes --output "./baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz.asc" --detach-sign --armor "./baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz"
-          cd -
+          for kind in src bin; do
+            shasum -a 512 "baremaps-${{ steps.variables.outputs.git_version }}-$kind.tar.gz" > "baremaps-${{ steps.variables.outputs.git_version }}-$kind.tar.gz.sha512"
+          done
 
-      - name: Publish release candidate on GitHub
+      - name: Draft the release on GitHub
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ steps.variables.outputs.git_tag }}" --draft --prerelease --title "Baremaps ${{ steps.variables.outputs.git_version }}" --repo ${{ github.repository }} --generate-notes
-          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz
-          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz.sha512
-          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz.asc
-          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz
-          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz.sha512
-          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz.asc
-
+          gh release create "${{ steps.variables.outputs.git_tag }}" --draft ${{ steps.variables.outputs.prerelease }} --title "Baremaps ${{ steps.variables.outputs.git_version }}" --repo ${{ github.repository }} --generate-notes
+          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-*.tar.gz*
