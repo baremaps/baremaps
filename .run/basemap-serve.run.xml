@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="basemap-serve" type="Application" factoryName="Application">
-    <option name="MAIN_CLASS_NAME" value="org.apache.baremaps.cli.Baremaps" />
+    <option name="MAIN_CLASS_NAME" value="com.baremaps.cli.Baremaps" />
     <module name="baremaps-cli" />
     <option name="PROGRAM_PARAMETERS" value="map serve --tileset tileset.js --style style.js --log-level DEBUG" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/basemap" />

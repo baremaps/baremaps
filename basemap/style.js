@@ -1,8 +1,5 @@
 /**
- Licensed to the Apache Software Foundation (ASF) under one or more
- contributor license agreements.  See the NOTICE file distributed with
- this work for additional information regarding copyright ownership.
- The ASF licenses this file to you under the Apache License, Version 2.0
+ Licensed under the Apache License, Version 2.0
  (the "License"); you may not use this file except in compliance with
  the License.  You may obtain a copy of the License at
 
@@ -79,8 +76,8 @@ export default {
             "url": `${config.host}/tiles.json`
         }
     },
-    "sprite": "https://baremaps.apache.org/assets/icons/icons",
-    "glyphs": "https://baremaps.apache.org/assets/fonts/{fontstack}/{range}.pbf",
+    "sprite": "https://baremaps.com/assets/icons/icons",
+    "glyphs": "https://baremaps.com/assets/fonts/{fontstack}/{range}.pbf",
     "layers": [
         background,
         power_background,

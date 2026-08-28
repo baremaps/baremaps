@@ -202,11 +202,11 @@
 
    SOURCE CODE VERSION:
 
-   This product bundles the source code of Apache Baremaps v${project.version}.
+   This product bundles the source code of Baremaps v${project.version}.
 
    THIRD PARTY LICENSES:
 
-   Code and data produced outside the ASF that is included in the
+   Code and data produced outside this project that are included in the
    distribution of this product is subject to the following
    additional license terms.
 

@@ -19,7 +19,7 @@ SOFTWARE.
 syntax = "proto2";
 
 option optimize_for = SPEED;
-option java_package = "org.apache.baremaps.osm.binary";
+option java_package = "com.baremaps.osm.binary";
 package OSMPBF;
 
 //protoc --java_out=../.. fileformat.proto

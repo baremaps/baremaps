@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="basemap-dem" type="Application" factoryName="Application">
-    <option name="MAIN_CLASS_NAME" value="org.apache.baremaps.cli.Baremaps" />
+    <option name="MAIN_CLASS_NAME" value="com.baremaps.cli.Baremaps" />
     <module name="baremaps-cli" />
     <option name="PROGRAM_PARAMETERS" value="dem serve --path $USER_HOME$/Downloads/gebco_2024.tif" />
     <projectPathOnTarget name="projectPathOnTarget" value="/app" />

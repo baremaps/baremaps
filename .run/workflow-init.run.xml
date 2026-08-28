@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="workflow-init" type="Application" factoryName="Application">
-    <option name="MAIN_CLASS_NAME" value="org.apache.baremaps.cli.Baremaps" />
+    <option name="MAIN_CLASS_NAME" value="com.baremaps.cli.Baremaps" />
     <module name="baremaps-cli" />
     <option name="PROGRAM_PARAMETERS" value="workflow init --file sample-workflow.json" />
     <method v="2">

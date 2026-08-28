@@ -44,31 +44,23 @@ jobs:
       - name: Sign and hash release candidate
         run: |
           cd ./baremaps-cli/target
-          mv apache-baremaps-${{ steps.variables.outputs.mvn_version }}-incubating-src.tar.gz apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-src.tar.gz
-          shasum -a 512 "./apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-src.tar.gz" > "./apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-src.tar.gz.sha512"
-          gpg --no-tty --quiet --pinentry-mode loopback --default-key "${{ secrets.GPG_KEY_ID }}" --batch --yes --output "./apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-src.tar.gz.asc" --detach-sign --armor "./apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-src.tar.gz"
-          mv apache-baremaps-${{ steps.variables.outputs.mvn_version }}-incubating-bin.tar.gz apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-bin.tar.gz
-          shasum -a 512 "./apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-bin.tar.gz" > "./apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-bin.tar.gz.sha512"
-          gpg --no-tty --quiet --pinentry-mode loopback --default-key "${{ secrets.GPG_KEY_ID }}" --batch --yes --output "./apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-bin.tar.gz.asc" --detach-sign --armor "./apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-bin.tar.gz"
+          mv baremaps-${{ steps.variables.outputs.mvn_version }}-src.tar.gz baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz
+          shasum -a 512 "./baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz" > "./baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz.sha512"
+          gpg --no-tty --quiet --pinentry-mode loopback --default-key "${{ secrets.GPG_KEY_ID }}" --batch --yes --output "./baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz.asc" --detach-sign --armor "./baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz"
+          mv baremaps-${{ steps.variables.outputs.mvn_version }}-bin.tar.gz baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz
+          shasum -a 512 "./baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz" > "./baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz.sha512"
+          gpg --no-tty --quiet --pinentry-mode loopback --default-key "${{ secrets.GPG_KEY_ID }}" --batch --yes --output "./baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz.asc" --detach-sign --armor "./baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz"
           cd -
 
       - name: Publish release candidate on GitHub
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ steps.variables.outputs.git_tag }}" --draft --prerelease --title "Apache Baremaps ${{ steps.variables.outputs.git_version }} (incubating)" --repo ${{ github.repository }} --generate-notes
-          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-src.tar.gz
-          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-src.tar.gz.sha512
-          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-src.tar.gz.asc
-          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-bin.tar.gz
-          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-bin.tar.gz.sha512
-          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/apache-baremaps-${{ steps.variables.outputs.git_version }}-incubating-bin.tar.gz.asc
+          gh release create "${{ steps.variables.outputs.git_tag }}" --draft --prerelease --title "Baremaps ${{ steps.variables.outputs.git_version }}" --repo ${{ github.repository }} --generate-notes
+          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz
+          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz.sha512
+          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-src.tar.gz.asc
+          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz
+          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz.sha512
+          gh release upload --clobber "${{ steps.variables.outputs.git_tag }}" ./baremaps-cli/target/baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz.asc
 
-      - name: Publish release candidate on Apache SVN
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y subversion
-          mkdir -p ${{ steps.variables.outputs.git_version }}
-          cp ./baremaps-cli/target/apache-baremaps-${{ steps.variables.outputs.git_version }}-* ${{ steps.variables.outputs.git_version }}
-          svn --username "${{ secrets.INCUBATOR_SVN_DEV_USERNAME }}" --password "${{ secrets.INCUBATOR_SVN_DEV_PASSWORD }}" import -m "Apache Baremaps ${{ steps.variables.outputs.git_version }} (incubating)" ${{ steps.variables.outputs.git_version }} https://dist.apache.org/repos/dist/dev/incubator/baremaps/${{ steps.variables.outputs.git_version }}
-          rm -rf ${{ steps.variables.outputs.git_version }}

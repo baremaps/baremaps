@@ -1,8 +1,5 @@
 <!--
-Licensed to the Apache Software Foundation (ASF) under one or more
-contributor license agreements.  See the NOTICE file distributed with
-this work for additional information regarding copyright ownership.
-The ASF licenses this file to you under the Apache License, Version 2.0
+Licensed under the Apache License, Version 2.0
 (the "License"); you may not use this file except in compliance with
 the License.  You may obtain a copy of the License at
 
@@ -29,8 +26,8 @@ bug fixes are most welcome. However, even "minor" details such as fixing spellin
 errors, improving documentation and examples, or pointing out usability issues, are of great importance too.
 
 You can contribute in the following ways.
-- Improve the code: Report [a bug or submit a feature request](https://github.com/apache/incubator-baremaps/issues), or [submit a pull request](https://github.com/apache/incubator-baremaps/pulls) in the [incubator-baremaps](https://github.com/apache/incubator-baremaps/) repository.
-- Improve the documentation: Report [documentation issue](https://github.com/apache/incubator-baremaps-site/issues) or [submit a pull request](https://github.com/apache/incubator-baremaps-site/pulls) in the [incubator-baremaps-site](https://github.com/apache/incubator-baremaps-site/) repository.
+- Improve the code: Report [a bug or submit a feature request](https://github.com/baremaps/baremaps/issues), or [submit a pull request](https://github.com/baremaps/baremaps/pulls) in the [baremaps](https://github.com/baremaps/baremaps/) repository.
+- Improve the documentation: Report [documentation issue](https://github.com/baremaps/baremaps-site/issues) or [submit a pull request](https://github.com/baremaps/baremaps-site/pulls) in the [baremaps-site](https://github.com/baremaps/baremaps-site/) repository.
 
 If you want to find an area that currently needs improving have a look at the
 open issues listed. This is also the place for discussing enhancement to Baremaps.
@@ -105,13 +102,13 @@ Before making a pull request, check that your source code is formatted according
 This file can typically used to [configure](https://www.jetbrains.com/help/idea/settings-code-style.html) your favourite IDE.
 You can run `mvn spotless:apply` to format your code automatically.
 
-Execute a run of Apache Rat to check for compliance with [ ASF Source Header and Copyright Notice Policy](https://www.apache.org/legal/src-headers.html). A textual report is added in `target/rat.txt`.
+Execute a run of Apache Rat to check that every source file carries the Apache License 2.0 header. A textual report is added in `target/rat.txt`.
 ```
 mvn clean && mvn apache-rat:check
 ```
 Notes: 
  - It is required to do the `clean` separately in two commands given that the parent module scan submodules files.
- - At the moment the check is failing as project is in progress of reaching compliance, please check for newly added content in Apache Rat report.
+ - The check currently fails on `NOTICE-binary` (third-party notices), please check for newly added content in the Apache Rat report.
 
 Finally, verify that your contribution passes all the tests (integration included).
 Once everything looks good, we'll merge it.

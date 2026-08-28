@@ -1,6 +1,6 @@
-# Apache Baremaps (incubating) ${project.version}
+# Baremaps ${project.version}
 
-Apache Baremaps is a toolkit for creating custom vector tiles from OpenStreetMap
+Baremaps is a toolkit for creating custom vector tiles from OpenStreetMap
 and other data sources with Postgis and Java.
 
 In order to build Baremaps from source, you first need to install Java 17 and Maven 3.8.1.
@@ -10,7 +10,7 @@ Then, from this directory, you can build Baremaps with the following command:
 
 More information about Baremaps can be found on our website:
 
-    https://baremaps.apache.org
+    https://baremaps.com
 
 We appreciate any feedback, bug reports, and pull requests, so don't hesitate to reach out!
 

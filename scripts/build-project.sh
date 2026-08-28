@@ -1,9 +1,6 @@
 #!/bin/sh
 
-# Licensed to the Apache Software Foundation (ASF) under one or more
-# contributor license agreements.  See the NOTICE file distributed with
-# this work for additional information regarding copyright ownership.
-# The ASF licenses this file to you under the Apache License, Version 2.0
+# Licensed under the Apache License, Version 2.0
 # (the "License"); you may not use this file except in compliance with
 # the License.  You may obtain a copy of the License at
 #
@@ -27,8 +24,8 @@ echo ""
 cd ..
 ./mvnw spotless:apply clean install -DskipTests
 rm -fr baremaps
-tar -xvf ./baremaps-cli/target/apache-baremaps-0.7.3-SNAPSHOT-incubating-bin.tar.gz -C target/
-mv ./target/apache-baremaps-0.7.3-SNAPSHOT-incubating-bin ./baremaps
+tar -xvf ./baremaps-cli/target/baremaps-0.7.3-SNAPSHOT-bin.tar.gz -C target/
+mv ./target/baremaps-0.7.3-SNAPSHOT-bin ./baremaps
 export PATH=$PATH:`pwd`/baremaps/bin
 
 echo ""

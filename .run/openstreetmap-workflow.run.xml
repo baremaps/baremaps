@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="openstreetmap-workflow" type="Application" factoryName="Application">
-    <option name="MAIN_CLASS_NAME" value="org.apache.baremaps.cli.Baremaps" />
+    <option name="MAIN_CLASS_NAME" value="com.baremaps.cli.Baremaps" />
     <module name="baremaps-cli" />
     <option name="PROGRAM_PARAMETERS" value="workflow execute --file workflow.json" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/examples/openstreetmap" />

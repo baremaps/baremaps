@@ -1,8 +1,5 @@
 <#--
-Licensed to the Apache Software Foundation (ASF) under one or more
-contributor license agreements.  See the NOTICE file distributed with
-this work for additional information regarding copyright ownership.
-The ASF licenses this file to you under the Apache License, Version 2.0
+Licensed under the Apache License, Version 2.0
 (the "License"); you may not use this file except in compliance with
 the License.  You may obtain a copy of the License at
 
@@ -31,7 +28,7 @@ This template is used to list the dependencies and their licenses at the end of 
     <#return project.artifactId + "-" + project.version>
 </#function>
 
-   Dependencies produced outside the ASF that is included in the
+   Dependencies produced outside this project that are included in the
    distribution of this product is subject to the following
    additional license terms.
 

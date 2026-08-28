@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-Licensed to the Apache Software Foundation (ASF) under one or more
-contributor license agreements.  See the NOTICE file distributed with
-this work for additional information regarding copyright ownership.
-The ASF licenses this file to you under the Apache License, Version 2.0
+Licensed under the Apache License, Version 2.0
 (the "License"); you may not use this file except in compliance with
 the License.  You may obtain a copy of the License at
 
@@ -18,24 +15,18 @@ limitations under the License.
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <parent>
-    <groupId>org.apache</groupId>
-    <artifactId>apache</artifactId>
-    <version>23</version>
-  </parent>
-
-  <groupId>org.apache.baremaps</groupId>
+  <groupId>com.baremaps</groupId>
   <artifactId>baremaps</artifactId>
   <version>0.8.3-SNAPSHOT</version>
   <packaging>pom</packaging>
-  <name>Apache Baremaps</name>
-  <description>Apache Baremaps (incubating) is a toolkit and a set of infrastructure components for creating,
+  <name>Baremaps</name>
+  <description>Baremaps is a toolkit and a set of infrastructure components for creating,
         publishing, and operating online maps.</description>
-  <url>https://github.com/apache/baremaps</url>
+  <url>https://github.com/baremaps/baremaps</url>
 
   <organization>
     <name>baremaps</name>
-    <url>https://baremaps.apache.org/</url>
+    <url>https://baremaps.com/</url>
   </organization>
 
   <licenses>
@@ -66,9 +57,9 @@ limitations under the License.
   </modules>
 
   <scm>
-    <connection>scm:git:git@github.com:apache/baremaps.git</connection>
-    <developerConnection>scm:git:git@github.com:apache/baremaps.git</developerConnection>
-    <url>scm:git:git@github.com:apache/baremaps.git</url>
+    <connection>scm:git:git@github.com:baremaps/baremaps.git</connection>
+    <developerConnection>scm:git:git@github.com:baremaps/baremaps.git</developerConnection>
+    <url>scm:git:git@github.com:baremaps/baremaps.git</url>
   </scm>
 
   <properties>
@@ -77,8 +68,8 @@ limitations under the License.
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <sonar.host.url>https://sonarcloud.io</sonar.host.url>
     <sonar.moduleKey>${project.groupId}:${project.artifactId}</sonar.moduleKey>
-    <sonar.organization>apache</sonar.organization>
-    <sonar.projectKey>apache_baremaps</sonar.projectKey>
+    <sonar.organization>baremaps</sonar.organization>
+    <sonar.projectKey>baremaps_baremaps</sonar.projectKey>
     <version.lib.armeria>1.41.0</version.lib.armeria>
     <version.lib.awaitility>4.3.0</version.lib.awaitility>
     <version.lib.awssdk>2.54.6</version.lib.awssdk>
@@ -162,6 +153,82 @@ limitations under the License.
         <version>${version.lib.brotli4j}</version>
       </dependency>
       <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-calcite</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-cli</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-core</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-data</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-dem</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-flatgeobuf</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-geoparquet</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-maplibre</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-openstreetmap</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-pmtiles</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-postgres</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-rpsl</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-server</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-shapefile</artifactId>
+        <version>${project.parent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.baremaps</groupId>
+        <artifactId>baremaps-testing</artifactId>
+        <version>${project.parent.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
         <groupId>com.fasterxml.jackson</groupId>
         <artifactId>jackson-bom</artifactId>
         <version>${version.lib.jackson}</version>
@@ -233,82 +300,6 @@ limitations under the License.
         <groupId>net.ripe.ipresource</groupId>
         <artifactId>ipresource</artifactId>
         <version>${version.lib.ipresource}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-calcite</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-cli</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-core</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-data</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-dem</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-flatgeobuf</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-geoparquet</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-maplibre</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-openstreetmap</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-pmtiles</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-postgres</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-rpsl</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-server</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-shapefile</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.baremaps</groupId>
-        <artifactId>baremaps-testing</artifactId>
-        <version>${project.parent.version}</version>
-        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.calcite</groupId>
@@ -708,7 +699,6 @@ limitations under the License.
             <exclude>**/feature.fbs</exclude>
 
             <!-- Files without headers -->
-            <exclude>**/DISCLAIMER</exclude>
             <exclude>**/data.osm</exclude>
             <exclude>**/nodes.wkt</exclude>
             <exclude>**/ways.wkt</exclude>

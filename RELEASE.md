@@ -1,8 +1,5 @@
 <!--
-Licensed to the Apache Software Foundation (ASF) under one or more
-contributor license agreements.  See the NOTICE file distributed with
-this work for additional information regarding copyright ownership.
-The ASF licenses this file to you under the Apache License, Version 2.0
+Licensed under the Apache License, Version 2.0
 (the "License"); you may not use this file except in compliance with
 the License.  You may obtain a copy of the License at
 
@@ -17,6 +14,8 @@ limitations under the License.
 
 # Release instructions
 
+# Release instructions
+
 The following instructions assume that the release candidate version has been set in an environment variable:
 
 ```bash
@@ -27,9 +26,9 @@ export RELEASE_MANAGER_NAME=<release_manager_name> # e.g. John Doe
 export COMMIT_HASH=<commit_hash> # e.g. 1234567890
 ```
 
-In order to release a new version of Apache Baremaps, follow these steps:
+In order to release a new version of Baremaps, follow these steps:
 
-- [ ] Notify the mailing list and ask everyone to pause commits on the main branch
+- [ ] Notify the community and ask everyone to pause commits on the main branch
 - [ ] Create a new issue on GitHub with the title "Release Baremaps $RELEASE_VERSION"
 - [ ] Create a new branch for the release (e.g. `release-$RELEASE_VERSION`)
 
@@ -52,39 +51,29 @@ git push --set-upstream origin release-$RELEASE_VERSION
 git tag v$RELEASE_VERSION-rc$CANDIDATE_NUMBER
 ```
 
-- [ ] Push the tag to the remote repository (this will trigger GitHub Action to build the release candidate, publish the artifacts to the [dev directory](https://dist.apache.org/repos/dist/dev/incubator/baremaps/) of dist.apache.org repository, and draft a release on GitHub):
+- [ ] Push the tag to the remote repository (this will trigger a GitHub Action to build, sign and hash the release candidate, and draft a release on GitHub):
 
 ```bash
 git push origin v$RELEASE_VERSION-rc$CANDIDATE_NUMBER
 ```
 
 - [ ] Edit the release notes for this tag on GitHub.
-- [ ] Ask the community to vote for the release candidate.
-- [ ] If the release candidate is not approved by the community, commit the necessary changes, clean the git history, create a new release candidate, and repeat the process.
-
-> TODO: The following step is not yet fully automated. We need to add secrets and steps to publish the artifacts to the [dev directory](https://dist.apache.org/repos/dist/dev/incubator/baremaps/) (APACHE_USERNAME, APACHE_PASSWORD) and to the maven repository (NEXUS_USERNAME, NEXUS_PASSWORD).
-
-- [ ] If the release candidate is approved by the community, tag the release commit with the release version (this will trigger the same GitHub Action as before):
+- [ ] Ask the community to test and review the release candidate.
+- [ ] If the release candidate is not approved, commit the necessary changes, clean the git history, create a new release candidate, and repeat the process.
+- [ ] If the release candidate is approved, tag the release commit with the release version (this will trigger the same GitHub Action as before):
 
 ```bash
 git tag -a v$RELEASE_VERSION
 git push origin v$RELEASE_VERSION
 ```
 
-- [ ] Register the release on [reporter.apache.org](https://reporter.apache.org/addrelease.html?incubator-baremaps).
 - [ ] Rebase the release branch into the main branch.
 - [ ] Clean up all the release candidate branches and tags.
 - [ ] Publish the release on GitHub.
-- [ ] Copy the release artifacts from the [dev directory](https://dist.apache.org/repos/dist/dev/incubator/baremaps/) to the [release directory](https://dist.apache.org/repos/dist/release/incubator/baremaps/).
+- [ ] Publish the release artifacts to the Maven repository.
 
 ```bash
-svn cp https://dist.apache.org/repos/dist/dev/incubator/baremaps/$RELEASE_VERSION-rc$CANDIDATE_NUMBER https://dist.apache.org/repos/dist/release/incubator/baremaps/$RELEASE_VERSION -m "Release Apache Baremaps (incubating) $RELEASE_VERSION"
-```
-
-- [ ] Publish the release artifacts to the maven repository.
-
-```bash
-./mvnw clean deploy -Papache-release
+./mvnw clean deploy -Prelease
 ```
 
 - [ ] Set the version of the next iteration and commit the changes:
@@ -95,11 +84,7 @@ git commit -a -m "Prepare for next development iteration"
 git push origin
 ```
 
-```bash
-./mvnw clean deploy
-```
-
-- [ ] Notify the community of the release by sending a message to the mailing list.
+- [ ] Notify the community of the release.
 
 ## Reproducing the build
 
@@ -116,7 +101,7 @@ docker run \
   -v $(pwd):/baremaps \
   -w /baremaps \
   eclipse-temurin:17-jdk \
-  ./mvnw clean verify -DskipTests artifact:compare -Dreference.repo=https://repository.apache.org/content/repositories/staging/
+  ./mvnw clean verify -DskipTests
 ```
 
 ## Verifying the release artifacts
@@ -124,105 +109,47 @@ docker run \
 Verify the GPG signature of the release artifacts:
 
 ```bash
-gpg --verify apache-baremaps-$RELEASE_VERSION-incubating-bin.tar.gz.asc
-gpg --verify apache-baremaps-$RELEASE_VERSION-incubating-src.tar.gz.asc
+gpg --verify baremaps-$RELEASE_VERSION-bin.tar.gz.asc
+gpg --verify baremaps-$RELEASE_VERSION-src.tar.gz.asc
 ```
 
 Verify the SHA512 checksum of the release artifacts:
 
 ```bash
-shasum -a 512 -c apache-baremaps-$RELEASE_VERSION-incubating-bin.tar.gz.sha512
-shasum -a 512 -c apache-baremaps-$RELEASE_VERSION-incubating-src.tar.gz.sha512
-```
-
-## Vote template
-
-```bash
-cat << EOF
-subject: [VOTE] Release Apache Baremaps $RELEASE_VERSION-rc$CANDIDATE_NUMBER (incubating)
-
-Hello Everyone,
-
-I have created a build for Apache Baremaps (incubating) $RELEASE_VERSION, release candidate $CANDIDATE_NUMBER.
-
-Thanks to everyone who has contributed to this release.
-
-You can read the release notes here:
-https://github.com/apache/incubator-baremaps/releases/tag/v$RELEASE_VERSION-rc$CANDIDATE_NUMBER
-
-The commit to be voted upon:
-https://github.com/apache/incubator-baremaps/tree/v$RELEASE_VERSION-rc$CANDIDATE_NUMBER
-
-Its hash is $COMMIT_HASH.
-
-Its tag is v$RELEASE_VERSION-rc$CANDIDATE_NUMBER.
-
-The artifacts to be voted on are located here:
-https://dist.apache.org/repos/dist/dev/incubator/baremaps/$RELEASE_VERSION-rc$CANDIDATE_NUMBER/
-
-The hashes of the artifacts are as follows:
-<src>
-<bin>
-
-Release artifacts are signed with the following key:
-http://people.apache.org/keys/committer/<username>.asc
-https://downloads.apache.org/incubator/baremaps/KEYS
-
-The README file for the src distribution contains instructions for building and testing the release.
-
-Please vote on releasing this package as Apache Baremaps $RELEASE_VERSION.
-
-The vote is open for the next 72 hours and passes if a majority of at least three +1 PMC votes are cast.
-
-[ ] +1 Release this package as Apache Baremaps $RELEASE_VERSION
-[ ] 0 I don't feel strongly about it, but I'm okay with the release
-[ ] -1 Do not release this package because...
-
-Here is my vote:
-
-+1 (binding)
-
-$RELEASE_MANAGER_NAME
-EOF
+shasum -a 512 -c baremaps-$RELEASE_VERSION-bin.tar.gz.sha512
+shasum -a 512 -c baremaps-$RELEASE_VERSION-src.tar.gz.sha512
 ```
 
 ## Announce template
 
 ```bash
-cat << EOF
-subject: [ANNOUNCE] Apache Baremaps $RELEASE_VERSION (incubating) released
+cat << EOT
+subject: [ANNOUNCE] Baremaps $RELEASE_VERSION released
 
 Hello Everyone,
 
-The Apache Baremaps community is pleased to announce the release of Apache Baremaps $RELEASE_VERSION (incubating).
-Apache Baremaps is a toolkit and a set of infrastructure components for creating, publishing, and operating online maps.
+The Baremaps community is pleased to announce the release of Baremaps $RELEASE_VERSION.
+Baremaps is a toolkit and a set of infrastructure components for creating, publishing, and operating online maps.
 <short description of the release which should include release highlights>
 
-The release notes are available here:
-https://github.com/apache/incubator-baremaps/releases/tag/v$RELEASE_VERSION
-
-The artifacts are available here:
-https://dist.apache.org/repos/dist/release/incubator/baremaps/$RELEASE_VERSION
+The release notes and artifacts are available here:
+https://github.com/baremaps/baremaps/releases/tag/v$RELEASE_VERSION
 
 We are looking to grow our community and welcome new contributors.
-If you are interested in contributing to the project, please contact us on the mailing list or on GitHub.
+If you are interested in contributing to the project, please reach out on GitHub.
 We will be happy to help you get started.
 
 The repository is available here:
-https://github.com/apache/incubator-baremaps
+https://github.com/baremaps/baremaps
 
 The documentation is available here:
-https://baremaps.apache.org
-
-The mailing list is available here:
-https://lists.apache.org/list.html?dev@baremaps.apache.org
+https://baremaps.com
 
 The issue tracker is available here:
-https://github.com/apache/incubator-baremaps/issues
+https://github.com/baremaps/baremaps/issues
 
 Best regards,
 
 $RELEASE_MANAGER_NAME
-EOF
+EOT
 ```
-

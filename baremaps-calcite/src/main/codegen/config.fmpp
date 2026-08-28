@@ -1,7 +1,4 @@
-# Licensed to the Apache Software Foundation (ASF) under one or more
-# contributor license agreements.  See the NOTICE file distributed with
-# this work for additional information regarding copyright ownership.
-# The ASF licenses this file to you under the Apache License, Version 2.0
+# Licensed under the Apache License, Version 2.0
 # (the "License"); you may not use this file except in compliance with
 # the License.  You may obtain a copy of the License at
 #
@@ -21,7 +18,7 @@ data: {
   # FMPP will use the declaration from default_config.fmpp.
   parser: {
     # Generated parser implementation class package and name
-    package: "org.apache.baremaps.calcite.sql",
+    package: "com.baremaps.calcite.sql",
     class: "BaremapsSqlDdlParser",
 
     # List of import statements.
@@ -32,7 +29,7 @@ data: {
       "org.apache.calcite.sql.SqlDrop"
       "org.apache.calcite.sql.SqlTruncate"
       "org.apache.calcite.sql.ddl.SqlCreateTableLike"
-      "org.apache.baremaps.calcite.ddl.SqlDdlNodes"
+      "com.baremaps.calcite.ddl.SqlDdlNodes"
     ]
 
     # List of new keywords. Example: "DATABASES", "TABLES". If the keyword is

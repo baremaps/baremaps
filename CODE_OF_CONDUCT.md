@@ -1,8 +1,5 @@
 <!--
-Licensed to the Apache Software Foundation (ASF) under one or more
-contributor license agreements.  See the NOTICE file distributed with
-this work for additional information regarding copyright ownership.
-The ASF licenses this file to you under the Apache License, Version 2.0
+Licensed under the Apache License, Version 2.0
 (the "License"); you may not use this file except in compliance with
 the License.  You may obtain a copy of the License at
 
@@ -16,7 +13,10 @@ limitations under the License.
 -->
 # Code of Conduct
 
-This is a project of the [Apache Software Foundation](https://apache.org)
-and follows the ASF [Code of Conduct](https://www.apache.org/foundation/policies/conduct).
+# Code of Conduct
 
-If you observe behavior that violates those rules please follow the [ASF reporting guidelines](https://www.apache.org/foundation/policies/conduct#reporting-guidelines).
+The Baremaps project follows the [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct/), version 2.1.
+
+We are committed to providing a welcoming and harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
+
+If you observe behavior that violates these rules, please report it privately to the project maintainers through [GitHub](https://github.com/baremaps/baremaps/security/advisories/new) or by contacting a maintainer directly. All reports will be reviewed and investigated promptly and fairly.

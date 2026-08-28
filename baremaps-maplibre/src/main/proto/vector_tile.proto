@@ -322,7 +322,7 @@ Creative Commons Notice
 syntax = "proto2";
 
 option optimize_for = SPEED;
-option java_package = "org.apache.baremaps.maplibre.binary";
+option java_package = "com.baremaps.maplibre.binary";
 
 package vector_tile;
 

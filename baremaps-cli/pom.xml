@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-Licensed to the Apache Software Foundation (ASF) under one or more
-contributor license agreements.  See the NOTICE file distributed with
-this work for additional information regarding copyright ownership.
-The ASF licenses this file to you under the Apache License, Version 2.0
+Licensed under the Apache License, Version 2.0
 (the "License"); you may not use this file except in compliance with
 the License.  You may obtain a copy of the License at
 
@@ -19,13 +16,13 @@ limitations under the License.
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>org.apache.baremaps</groupId>
+    <groupId>com.baremaps</groupId>
     <artifactId>baremaps</artifactId>
     <version>0.8.3-SNAPSHOT</version>
   </parent>
 
   <artifactId>baremaps-cli</artifactId>
-  <name>Apache Baremaps CLI</name>
+  <name>Baremaps CLI</name>
 
   <properties>
     <license.directory>${project.build.directory}/generated-sources/license</license.directory>
@@ -37,25 +34,25 @@ limitations under the License.
 
   <dependencies>
     <dependency>
-      <groupId>info.picocli</groupId>
-      <artifactId>picocli</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.baremaps</groupId>
+      <groupId>com.baremaps</groupId>
       <artifactId>baremaps-core</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.baremaps</groupId>
+      <groupId>com.baremaps</groupId>
       <artifactId>baremaps-dem</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.baremaps</groupId>
+      <groupId>com.baremaps</groupId>
       <artifactId>baremaps-server</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.baremaps</groupId>
+      <groupId>com.baremaps</groupId>
       <artifactId>baremaps-testing</artifactId>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>info.picocli</groupId>
+      <artifactId>picocli</artifactId>
     </dependency>
   </dependencies>
 
@@ -119,7 +116,7 @@ limitations under the License.
             </goals>
             <phase>package</phase>
             <configuration>
-              <finalName>apache-${project.parent.artifactId}-${project.parent.version}-incubating-src</finalName>
+              <finalName>${project.parent.artifactId}-${project.parent.version}-src</finalName>
               <appendAssemblyId>false</appendAssemblyId>
               <tarLongFileMode>posix</tarLongFileMode>
               <descriptors>
@@ -134,7 +131,7 @@ limitations under the License.
             </goals>
             <phase>package</phase>
             <configuration>
-              <finalName>apache-${project.parent.artifactId}-${project.parent.version}-incubating-bin</finalName>
+              <finalName>${project.parent.artifactId}-${project.parent.version}-bin</finalName>
               <appendAssemblyId>false</appendAssemblyId>
               <tarLongFileMode>posix</tarLongFileMode>
               <descriptors>
