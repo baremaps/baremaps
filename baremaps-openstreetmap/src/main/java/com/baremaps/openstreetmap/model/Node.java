@@ -14,8 +14,6 @@
 
 package com.baremaps.openstreetmap.model;
 
-
-
 import java.util.Map;
 import java.util.Objects;
 import java.util.StringJoiner;
@@ -24,111 +22,47 @@ import org.locationtech.jts.geom.Geometry;
 /** Represents a node element in an OpenStreetMap dataset. */
 public final class Node extends Element {
 
-  private Double lon;
+  private final double lon;
+  private final double lat;
 
-  private Double lat;
-
-  /**
-   * Constructs an OpenStreetMap {@code Node}.
-   */
-  public Node() {
-    super();
+  public Node(long id, Info info, Map<String, Object> tags, double lon, double lat) {
+    this(id, info, tags, lon, lat, null);
   }
 
-  /**
-   * Constructs an OpenStreetMap {@code Node} with the specified parameters.
-   *
-   * @param id the id
-   * @param info the information
-   * @param tags the tags
-   * @param lon the longitude
-   * @param lat the latitude
-   */
-  public Node(Long id, Info info, Map<String, Object> tags, Double lon, Double lat) {
-    super(id, info, tags);
-    this.lon = lon;
-    this.lat = lat;
-  }
-
-  /**
-   * Constructs an OpenStreetMap {@code Node} with the specified parameters.
-   *
-   * @param id the id
-   * @param info the information
-   * @param tags the tags
-   * @param lon the longitude
-   * @param lat the latitude
-   * @param geometry the geometry
-   */
-  public Node(Long id, Info info, Map<String, Object> tags, Double lon, Double lat,
+  public Node(long id, Info info, Map<String, Object> tags, double lon, double lat,
       Geometry geometry) {
     super(id, info, tags, geometry);
     this.lon = lon;
     this.lat = lat;
   }
 
-  /**
-   * Returns the longitude.
-   *
-   * @return the longitude
-   */
-  public Double getLon() {
+  public double getLon() {
     return lon;
   }
 
-  /**
-   * Sets the longitude.
-   *
-   * @param lon the longitude
-   */
-  public void setLon(Double lon) {
-    this.lon = lon;
-  }
-
-  /**
-   * Returns the latitude.
-   *
-   * @return the latitude
-   */
-  public Double getLat() {
+  public double getLat() {
     return lat;
   }
 
-  /**
-   * Sets the latitude.
-   *
-   * @param lat the latitude
-   */
-  public void setLat(Double lat) {
-    this.lat = lat;
+  @Override
+  public Node withTags(Map<String, Object> tags) {
+    return new Node(getId(), getInfo(), tags, lon, lat, getGeometry());
   }
 
-  /** {@inheritDoc} */
   @Override
   public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof Node)) {
-      return false;
-    }
-    if (!super.equals(o)) {
-      return false;
-    }
-    Node node = (Node) o;
-    return Double.compare(node.lon, lon) == 0 && Double.compare(node.lat, lat) == 0;
+    return o instanceof Node node && super.equals(o)
+        && Double.compare(node.lon, lon) == 0 && Double.compare(node.lat, lat) == 0;
   }
 
-  /** {@inheritDoc} */
   @Override
   public int hashCode() {
     return Objects.hash(super.hashCode(), lon, lat);
   }
 
-  /** {@inheritDoc} */
   @Override
   public String toString() {
-    return new StringJoiner(", ", Node.class.getSimpleName() + "[", "]").add("lon=" + lon)
-        .add("lat=" + lat).add("id=" + id).toString();
+    return new StringJoiner(", ", Node.class.getSimpleName() + "[", "]").add("id=" + getId())
+        .add("lon=" + lon).add("lat=" + lat).toString();
   }
 }

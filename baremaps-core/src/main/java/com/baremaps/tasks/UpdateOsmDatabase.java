@@ -119,7 +119,7 @@ public class UpdateOsmDatabase implements Task {
     }
 
     // Get the sequence number of the latest header
-    var stateReader = new StateReader(replicationUrl, true);
+    var stateReader = new StateReader(replicationUrl);
     var sequenceNumber = header.replicationSequenceNumber();
 
     // If the replicationTimestamp is not provided, guess it from the replication timestamp.
@@ -133,7 +133,7 @@ public class UpdateOsmDatabase implements Task {
 
     // Increment the sequence number and get the changeset url
     var nextSequenceNumber = sequenceNumber + 1;
-    var changeUrl = stateReader.getUrl(replicationUrl, nextSequenceNumber, "osc.gz");
+    var changeUrl = stateReader.getUrl(nextSequenceNumber, "osc.gz");
     logger.info("Updating the database with the changeset: {}", changeUrl);
 
     // Process the changeset and update the database
@@ -168,9 +168,9 @@ public class UpdateOsmDatabase implements Task {
     }
 
     // Add the new header to the database
-    var stateUrl = stateReader.getUrl(replicationUrl, nextSequenceNumber, "state.txt");
+    var stateUrl = stateReader.getUrl(nextSequenceNumber, "state.txt");
     try (var stateInputStream = new BufferedInputStream(stateUrl.openStream())) {
-      var state = new StateReader().read(stateInputStream);
+      var state = stateReader.read(stateInputStream);
       headerRepository.put(new Header(state.sequenceNumber(), state.timestamp(),
           header.replicationUrl(), header.source(), header.writingProgram()));
     }

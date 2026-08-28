@@ -14,29 +14,21 @@
 
 package com.baremaps.openstreetmap.function;
 
-
-
 import com.baremaps.openstreetmap.model.Entity;
 import com.baremaps.openstreetmap.model.Way;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-/** A consumer that stores openstreetmap references in a map. */
+/** A consumer that records the nodes of every way it sees, for building relation geometries. */
 public class ReferenceMapBuilder implements Consumer<Entity> {
 
   private final Map<Long, List<Long>> referenceMap;
 
-  /**
-   * Constructs a {@code CacheBlockConsumer} with the provided map.
-   *
-   * @param referenceMap the map of references
-   */
   public ReferenceMapBuilder(Map<Long, List<Long>> referenceMap) {
     this.referenceMap = referenceMap;
   }
 
-  /** {@inheritDoc} */
   @Override
   public void accept(Entity entity) {
     if (entity instanceof Way way) {

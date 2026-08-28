@@ -14,99 +14,40 @@
 
 package com.baremaps.openstreetmap.xml;
 
-
-
 import static com.baremaps.openstreetmap.stream.ConsumerUtils.consumeThenReturn;
 
-import com.baremaps.openstreetmap.OpenStreetMapFormat.EntityReader;
-import com.baremaps.openstreetmap.function.CoordinateMapBuilder;
-import com.baremaps.openstreetmap.function.EntityGeometryBuilder;
-import com.baremaps.openstreetmap.function.EntityProjectionTransformer;
-import com.baremaps.openstreetmap.function.ReferenceMapBuilder;
+import com.baremaps.openstreetmap.EntityReader;
+import com.baremaps.openstreetmap.GeometryOptions;
 import com.baremaps.openstreetmap.model.Entity;
 import java.io.InputStream;
-import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
-import org.locationtech.jts.geom.Coordinate;
 
-/** A utility class for parsing an OpenStreetMap XML file. */
+/** Reads an OpenStreetMap XML file as a stream of entities. */
 public class XmlEntityReader implements EntityReader<Entity> {
 
-  private boolean geometry = false;
+  private final GeometryOptions geometryOptions;
 
-  private int srid = 4326;
-
-  private Map<Long, Coordinate> coordinateMap;
-
-  private Map<Long, List<Long>> referenceMap;
-
-  @Override
-  public boolean getGeometries() {
-    return geometry;
-  }
-
-  @Override
-  public XmlEntityReader setGeometries(boolean geometries) {
-    this.geometry = geometries;
-    return this;
-  }
-
-  @Override
-  public int getSrid() {
-    return srid;
-  }
-
-  @Override
-  public XmlEntityReader setSrid(int srid) {
-    this.srid = srid;
-    return this;
-  }
-
-  @Override
-  public Map<Long, Coordinate> getCoordinateMap() {
-    return coordinateMap;
-  }
-
-  @Override
-  public XmlEntityReader setCoordinateMap(Map<Long, Coordinate> coordinateMap) {
-    this.coordinateMap = coordinateMap;
-    return this;
-  }
-
-  @Override
-  public Map<Long, List<Long>> getReferenceMap() {
-    return referenceMap;
-  }
-
-  @Override
-  public XmlEntityReader setReferenceMap(Map<Long, List<Long>> referenceMap) {
-    this.referenceMap = referenceMap;
-    return this;
+  /** Creates a reader that leaves geometries unset. */
+  public XmlEntityReader() {
+    this(null);
   }
 
   /**
-   * Creates an ordered stream of OSM entities from a XML file.
+   * Creates a reader that sets the geometry of the elements it reads.
    *
-   * @param input
-   * @return
+   * @param geometryOptions the geometry options, or null to leave geometries unset
    */
+  public XmlEntityReader(GeometryOptions geometryOptions) {
+    this.geometryOptions = geometryOptions;
+  }
+
   @Override
   public Stream<Entity> read(InputStream input) {
     var entities = StreamSupport.stream(new XmlEntitySpliterator(input), false);
-    if (geometry) {
-      // Initialize and chain the entity handlers
-      var coordinateMapBuilder = new CoordinateMapBuilder(coordinateMap);
-      var referenceMapBuilder = new ReferenceMapBuilder(referenceMap);
-      var entityGeometryBuilder = new EntityGeometryBuilder(coordinateMap, referenceMap);
-      var entityProjectionTransformer = new EntityProjectionTransformer(4326, srid);
-      var entityHandler = coordinateMapBuilder
-          .andThen(referenceMapBuilder)
-          .andThen(entityGeometryBuilder)
-          .andThen(entityProjectionTransformer);
-      entities = entities.map(consumeThenReturn(entityHandler));
+    if (geometryOptions == null) {
+      return entities;
     }
-    return entities;
+    return entities.map(consumeThenReturn(geometryOptions.entityHandler()));
   }
 }

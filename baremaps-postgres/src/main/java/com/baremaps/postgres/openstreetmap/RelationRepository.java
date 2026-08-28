@@ -306,10 +306,10 @@ public class RelationRepository implements Repository<Long, Relation> {
         for (Relation value : values) {
           writer.startRow(10);
           writer.writeLong(value.getId());
-          writer.writeInteger(value.getInfo().getVersion());
-          writer.writeInteger(value.getInfo().getUid());
-          writer.writeLocalDateTime(value.getInfo().getTimestamp());
-          writer.writeLong(value.getInfo().getChangeset());
+          writer.writeInteger(value.getInfo().version());
+          writer.writeInteger(value.getInfo().uid());
+          writer.writeLocalDateTime(value.getInfo().timestamp());
+          writer.writeLong(value.getInfo().changeset());
           writer.writeJsonb(JsonbMapper.toJson(value.getTags()));
           writer.writeLongList(
               value.getMembers().stream().map(Member::ref).toList());
@@ -347,10 +347,10 @@ public class RelationRepository implements Repository<Long, Relation> {
   private void setValue(PreparedStatement statement, Relation value)
       throws SQLException, JsonProcessingException {
     statement.setObject(1, value.getId());
-    statement.setObject(2, value.getInfo().getVersion());
-    statement.setObject(3, value.getInfo().getUid());
-    statement.setObject(4, value.getInfo().getTimestamp());
-    statement.setObject(5, value.getInfo().getChangeset());
+    statement.setObject(2, value.getInfo().version());
+    statement.setObject(3, value.getInfo().uid());
+    statement.setObject(4, value.getInfo().timestamp());
+    statement.setObject(5, value.getInfo().changeset());
     statement.setObject(6, JsonbMapper.toJson(value.getTags()));
     Object[] refs = value.getMembers().stream().map(Member::ref).toArray();
     statement.setObject(7, statement.getConnection().createArrayOf("bigint", refs));

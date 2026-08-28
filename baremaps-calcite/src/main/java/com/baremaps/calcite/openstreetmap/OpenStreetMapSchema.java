@@ -14,7 +14,8 @@
 
 package com.baremaps.calcite.openstreetmap;
 
-import com.baremaps.openstreetmap.OpenStreetMapFormat;
+import com.baremaps.openstreetmap.EntityReader;
+import com.baremaps.openstreetmap.GeometryOptions;
 import com.baremaps.openstreetmap.model.Entity;
 import com.baremaps.openstreetmap.pbf.PbfEntityReader;
 import com.baremaps.openstreetmap.xml.XmlEntityReader;
@@ -151,20 +152,11 @@ public class OpenStreetMapSchema extends AbstractSchema {
    */
   private Table createTable(File file) {
     // Determine the appropriate entity reader based on file extension
-    OpenStreetMapFormat.EntityReader<Entity> entityReader;
-    if (file.getName().toLowerCase().endsWith(".pbf") ||
-        file.getName().toLowerCase().endsWith(".osm.pbf")) {
-      PbfEntityReader pbfReader = new PbfEntityReader();
-      pbfReader.setGeometries(true);
-      pbfReader.setCoordinateMap(new HashMap<>());
-      pbfReader.setReferenceMap(new HashMap<>());
-      entityReader = pbfReader;
+    EntityReader<Entity> entityReader;
+    if (file.getName().toLowerCase().endsWith(".pbf")) {
+      entityReader = new PbfEntityReader(GeometryOptions.inMemory());
     } else {
-      XmlEntityReader xmlReader = new XmlEntityReader();
-      xmlReader.setGeometries(true);
-      xmlReader.setCoordinateMap(new HashMap<>());
-      xmlReader.setReferenceMap(new HashMap<>());
-      entityReader = xmlReader;
+      entityReader = new XmlEntityReader(GeometryOptions.inMemory());
     }
 
     // Create the table with the file reference

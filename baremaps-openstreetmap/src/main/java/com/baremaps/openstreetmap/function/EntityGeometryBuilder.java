@@ -47,17 +47,17 @@ public class EntityGeometryBuilder implements Consumer<Entity> {
   }
 
   /**
-   * A default predicate that returns true if the relation is a multipolygon.
+   * Returns true if the relation describes an area. Only multipolygons and boundaries do:
+   * boundaries are administrative areas whose rings are shared with neighbours, and other relation
+   * types (routes, restrictions, ...) have no single geometry. Coastline relations are excluded
+   * because the coastline of a landmass is too large to assemble in memory.
    */
   private static boolean isMultiPolygon(Relation relation) {
     var tags = relation.getTags();
     if ("coastline".equals(tags.get("natural"))) {
-      // Coastlines are complex relations that we do not handle
       return false;
-    } else {
-      // MultiPolygons and boundaries are complex relations that we handle
-      return "multipolygon".equals(tags.get("type")) || "boundary".equals(tags.get("type"));
     }
+    return "multipolygon".equals(tags.get("type")) || "boundary".equals(tags.get("type"));
   }
 
   /** {@inheritDoc} */

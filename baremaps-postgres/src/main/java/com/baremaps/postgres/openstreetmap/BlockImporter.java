@@ -53,7 +53,6 @@ public class BlockImporter implements Consumer<Block> {
       if (block instanceof HeaderBlock headerBlock) {
         headerRepository.put(headerBlock.getHeader());
       } else if (block instanceof DataBlock dataBlock) {
-        nodeRepository.copy(dataBlock.getDenseNodes());
         nodeRepository.copy(dataBlock.getNodes());
         wayRepository.copy(dataBlock.getWays());
         relationRepository.copy(dataBlock.getRelations());

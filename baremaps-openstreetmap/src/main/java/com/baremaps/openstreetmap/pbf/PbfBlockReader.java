@@ -14,105 +14,61 @@
 
 package com.baremaps.openstreetmap.pbf;
 
-import com.baremaps.openstreetmap.function.*;
+import static com.baremaps.openstreetmap.stream.ConsumerUtils.consumeThenReturn;
+
+import com.baremaps.openstreetmap.EntityReader;
+import com.baremaps.openstreetmap.GeometryOptions;
 import com.baremaps.openstreetmap.model.Block;
-import com.baremaps.openstreetmap.stream.ConsumerUtils;
+import com.baremaps.openstreetmap.stream.StreamException;
 import com.baremaps.openstreetmap.stream.StreamUtils;
 import java.io.InputStream;
-import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
-import org.locationtech.jts.geom.Coordinate;
 
-/** A utility class for reading an OpenStreetMap pbf file. */
-public class PbfBlockReader implements PbfReader<Block> {
+/** Reads an OpenStreetMap PBF file as a stream of blocks. */
+public class PbfBlockReader implements EntityReader<Block> {
 
-  private int buffer = Runtime.getRuntime().availableProcessors();
+  private final GeometryOptions geometryOptions;
 
-  private boolean geometry = false;
+  /** Creates a reader that leaves geometries unset. */
+  public PbfBlockReader() {
+    this(null);
+  }
 
-  private int srid = 4326;
-
-  private Map<Long, Coordinate> coordinateMap;
-
-  private Map<Long, List<Long>> referenceMap;
-
-  @Override
-  public int getBuffer() {
-    return buffer;
+  /**
+   * Creates a reader that sets the geometry of the elements it reads.
+   *
+   * @param geometryOptions the geometry options, or null to leave geometries unset
+   */
+  public PbfBlockReader(GeometryOptions geometryOptions) {
+    this.geometryOptions = geometryOptions;
   }
 
   @Override
-  public PbfBlockReader setBuffer(int buffer) {
-    this.buffer = buffer;
-    return this;
-  }
-
-  @Override
-  public boolean getGeometries() {
-    return geometry;
-  }
-
-  @Override
-  public PbfBlockReader setGeometries(boolean geometries) {
-    this.geometry = geometries;
-    return this;
-  }
-
-  @Override
-  public int getSrid() {
-    return srid;
-  }
-
-  @Override
-  public PbfBlockReader setSrid(int srid) {
-    this.srid = srid;
-    return this;
-  }
-
-  @Override
-  public Map<Long, Coordinate> getCoordinateMap() {
-    return coordinateMap;
-  }
-
-  @Override
-  public PbfBlockReader setCoordinateMap(Map<Long, Coordinate> coordinateMap) {
-    this.coordinateMap = coordinateMap;
-    return this;
-  }
-
-  @Override
-  public Map<Long, List<Long>> getReferenceMap() {
-    return referenceMap;
-  }
-
-  @Override
-  public PbfBlockReader setReferenceMap(Map<Long, List<Long>> referenceMap) {
-    this.referenceMap = referenceMap;
-    return this;
-  }
-
-  @Override
-  public Stream<Block> read(InputStream inputStream) {
+  public Stream<Block> read(InputStream input) {
+    // Blobs are decoded in parallel, but delivered in file order: geometry building relies on
+    // nodes being seen before the ways that reference them (see GeometryOptions#entityHandler).
     var blocks = StreamUtils.bufferInSourceOrder(
-        StreamUtils.stream(new BlobIterator(inputStream)),
-        new BlobToBlockMapper(),
+        StreamUtils.stream(new BlobIterator(input)),
+        PbfBlockReader::toBlock,
         Runtime.getRuntime().availableProcessors());
-    if (geometry) {
-      // Initialize and chain the entity handlers
-      var coordinateMapBuilder = new CoordinateMapBuilder(coordinateMap);
-      var referenceMapBuilder = new ReferenceMapBuilder(referenceMap);
-      var entityGeometryBuilder = new EntityGeometryBuilder(coordinateMap, referenceMap);
-      var entityProjectionTransformer = new EntityProjectionTransformer(4326, srid);
-      var entityHandler = coordinateMapBuilder
-          .andThen(referenceMapBuilder)
-          .andThen(entityGeometryBuilder)
-          .andThen(entityProjectionTransformer);
-
-      // Initialize the block mapper
-      var blockMapper = ConsumerUtils.consumeThenReturn(new BlockEntitiesHandler(entityHandler));
-      blocks = blocks.map(blockMapper);
+    if (geometryOptions == null) {
+      return blocks;
     }
-    return blocks;
+    var entityHandler = geometryOptions.entityHandler();
+    return blocks.map(consumeThenReturn(block -> block.entities().forEach(entityHandler)));
+  }
+
+  private static Block toBlock(Blob blob) {
+    try {
+      return switch (blob.type()) {
+        case "OSMHeader" -> HeaderBlockReader.read(blob);
+        case "OSMData" -> DataBlockReader.read(blob);
+        default -> throw new StreamException("Unknown blob type: " + blob.type());
+      };
+    } catch (StreamException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new StreamException(e);
+    }
   }
 }

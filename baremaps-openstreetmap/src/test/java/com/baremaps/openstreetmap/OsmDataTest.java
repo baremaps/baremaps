@@ -66,16 +66,12 @@ class OsmDataTest {
     var pbfDisplayName =
         String.format(displayNameFormat, osmTest.getId(), "pbf", osmTest.getDescription());
     return Stream.<DynamicTest>builder()
-        .add(DynamicTest.dynamicTest(xmlDisplayName, () -> runTest(osmTest, new XmlEntityReader()
-            .setCoordinateMap(new HashMap<>())
-            .setReferenceMap(new HashMap<>())
-            .setGeometries(true)
-            .read(Files.newInputStream(osmTest.getOsmXml())))))
-        .add(DynamicTest.dynamicTest(pbfDisplayName, () -> runTest(osmTest, new PbfEntityReader()
-            .setCoordinateMap(new HashMap<>())
-            .setReferenceMap(new HashMap<>())
-            .setGeometries(true)
-            .read(Files.newInputStream(osmTest.getOsmPbf())))))
+        .add(DynamicTest.dynamicTest(xmlDisplayName,
+            () -> runTest(osmTest, new XmlEntityReader(GeometryOptions.inMemory())
+                .read(Files.newInputStream(osmTest.getOsmXml())))))
+        .add(DynamicTest.dynamicTest(pbfDisplayName,
+            () -> runTest(osmTest, new PbfEntityReader(GeometryOptions.inMemory())
+                .read(Files.newInputStream(osmTest.getOsmPbf())))))
         .build();
   }
 

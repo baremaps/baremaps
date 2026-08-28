@@ -311,10 +311,10 @@ public class WayRepository implements Repository<Long, Way> {
         for (Way value : values) {
           writer.startRow(8);
           writer.writeLong(value.getId());
-          writer.writeInteger(value.getInfo().getVersion());
-          writer.writeInteger(value.getInfo().getUid());
-          writer.writeLocalDateTime(value.getInfo().getTimestamp());
-          writer.writeLong(value.getInfo().getChangeset());
+          writer.writeInteger(value.getInfo().version());
+          writer.writeInteger(value.getInfo().uid());
+          writer.writeLocalDateTime(value.getInfo().timestamp());
+          writer.writeLong(value.getInfo().changeset());
           writer.writeJsonb(JsonbMapper.toJson(value.getTags()));
           writer.writeLongList(value.getNodes());
           writer.writeGeometry(value.getGeometry());
@@ -345,10 +345,10 @@ public class WayRepository implements Repository<Long, Way> {
   private void setValue(PreparedStatement statement, Way value)
       throws SQLException, JsonProcessingException {
     statement.setObject(1, value.getId());
-    statement.setObject(2, value.getInfo().getVersion());
-    statement.setObject(3, value.getInfo().getUid());
-    statement.setObject(4, value.getInfo().getTimestamp());
-    statement.setObject(5, value.getInfo().getChangeset());
+    statement.setObject(2, value.getInfo().version());
+    statement.setObject(3, value.getInfo().uid());
+    statement.setObject(4, value.getInfo().timestamp());
+    statement.setObject(5, value.getInfo().changeset());
     statement.setObject(6, JsonbMapper.toJson(value.getTags()));
     statement.setObject(7, value.getNodes().stream().mapToLong(Long::longValue).toArray());
     statement.setBytes(8, GeometryUtils.serialize(value.getGeometry()));

@@ -14,101 +14,95 @@
 
 package com.baremaps.openstreetmap.state;
 
-
+import com.baremaps.openstreetmap.model.State;
 import com.google.common.io.CharStreams;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import com.baremaps.openstreetmap.OpenStreetMapFormat.Reader;
-import com.baremaps.openstreetmap.model.State;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Utility class for reading OSM state files. This code has been adapted from pyosmium (BSD 2-Clause
- * "Simplified" License).
+ * Reads the state files of an OpenStreetMap replication server and locates the state matching a
+ * timestamp. Adapted from pyosmium (BSD 2-Clause "Simplified" License).
  */
-public class StateReader implements Reader<State> {
+public class StateReader {
 
   private static final Logger logger = LoggerFactory.getLogger(StateReader.class);
 
+  private static final DateTimeFormatter TIMESTAMP_FORMAT =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'");
+
+  private static final String DEFAULT_REPLICATION_URL = "https://planet.osm.org/replication/hour";
+
+  private static final int DEFAULT_RETRIES = 2;
+
   private final String replicationUrl;
-
-  private final boolean balancedSearch;
-
   private final int retries;
 
-  /**
-   * Constructs a {@code StateReader}.
-   */
   public StateReader() {
-    this("https://planet.osm.org/replication/hour", true, 2);
+    this(DEFAULT_REPLICATION_URL);
+  }
+
+  public StateReader(String replicationUrl) {
+    this(replicationUrl, DEFAULT_RETRIES);
   }
 
   /**
-   * Constructs a {@code StateReader}.
-   *
-   * @param replicationUrl the replication URL
-   * @param balancedSearch whether to use a balanced search
+   * @param replicationUrl the base URL of the replication server
+   * @param retries how many times a failed download of a state file is retried
    */
-  public StateReader(String replicationUrl, boolean balancedSearch) {
-    this(replicationUrl, balancedSearch, 2);
-  }
-
-  /**
-   * Constructs a {@code StateReader}.
-   *
-   * @param replicationUrl the replication URL
-   * @param balancedSearch whether to use a balanced search
-   * @param retries the number of retries
-   */
-  public StateReader(String replicationUrl, boolean balancedSearch, int retries) {
+  public StateReader(String replicationUrl, int retries) {
     this.replicationUrl = replicationUrl;
-    this.balancedSearch = balancedSearch;
     this.retries = retries;
   }
 
   /**
-   * Parse an OSM state file.
+   * Parses a state file, a list of {@code key=value} lines.
    *
-   * @param input the OpenStreetMap state file
+   * @param input the state file
    * @return the state
    */
-  @Override
   public State read(InputStream input) {
     try {
-      InputStreamReader reader = new InputStreamReader(input, StandardCharsets.UTF_8);
       Map<String, String> map = new HashMap<>();
-      for (String line : CharStreams.readLines(reader)) {
+      for (String line : CharStreams
+          .readLines(new InputStreamReader(input, StandardCharsets.UTF_8))) {
         String[] array = line.split("=");
         if (array.length == 2) {
           map.put(array[0], array[1]);
         }
       }
       long sequenceNumber = Long.parseLong(map.get("sequenceNumber"));
-      DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'");
-      LocalDateTime timestamp = LocalDateTime.parse(map.get("timestamp").replace("\\", ""), format);
-      return new State(sequenceNumber, timestamp);
+      // The colons of the timestamp are escaped with backslashes in state files.
+      String timestamp = map.get("timestamp").replace("\\", "");
+      return new State(sequenceNumber, LocalDateTime.parse(timestamp, TIMESTAMP_FORMAT));
     } catch (IOException e) {
-      throw new RuntimeException(e);
+      throw new UncheckedIOException(e);
     }
   }
 
   /**
-   * Get the state corresponding to the given timestamp.
+   * Finds the latest state whose timestamp precedes the given one.
+   *
+   * <p>
+   * The search first brackets the timestamp: starting from the latest state as the upper bound, it
+   * halves the sequence number until it finds a state before the timestamp (the lower bound).
+   * Then it bisects between the bounds. State files can be missing on the server, so a probe that
+   * fails is retried on neighbouring sequence numbers.
    *
    * @param timestamp the timestamp
-   * @return the state
+   * @return the state, or empty if the latest state cannot be read
    */
   @SuppressWarnings({"squid:S3776", "squid:S6541"})
   public Optional<State> getStateFromTimestamp(LocalDateTime timestamp) {
@@ -119,10 +113,12 @@ public class StateReader implements Reader<State> {
     if (timestamp.isAfter(upper.get().timestamp()) || upper.get().sequenceNumber() <= 0) {
       return upper;
     }
+
+    // Bracket the timestamp between a lower and an upper state.
     var lower = Optional.<State>empty();
     var lowerId = 0L;
     while (lower.isEmpty()) {
-      lower = getLatestState(lowerId);
+      lower = getState(lowerId);
       if (lower.isPresent() && lower.get().timestamp().isAfter(timestamp)) {
         if (lower.get().sequenceNumber() == 0
             || lower.get().sequenceNumber() + 1 >= upper.get().sequenceNumber()) {
@@ -140,35 +136,16 @@ public class StateReader implements Reader<State> {
         lowerId = newId;
       }
     }
-    long baseSplitId;
+
+    // Bisect between the bounds.
     while (true) {
-      if (balancedSearch) {
-        baseSplitId = ((lower.get().sequenceNumber() + upper.get().sequenceNumber()) / 2);
-      } else {
-        var tsInt = upper.get().timestamp().toEpochSecond(ZoneOffset.UTC)
-            - lower.get().timestamp().toEpochSecond(ZoneOffset.UTC);
-        var seqInt = upper.get().sequenceNumber() - lower.get().sequenceNumber();
-        var goal = timestamp.getSecond() - lower.get().timestamp().getSecond();
-        baseSplitId =
-            lower.get().sequenceNumber() + (long) Math.ceil((double) (goal * seqInt) / tsInt);
-        if (baseSplitId >= upper.get().sequenceNumber()) {
-          baseSplitId = upper.get().sequenceNumber() - 1;
-        }
+      var splitId = (lower.get().sequenceNumber() + upper.get().sequenceNumber()) / 2;
+      var split = getState(splitId);
+      for (var id = splitId - 1; split.isEmpty() && id > lower.get().sequenceNumber(); id--) {
+        split = getState(id);
       }
-      var split = getLatestState(baseSplitId);
-      if (split.isEmpty()) {
-        var splitId = baseSplitId - 1;
-        while (split.isEmpty() && splitId > lower.get().sequenceNumber()) {
-          split = getLatestState(splitId);
-          splitId--;
-        }
-      }
-      if (split.isEmpty()) {
-        var splitId = baseSplitId + 1;
-        while (split.isEmpty() && splitId < upper.get().sequenceNumber()) {
-          split = getLatestState(splitId);
-          splitId++;
-        }
+      for (var id = splitId + 1; split.isEmpty() && id < upper.get().sequenceNumber(); id++) {
+        split = getState(id);
       }
       if (split.isEmpty()) {
         return lower;
@@ -185,16 +162,15 @@ public class StateReader implements Reader<State> {
   }
 
   /**
-   * Get the state corresponding to the given sequence number.
+   * Downloads the state with the given sequence number.
    *
    * @param sequenceNumber the sequence number
-   * @return the state
+   * @return the state, or empty if it cannot be read
    */
-  public Optional<State> getLatestState(long sequenceNumber) {
-    for (int i = 0; i < retries + 1; i++) {
-      try (var inputStream = getStateUrl(sequenceNumber).openStream()) {
-        var state = new StateReader().read(inputStream);
-        return Optional.of(state);
+  public Optional<State> getState(long sequenceNumber) {
+    for (int i = 0; i <= retries; i++) {
+      try (var input = getUrl(sequenceNumber, "state.txt").openStream()) {
+        return Optional.of(read(input));
       } catch (Exception e) {
         logger.error("Error while reading state file", e);
       }
@@ -203,60 +179,31 @@ public class StateReader implements Reader<State> {
   }
 
   /**
-   * Get the latest state.
+   * Downloads the latest state of the replication server.
    *
-   * @return the state
+   * @return the state, or empty if it cannot be read
    */
   public Optional<State> getLatestState() {
-    try (var inputStream = getStateUrl().openStream()) {
-      var state = new StateReader().read(inputStream);
-      return Optional.of(state);
+    try (var input = URI.create(replicationUrl + "/state.txt").toURL().openStream()) {
+      return Optional.of(read(input));
     } catch (Exception e) {
       logger.error("Error while reading state file", e);
+      return Optional.empty();
     }
-    return Optional.empty();
   }
 
   /**
-   * Get the URL of the state file corresponding to the given sequence number.
+   * Returns the URL of a replication file. Sequence numbers are zero-padded to nine digits and
+   * split in three directory levels, e.g. 1234 becomes 000/001/234.
    *
    * @param sequenceNumber the sequence number
+   * @param extension the file extension, e.g. "state.txt" or "osc.gz"
    * @return the URL
    * @throws MalformedURLException if the URL is malformed
    */
-  public URL getStateUrl(long sequenceNumber) throws MalformedURLException {
+  public URL getUrl(long sequenceNumber, String extension) throws MalformedURLException {
     var s = String.format("%09d", sequenceNumber);
-    var uri =
-        String.format("%s/%s/%s/%s.%s", replicationUrl, s.substring(0, 3), s.substring(3, 6),
-            s.substring(6, 9), "state.txt");
-    return URI.create(uri).toURL();
+    return URI.create(String.format("%s/%s/%s/%s.%s", replicationUrl, s.substring(0, 3),
+        s.substring(3, 6), s.substring(6, 9), extension)).toURL();
   }
-
-  /**
-   * Get the URL of the latest state file.
-   *
-   * @return the URL
-   * @throws MalformedURLException if the URL is malformed
-   */
-  public URL getStateUrl() throws MalformedURLException {
-    return new URL(replicationUrl + "/state.txt");
-  }
-
-  /**
-   * Get the URL of a replication file.
-   *
-   * @param replicationUrl the replication URL
-   * @param sequenceNumber the sequence number
-   * @param extension the extension
-   * @return the URL
-   * @throws MalformedURLException if the URL is malformed
-   */
-  public URL getUrl(String replicationUrl, Long sequenceNumber, String extension)
-      throws MalformedURLException {
-    var s = String.format("%09d", sequenceNumber);
-    var uri = String.format("%s/%s/%s/%s.%s", replicationUrl, s.substring(0, 3), s.substring(3, 6),
-        s.substring(6, 9), extension);
-    return URI.create(uri).toURL();
-  }
-
 }

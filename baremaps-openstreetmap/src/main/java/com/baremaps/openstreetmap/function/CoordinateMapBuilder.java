@@ -14,29 +14,21 @@
 
 package com.baremaps.openstreetmap.function;
 
-
-
 import com.baremaps.openstreetmap.model.Entity;
 import com.baremaps.openstreetmap.model.Node;
 import java.util.Map;
 import java.util.function.Consumer;
 import org.locationtech.jts.geom.Coordinate;
 
-/** A consumer that stores openstreetmap coordinates in a map. */
+/** A consumer that records the coordinate of every node it sees, for building way geometries. */
 public class CoordinateMapBuilder implements Consumer<Entity> {
 
   private final Map<Long, Coordinate> coordinateMap;
 
-  /**
-   * Constructs a {@code CacheBlockConsumer} with the provided map.
-   *
-   * @param coordinateMap the map of coordinates
-   */
   public CoordinateMapBuilder(Map<Long, Coordinate> coordinateMap) {
     this.coordinateMap = coordinateMap;
   }
 
-  /** {@inheritDoc} */
   @Override
   public void accept(Entity entity) {
     if (entity instanceof Node node) {

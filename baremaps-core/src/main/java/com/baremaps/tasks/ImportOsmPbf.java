@@ -16,6 +16,7 @@ package com.baremaps.tasks;
 
 import static java.lang.Boolean.TRUE;
 
+import com.baremaps.openstreetmap.GeometryOptions;
 import com.baremaps.openstreetmap.model.Node;
 import com.baremaps.openstreetmap.model.Relation;
 import com.baremaps.openstreetmap.model.Way;
@@ -142,11 +143,8 @@ public class ImportOsmPbf implements Task {
       Integer databaseSrid) throws IOException {
 
     // configure the block reader
-    var reader = new PbfBlockReader()
-        .setGeometries(true)
-        .setSrid(databaseSrid)
-        .setCoordinateMap(coordinateMap)
-        .setReferenceMap(referenceMap);
+    var reader =
+        new PbfBlockReader(new GeometryOptions(coordinateMap, referenceMap, databaseSrid));
 
     // configure the block importer
     var importer = new BlockImporter(

@@ -68,6 +68,8 @@ public class ProjectionTransformer extends GeometryTransformer {
     if (sourceSrid == targetSrid) {
       return coordinate;
     }
+    // Clamp to the domain of the target projection: e.g. Mercator is undefined at the poles, and
+    // OSM data does contain nodes there.
     var x = Math.max(Math.min(coordinate.x, max.x), min.x);
     var y = Math.max(Math.min(coordinate.y, max.y), min.y);
     ProjCoordinate c1 = new ProjCoordinate(x, y);

@@ -14,26 +14,24 @@
 
 package com.baremaps.openstreetmap.function;
 
-
 import com.baremaps.openstreetmap.model.Entity;
 import com.baremaps.openstreetmap.model.Way;
+import com.baremaps.openstreetmap.utils.GeometryUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import org.locationtech.jts.geom.*;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.LineString;
+import org.locationtech.jts.geom.Polygon;
 import org.locationtech.jts.geom.util.GeometryFixer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * A consumer that builds and sets a way geometry via side effects.
- */
+/** A consumer that builds and sets a way geometry via side effects. */
 public class WayGeometryBuilder implements Consumer<Entity> {
 
   private static final Logger logger = LoggerFactory.getLogger(WayGeometryBuilder.class);
-
-  private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
   private final Map<Long, Coordinate> coordinateMap;
 
@@ -46,49 +44,53 @@ public class WayGeometryBuilder implements Consumer<Entity> {
     this.coordinateMap = coordinateMap;
   }
 
-  /** {@inheritDoc} */
   @Override
-  @SuppressWarnings("squid:S3776")
   public void accept(Entity entity) {
     if (entity instanceof Way way) {
       try {
-        // Build the coordinate list and remove duplicates.
-        List<Coordinate> list = new ArrayList<>();
-        Coordinate previous = null;
-        for (Long id : way.getNodes()) {
-          Coordinate coordinate = coordinateMap.get(id);
-          if (coordinate != null && !coordinate.equals(previous)) {
-            list.add(coordinate);
-            previous = coordinate;
-          }
-        }
-
-        Coordinate[] array = list.toArray(new Coordinate[0]);
-        LineString line = geometryFactory.createLineString(array);
-
-        if (!line.isEmpty()) {
-          // Ways can be open or closed depending on the geometry or the tags:
-          // https://wiki.openstreetmap.org/wiki/Way
-          if (!line.isClosed()
-              || way.getTags().containsKey("railway")
-              || way.getTags().containsKey("highway")
-              || way.getTags().containsKey("barrier")) {
-            way.setGeometry(line);
-          } else {
-            Polygon polygon = geometryFactory.createPolygon(line.getCoordinates());
-            if (polygon.isValid()) {
-              way.setGeometry(polygon);
-            } else {
-              var geometryFixer = new GeometryFixer(polygon);
-              var fixedGeometry = geometryFixer.getResult();
-              way.setGeometry(fixedGeometry);
-            }
-          }
-        }
+        way.setGeometry(build(way));
       } catch (Exception e) {
         logger.debug("Unable to build the geometry for way #" + way.getId(), e);
-        way.setGeometry(geometryFactory.createEmpty(0));
+        way.setGeometry(GeometryUtils.GEOMETRY_FACTORY_WGS84.createEmpty(0));
       }
     }
+  }
+
+  private org.locationtech.jts.geom.Geometry build(Way way) {
+    LineString line = lineString(way.getNodes(), coordinateMap);
+    if (line.isEmpty()) {
+      return null;
+    }
+    // A closed way is an area unless its tags say it is a linear feature, in which case it is a
+    // loop (e.g. a roundabout). See https://wiki.openstreetmap.org/wiki/Way
+    if (!line.isClosed()
+        || way.getTags().containsKey("railway")
+        || way.getTags().containsKey("highway")
+        || way.getTags().containsKey("barrier")) {
+      return line;
+    }
+    Polygon polygon = GeometryUtils.GEOMETRY_FACTORY_WGS84.createPolygon(line.getCoordinates());
+    return polygon.isValid() ? polygon : new GeometryFixer(polygon).getResult();
+  }
+
+  /**
+   * Builds the line of a sequence of nodes. Nodes without a known coordinate are skipped, and
+   * consecutive duplicate coordinates are collapsed since JTS rejects them in rings.
+   *
+   * @param nodes the node ids
+   * @param coordinateMap the coordinates of nodes
+   * @return the line, possibly empty
+   */
+  static LineString lineString(List<Long> nodes, Map<Long, Coordinate> coordinateMap) {
+    List<Coordinate> list = new ArrayList<>(nodes.size());
+    Coordinate previous = null;
+    for (Long id : nodes) {
+      Coordinate coordinate = coordinateMap.get(id);
+      if (coordinate != null && !coordinate.equals(previous)) {
+        list.add(coordinate);
+        previous = coordinate;
+      }
+    }
+    return GeometryUtils.GEOMETRY_FACTORY_WGS84.createLineString(list.toArray(new Coordinate[0]));
   }
 }

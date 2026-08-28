@@ -14,31 +14,22 @@
 
 package com.baremaps.openstreetmap.model;
 
+import java.util.List;
 
-/** Represents a block of data in an OpenStreetMap dataset. */
+/**
+ * A block of an OpenStreetMap PBF file. Blocks are the unit of parallel decoding: each one is
+ * self-contained and the entities it holds can be listed in file order.
+ */
 public abstract sealed
+
 class Block
 permits HeaderBlock, DataBlock
 {
 
-  private final Blob blob;
-
   /**
-   * Constructs an OpenStreetMap {@code Block} with the specified {@code Blob}.
+   * Returns the entities of the block in file order.
    *
-   * @param blob the blob
+   * @return the entities
    */
-  protected Block(Blob blob) {
-    this.blob = blob;
-  }
-
-  /**
-   * Returns the blob.
-   *
-   * @return the blob
-   */
-  public Blob getBlob() {
-    return blob;
-  }
-
+  public abstract List<Entity> entities();
 }

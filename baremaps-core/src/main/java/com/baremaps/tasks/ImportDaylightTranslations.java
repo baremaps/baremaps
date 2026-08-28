@@ -116,8 +116,9 @@ public class ImportDaylightTranslations implements Task {
       for (var line : lines) {
         tags.put(line.attributeKey(), line.attributeValue());
       }
-      entity.setTags(tags);
-      repository.put(entity);
+      @SuppressWarnings("unchecked")
+      var updated = (T) entity.withTags(tags);
+      repository.put(updated);
     }
   }
 

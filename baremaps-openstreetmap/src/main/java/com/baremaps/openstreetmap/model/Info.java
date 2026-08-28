@@ -14,98 +14,11 @@
 
 package com.baremaps.openstreetmap.model;
 
-
-
 import java.time.LocalDateTime;
-import java.util.Objects;
-import java.util.StringJoiner;
 
-/** Represents all the metadata associated to an element in an OpenStreetMap dataset. */
-public final class Info {
-
-  protected final int version;
-
-  protected final LocalDateTime timestamp;
-
-  protected final long changeset;
-
-  protected final int uid;
-
-  /**
-   * Constructs an OpenStreetMap {@code Info} with the specified metadata.
-   *
-   * @param version the version
-   * @param timestamp the timestamp
-   * @param changeset the changeset
-   * @param uid the user id
-   */
-  public Info(int version, LocalDateTime timestamp, long changeset, int uid) {
-    this.version = version;
-    this.timestamp = timestamp;
-    this.changeset = changeset;
-    this.uid = uid;
-  }
-
-  /**
-   * Returns the version.
-   *
-   * @return the version
-   */
-  public int getVersion() {
-    return version;
-  }
-
-  /**
-   * Returns the timestamp.
-   *
-   * @return the timestamp
-   */
-  public LocalDateTime getTimestamp() {
-    return timestamp;
-  }
-
-  /**
-   * Returns the changeset.
-   *
-   * @return the changeset
-   */
-  public long getChangeset() {
-    return changeset;
-  }
-
-  /**
-   * Returns the user id.
-   *
-   * @return the user id
-   */
-  public int getUid() {
-    return uid;
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof Info)) {
-      return false;
-    }
-    Info info = (Info) o;
-    return version == info.version && changeset == info.changeset && uid == info.uid
-        && Objects.equals(timestamp, info.timestamp);
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public int hashCode() {
-    return Objects.hash(version, timestamp, changeset, uid);
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public String toString() {
-    return new StringJoiner(", ", Info.class.getSimpleName() + "[", "]").add("version=" + version)
-        .add("timestamp=" + timestamp).add("changeset=" + changeset).add("uid=" + uid).toString();
-  }
+/**
+ * The editing metadata of an element: its version, the moment it was written, the changeset it
+ * belongs to and the id of the user who wrote it.
+ */
+public record Info(int version, LocalDateTime timestamp, long changeset, int uid) {
 }

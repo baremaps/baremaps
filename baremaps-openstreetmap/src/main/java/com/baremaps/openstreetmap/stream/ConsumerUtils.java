@@ -14,8 +14,6 @@
 
 package com.baremaps.openstreetmap.stream;
 
-
-
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
@@ -27,21 +25,8 @@ public class ConsumerUtils {
   }
 
   /**
-   * Returns a consumer that applies a function to its input, and then passes the result to the
-   *
-   * @param type the type of the input
-   * @return
-   * @param <T>
-   */
-  @SuppressWarnings("squid:S1172")
-  public static <T> Consumer<T> chain(Class<T> type) {
-    return t -> {
-      // Do nothing
-    };
-  }
-
-  /**
-   * Transforms a consumer into a function.
+   * Turns a consumer into an identity function with a side effect, so it can be used in a stream
+   * {@code map} where {@code peek} would be discouraged.
    *
    * @param consumer the consumer
    * @param <T> the type
@@ -53,7 +38,4 @@ public class ConsumerUtils {
       return t;
     };
   }
-
-
-
 }

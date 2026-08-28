@@ -26,7 +26,6 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.util.HashMap;
 import java.util.Properties;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
@@ -45,7 +44,6 @@ public class OpenStreetMapTableTest {
     try (var inputStream = Files.newInputStream(SAMPLE_OSM_PATH)) {
       // Create a PBF entity reader
       PbfEntityReader entityReader = new PbfEntityReader();
-      entityReader.setGeometries(false); // Don't generate geometries to avoid errors
 
       // Create the OpenStreetMapTable
       OpenStreetMapTable osmTable = new OpenStreetMapTable(SAMPLE_OSM_PATH.toFile(), entityReader);
@@ -80,11 +78,6 @@ public class OpenStreetMapTableTest {
   void testSqlQueryWithRealPbfFile() throws Exception {
     // Create a properly configured reader and table directly
     PbfEntityReader entityReader = new PbfEntityReader();
-
-    // Disable geometry generation to avoid coordinate map issues
-    entityReader.setGeometries(false);
-    entityReader.setCoordinateMap(new HashMap<>());
-    entityReader.setReferenceMap(new HashMap<>());
 
     try (var inputStream = new FileInputStream(SAMPLE_OSM_PATH.toFile())) {
       // Create the table with our configured reader

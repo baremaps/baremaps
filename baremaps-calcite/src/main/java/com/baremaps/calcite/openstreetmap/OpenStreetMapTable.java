@@ -14,7 +14,7 @@
 
 package com.baremaps.calcite.openstreetmap;
 
-import com.baremaps.openstreetmap.OpenStreetMapFormat.EntityReader;
+import com.baremaps.openstreetmap.EntityReader;
 import com.baremaps.openstreetmap.model.*;
 import java.io.File;
 import java.io.FileInputStream;
@@ -176,11 +176,11 @@ public class OpenStreetMapTable extends AbstractTable implements ScannableTable 
       return new Object[] {
           element.getId(),
           elementTypeToString(element),
-          element.getInfo().getVersion(),
-          element.getInfo().getTimestamp(),
-          element.getInfo().getUid(),
+          element.getInfo().version(),
+          element.getInfo().timestamp(),
+          element.getInfo().uid(),
           "", // User name is not available in the Info class, using empty string
-          element.getInfo().getChangeset(),
+          element.getInfo().changeset(),
           element.getTags(),
           element.getGeometry()
       };

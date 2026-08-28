@@ -14,8 +14,6 @@
 
 package com.baremaps.openstreetmap.model;
 
-
-
 import java.util.Map;
 import java.util.Objects;
 import java.util.StringJoiner;
@@ -24,6 +22,11 @@ import org.locationtech.jts.geom.Geometry;
 /**
  * Represents an element in an OpenStreetMap dataset. Elements are a basis to model the physical
  * world.
+ *
+ * <p>
+ * The identity of an element (id, info, tags, members) is fixed at construction. The geometry is
+ * the one deliberately mutable slot: it is derived from other elements and is set by the geometry
+ * builders once the coordinates they depend on have been streamed.
  */
 public abstract sealed
 
@@ -31,30 +34,11 @@ class Element implements Entity
 permits Node, Way, Relation
 {
 
-  protected Long id;
+  private final long id;
+  private final Info info;
+  private final Map<String, Object> tags;
+  private Geometry geometry;
 
-  protected Info info;
-
-  protected Map<String, Object> tags;
-
-  protected Geometry geometry;
-
-  protected Element() {
-
-  }
-
-  protected Element(long id, Info info, Map<String, Object> tags) {
-    this(id, info, tags, null);
-  }
-
-  /**
-   * Constructs an OpenStreetMap {@code Element} with the specified parameters.
-   *
-   * @param id the id
-   * @param info the {@code Info}
-   * @param tags the tags
-   * @param geometry the geometry
-   */
   protected Element(long id, Info info, Map<String, Object> tags, Geometry geometry) {
     this.id = id;
     this.info = info;
@@ -62,101 +46,54 @@ permits Node, Way, Relation
     this.geometry = geometry;
   }
 
-  /**
-   * Returns the id.
-   *
-   * @return the id
-   */
   public long getId() {
     return id;
   }
 
-  /**
-   * Sets the id.
-   */
-  public void setId(long id) {
-    this.id = id;
-  }
-
-  /**
-   * Returns the info.
-   *
-   * @return the info
-   */
   public Info getInfo() {
     return info;
   }
 
-  /**
-   * Sets the info.
-   *
-   * @param info the info
-   */
-  public void setInfo(Info info) {
-    this.info = info;
-  }
-
-  /**
-   * Returns the tags.
-   *
-   * @return the tags
-   */
   public Map<String, Object> getTags() {
     return tags;
   }
 
   /**
-   * Sets the tags.
+   * Returns a copy of this element with the provided tags.
    *
    * @param tags the tags
+   * @return a copy of this element
    */
-  public void setTags(Map<String, Object> tags) {
-    this.tags = tags;
-  }
+  public abstract Element withTags(Map<String, Object> tags);
 
-  /**
-   * Returns the geometry.
-   *
-   * @return the geometry
-   */
   public Geometry getGeometry() {
-    return this.geometry;
+    return geometry;
   }
 
-  /**
-   * Sets the geometry.
-   *
-   * @param geometry the geometry
-   */
   public void setGeometry(Geometry geometry) {
     this.geometry = geometry;
   }
 
-  /** {@inheritDoc} */
   @Override
   public boolean equals(Object o) {
     if (this == o) {
       return true;
     }
-    if (!(o instanceof Element)) {
+    if (!(o instanceof Element element)) {
       return false;
     }
-    Element element = (Element) o;
     return id == element.id && Objects.equals(info, element.info)
         && Objects.equals(tags, element.tags) && Objects.equals(geometry, element.geometry);
   }
 
-  /** {@inheritDoc} */
   @Override
   public int hashCode() {
     return Objects.hash(id, info, tags, geometry);
   }
 
-  /** {@inheritDoc} */
   @Override
   public String toString() {
-    return new StringJoiner(", ", Element.class.getSimpleName() + "[", "]").add("id=" + id)
+    return new StringJoiner(", ", getClass().getSimpleName() + "[", "]").add("id=" + id)
         .add("info=" + info).add("tags=" + tags).add("geometry=" + geometry).toString();
   }
-
 }

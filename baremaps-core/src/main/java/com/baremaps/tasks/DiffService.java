@@ -17,7 +17,6 @@ package com.baremaps.tasks;
 import static com.baremaps.openstreetmap.stream.ConsumerUtils.consumeThenReturn;
 
 import com.baremaps.openstreetmap.function.EntityGeometryBuilder;
-import com.baremaps.openstreetmap.function.EntityToGeometryMapper;
 import com.baremaps.openstreetmap.function.ProjectionTransformer;
 import com.baremaps.openstreetmap.model.*;
 import com.baremaps.openstreetmap.stream.StreamException;
@@ -138,7 +137,9 @@ public class DiffService implements Callable<List<TileCoord>> {
   private Stream<Geometry> geometriesForNextVersion(Change change) {
     return change.entities().stream()
         .map(consumeThenReturn(new EntityGeometryBuilder(coordinateMap, referenceMap)))
-        .flatMap(new EntityToGeometryMapper().andThen(Optional::stream));
+        .flatMap(entity -> entity instanceof Element element
+            ? Stream.ofNullable(element.getGeometry())
+            : Stream.empty());
   }
 
   public URL resolve(String replicationUrl, Long sequenceNumber, String extension)

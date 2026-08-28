@@ -16,6 +16,7 @@ package com.baremaps.calcite.openstreetmap;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.baremaps.openstreetmap.GeometryOptions;
 import com.baremaps.openstreetmap.pbf.PbfEntityReader;
 import com.baremaps.testing.TestFiles;
 import java.io.File;
@@ -27,7 +28,6 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HashMap;
 import java.util.Properties;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -140,10 +140,7 @@ public class OpenStreetMapSchemaTest {
   @Test
   void testSqlQueryWithSingleFile() throws Exception {
     // Create a properly configured PbfEntityReader
-    PbfEntityReader entityReader = new PbfEntityReader();
-    entityReader.setGeometries(true);
-    entityReader.setCoordinateMap(new HashMap<>());
-    entityReader.setReferenceMap(new HashMap<>());
+    PbfEntityReader entityReader = new PbfEntityReader(GeometryOptions.inMemory());
 
     // Create an OpenStreetMapSchema with a single file
     File pbfFile = sampleDataDir.resolve("sample.osm.pbf").toFile();

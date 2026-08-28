@@ -107,18 +107,9 @@ public class RelationMultiPolygonBuilder implements Consumer<Entity> {
 
     // Categorize the other polygons as inner or outer
     for (var otherPolygon : otherPolygons) {
-
-      // If the outer polygon contains the other polygon, it is an inner polygon
-      for (var outerPolygon : outerPolygons) {
-        if (outerPolygon.contains(otherPolygon)) {
-          innerPolygons.add(otherPolygon);
-        }
-      }
-
-      // Otherwise, it is an outer polygon
-      if (!innerPolygons.contains(otherPolygon)) {
-        outerPolygons.add(otherPolygon);
-      }
+      // A polygon contained in an outer polygon is a hole, any other one is an outer polygon
+      var contained = outerPolygons.stream().anyMatch(outer -> outer.contains(otherPolygon));
+      (contained ? innerPolygons : outerPolygons).add(otherPolygon);
     }
 
     // Merge the outer and inner polygons to build the relation geometry
@@ -200,29 +191,13 @@ public class RelationMultiPolygonBuilder implements Consumer<Entity> {
   }
 
   private LineString createLineString(Member member) {
-    List<Long> refs = referenceMap.get(member.ref());
-
-    // Build the coordinate list and remove duplicates.
-    List<Coordinate> list = new ArrayList<>();
-    Coordinate previous = null;
-    for (Long id : refs) {
-      Coordinate coordinate = coordinateMap.get(id);
-
-      // remove duplicate coordinates
-      if (coordinate != null && !coordinate.equals(previous)) {
-        list.add(coordinate);
-        previous = coordinate;
-      }
-    }
-
-    Coordinate[] array = list.toArray(new Coordinate[0]);
-    return GeometryUtils.GEOMETRY_FACTORY_WGS84.createLineString(array);
+    return WayGeometryBuilder.lineString(referenceMap.get(member.ref()), coordinateMap);
   }
 
   private List<Polygon> combinePolygons(List<Polygon> polygons) {
-    // The symDifference operation combines the polygons
-    // and fixes the topology of the resulting geometry
-    // e.g. it removes the holes that are contained in the shell
+    // Members of the same role may touch, overlap or nest (e.g. an island inside a lake inside an
+    // outer ring). Folding them with symDifference applies even-odd semantics, so nested polygons
+    // become holes and overlapping ones merge, and yields a topologically valid result.
     var geometry = GeometryUtils.GEOMETRY_FACTORY_WGS84.createEmpty(0);
     for (Polygon polygon : polygons) {
       geometry = geometry.symDifference(polygon);

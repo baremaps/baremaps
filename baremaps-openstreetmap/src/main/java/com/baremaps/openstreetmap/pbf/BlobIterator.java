@@ -14,11 +14,10 @@
 
 package com.baremaps.openstreetmap.pbf;
 
-
-
-import com.baremaps.openstreetmap.model.Blob;
+import com.baremaps.openstreetmap.stream.StreamException;
 import com.baremaps.osm.binary.Fileformat;
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Iterator;
@@ -27,67 +26,53 @@ import java.util.NoSuchElementException;
 /** An iterator over the blobs of an OpenStreetMap PBF {@code InputStream}. */
 class BlobIterator implements Iterator<Blob> {
 
-  private final DataInputStream dis;
-
+  private final DataInputStream input;
   private Blob next;
+  private boolean done;
 
-  /**
-   * Constructs a {@code BlobIterator} with the specified {@code InputStream}.
-   *
-   * @param input
-   */
-  public BlobIterator(InputStream input) {
-    this.dis = new DataInputStream(input);
+  BlobIterator(InputStream input) {
+    this.input = new DataInputStream(input);
   }
 
+  /**
+   * Reads the next blob, or returns null at the end of the stream. Only an end of stream that falls
+   * exactly between two blobs is a normal termination; a truncated blob is an error.
+   */
   private Blob read() throws IOException {
-    // Read blob header
-    int headerSize = dis.readInt();
+    int headerSize;
+    try {
+      headerSize = input.readInt();
+    } catch (EOFException e) {
+      return null;
+    }
     byte[] headerBytes = new byte[headerSize];
-    dis.readFully(headerBytes);
+    input.readFully(headerBytes);
     Fileformat.BlobHeader header = Fileformat.BlobHeader.parseFrom(headerBytes);
-
-    // Read blob data
-    int dataSize = header.getDatasize();
-    byte[] data = new byte[dataSize];
-    dis.readFully(data);
-
-    return new Blob(header, data, 8 + headerSize + dataSize);
+    byte[] data = new byte[header.getDatasize()];
+    input.readFully(data);
+    return new Blob(header.getType(), data);
   }
 
-  /**
-   * Returns true if the iteration has more blobs.
-   *
-   * @return true if the iteration has more elements
-   */
   @Override
   public boolean hasNext() {
-    try {
-      if (next == null) {
+    if (next == null && !done) {
+      try {
         next = read();
+      } catch (IOException e) {
+        throw new StreamException(e);
       }
-      return true;
-    } catch (IOException exception) {
-      return false;
+      done = next == null;
     }
+    return next != null;
   }
 
-  /**
-   * Returns the next blob in the iteration.
-   *
-   * @return the next blob in the iteration
-   */
   @Override
   public Blob next() {
-    try {
-      if (next == null) {
-        next = read();
-      }
-      Blob current = next;
-      next = null;
-      return current;
-    } catch (IOException exception) {
+    if (!hasNext()) {
       throw new NoSuchElementException();
     }
+    Blob current = next;
+    next = null;
+    return current;
   }
 }

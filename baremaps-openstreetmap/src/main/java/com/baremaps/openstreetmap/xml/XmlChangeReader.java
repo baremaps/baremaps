@@ -14,23 +14,15 @@
 
 package com.baremaps.openstreetmap.xml;
 
-
-
-import com.baremaps.openstreetmap.OpenStreetMapFormat.Reader;
+import com.baremaps.openstreetmap.EntityReader;
 import com.baremaps.openstreetmap.model.Change;
 import java.io.InputStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-/** A utility class for parsing an OpenStreetMap change file. */
-public class XmlChangeReader implements Reader<Stream<Change>> {
+/** Reads an OpenStreetMap change file (osc.xml) as a stream of changes. */
+public class XmlChangeReader implements EntityReader<Change> {
 
-  /**
-   * Creates an ordered stream of OSM changes from an XML file.
-   *
-   * @param input
-   * @return
-   */
   @Override
   public Stream<Change> read(InputStream input) {
     return StreamSupport.stream(new XmlChangeSpliterator(input), false);

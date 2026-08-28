@@ -14,6 +14,7 @@
 
 package com.baremaps.calcite.openstreetmap;
 
+import com.baremaps.openstreetmap.GeometryOptions;
 import com.baremaps.openstreetmap.pbf.PbfEntityReader;
 import com.baremaps.openstreetmap.xml.XmlEntityReader;
 import java.io.FileInputStream;
@@ -75,8 +76,7 @@ public class OpenStreetMapTableFactory implements TableFactory<Table> {
    * @throws IOException if an I/O error occurs
    */
   private OpenStreetMapTable createTableFromPbf(Path path) throws IOException {
-    PbfEntityReader reader = new PbfEntityReader();
-    reader.setGeometries(true);
+    PbfEntityReader reader = new PbfEntityReader(GeometryOptions.inMemory());
     return new OpenStreetMapTable(path.toFile(), reader);
   }
 
@@ -88,8 +88,7 @@ public class OpenStreetMapTableFactory implements TableFactory<Table> {
    * @throws IOException if an I/O error occurs
    */
   private OpenStreetMapTable createTableFromXml(Path path) throws IOException {
-    XmlEntityReader reader = new XmlEntityReader();
-    reader.setGeometries(true);
+    XmlEntityReader reader = new XmlEntityReader(GeometryOptions.inMemory());
     return new OpenStreetMapTable(path.toFile(), reader);
   }
 }

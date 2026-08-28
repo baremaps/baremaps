@@ -12,27 +12,25 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.pbf;
+package com.baremaps.openstreetmap;
 
+import java.io.InputStream;
+import java.util.stream.Stream;
 
-
-import com.baremaps.openstreetmap.OpenStreetMapFormat.EntityReader;
-
-public interface PbfReader<T> extends EntityReader<T> {
-
-  /**
-   * Gets the number of blobs buffered by the parser to parallelize deserialization.
-   *
-   * @return the size of the buffer
-   */
-  int getBuffer();
+/**
+ * Reads an OpenStreetMap file as an ordered stream of objects.
+ *
+ * @param <T> the type of the streamed objects
+ */
+@FunctionalInterface
+public interface EntityReader<T> {
 
   /**
-   * Sets the number of blobs buffered by the parser to parallelize deserialization.
+   * Creates an ordered stream from the provided input. The stream is lazy: the input must stay open
+   * until the stream has been consumed.
    *
-   * @param buffer the size of the buffer
-   * @return the reader
+   * @param input the file content
+   * @return an ordered stream
    */
-  PbfReader<T> setBuffer(int buffer);
-
+  Stream<T> read(InputStream input);
 }

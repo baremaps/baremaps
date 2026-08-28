@@ -102,8 +102,9 @@ public class ImportDaylightFeatures implements Task {
       if (entity.getTags() != null) {
         tags.putAll(entity.getTags());
       }
-      entity.setTags(tags);
-      repository.put(entity);
+      @SuppressWarnings("unchecked")
+      var updated = (T) entity.withTags(tags);
+      repository.put(updated);
     }
   }
 

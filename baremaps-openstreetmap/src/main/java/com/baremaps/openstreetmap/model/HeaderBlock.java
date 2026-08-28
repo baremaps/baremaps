@@ -14,44 +14,29 @@
 
 package com.baremaps.openstreetmap.model;
 
+import java.util.List;
 
-
-/** Represents a header block in an OpenStreetMap dataset. */
+/** The first block of an OpenStreetMap PBF file, holding its header and bounds. */
 public final class HeaderBlock extends Block {
 
   private final Header header;
-
   private final Bound bound;
 
-  /**
-   * Constructs an OpenStreetMap {@code HeaderBlock} with the specified parameters.
-   *
-   * @param blob the blob
-   * @param header the header
-   * @param bound the bound
-   */
-  public HeaderBlock(Blob blob, Header header, Bound bound) {
-    super(blob);
+  public HeaderBlock(Header header, Bound bound) {
     this.header = header;
     this.bound = bound;
   }
 
-  /**
-   * Returns the header.
-   *
-   * @return the header
-   */
   public Header getHeader() {
     return header;
   }
 
-  /**
-   * Returns the bounds.
-   *
-   * @return the bounds
-   */
   public Bound getBound() {
     return bound;
   }
 
+  @Override
+  public List<Entity> entities() {
+    return List.of(header, bound);
+  }
 }

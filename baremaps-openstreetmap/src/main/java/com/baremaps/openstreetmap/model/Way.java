@@ -14,88 +14,42 @@
 
 package com.baremaps.openstreetmap.model;
 
-
-
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.StringJoiner;
 import org.locationtech.jts.geom.Geometry;
 
 /** Represents a way element in an OpenStreetMap dataset. */
 public final class Way extends Element {
 
-  private List<Long> nodes;
+  private final List<Long> nodes;
 
-  /**
-   * Constructs an OpenStreetMap {@code Way}.
-   */
-  public Way() {
-    super();
+  public Way(long id, Info info, Map<String, Object> tags, List<Long> nodes) {
+    this(id, info, tags, nodes, null);
   }
 
-  /**
-   * Constructs an OpenStreetMap {@code Node} with the specified parameters.
-   *
-   * @param id the id
-   * @param info the information
-   * @param tags the tags
-   * @param nodes the nodes
-   */
-  public Way(Long id, Info info, Map<String, Object> tags, List<Long> nodes) {
-    super(id, info, tags);
-    this.nodes = nodes;
-  }
-
-  /**
-   * Constructs an OpenStreetMap {@code Node} with the specified parameters.
-   *
-   * @param id the id
-   * @param info the information
-   * @param tags the tags
-   * @param nodes the nodes
-   * @param geometry the geometry
-   */
-  public Way(Long id, Info info, Map<String, Object> tags, List<Long> nodes, Geometry geometry) {
+  public Way(long id, Info info, Map<String, Object> tags, List<Long> nodes, Geometry geometry) {
     super(id, info, tags, geometry);
     this.nodes = nodes;
   }
 
-  /**
-   * Returns the nodes.
-   *
-   * @return the nodes
-   */
+  /** Returns the ids of the nodes of the way, in order. */
   public List<Long> getNodes() {
     return nodes;
   }
 
-  /** {@inheritDoc} */
   @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof Way)) {
-      return false;
-    }
-    if (!super.equals(o)) {
-      return false;
-    }
-    Way way = (Way) o;
-    return Objects.equals(nodes, way.nodes);
+  public Way withTags(Map<String, Object> tags) {
+    return new Way(getId(), getInfo(), tags, nodes, getGeometry());
   }
 
-  /** {@inheritDoc} */
+  @Override
+  public boolean equals(Object o) {
+    return o instanceof Way way && super.equals(o) && Objects.equals(nodes, way.nodes);
+  }
+
   @Override
   public int hashCode() {
     return Objects.hash(super.hashCode(), nodes);
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public String toString() {
-    return new StringJoiner(", ", Way.class.getSimpleName() + "[", "]").add("nodes=" + nodes)
-        .add("id=" + id).toString();
   }
 }

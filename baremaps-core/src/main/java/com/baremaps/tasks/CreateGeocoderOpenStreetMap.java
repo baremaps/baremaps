@@ -16,6 +16,7 @@ package com.baremaps.tasks;
 
 import com.baremaps.geocoder.GeocoderConstants;
 import com.baremaps.geocoder.openstreetmap.OpenStreetMapEntityConsumer;
+import com.baremaps.openstreetmap.GeometryOptions;
 import com.baremaps.openstreetmap.pbf.PbfEntityReader;
 import com.baremaps.openstreetmap.stream.StreamUtils;
 import com.baremaps.workflow.Task;
@@ -86,12 +87,8 @@ public class CreateGeocoderOpenStreetMap implements Task {
       OpenStreetMapEntityConsumer importer) throws IOException {
 
     // configure the block reader
-    var reader = new PbfEntityReader()
-        .setGeometries(true)
-        // Must be to 4326 projection to avoid transformation before using Lucene API
-        .setSrid(4326)
-        .setCoordinateMap(coordinateMap)
-        .setReferenceMap(referenceMap);
+    // Geometries stay in WGS 84, which is what the Lucene API expects
+    var reader = new PbfEntityReader(new GeometryOptions(coordinateMap, referenceMap));
 
     try (var input = Files.newInputStream(path)) {
       StreamUtils.batch(reader.read(input)).forEach(importer);
