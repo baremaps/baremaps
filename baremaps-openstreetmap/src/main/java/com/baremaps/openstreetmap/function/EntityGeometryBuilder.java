@@ -14,62 +14,57 @@
 
 package com.baremaps.openstreetmap.function;
 
-
-
+import com.baremaps.openstreetmap.model.Bound;
 import com.baremaps.openstreetmap.model.Entity;
+import com.baremaps.openstreetmap.model.Header;
 import com.baremaps.openstreetmap.model.Node;
 import com.baremaps.openstreetmap.model.Relation;
 import com.baremaps.openstreetmap.model.Way;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import org.locationtech.jts.geom.*;
+import org.locationtech.jts.geom.Coordinate;
 
-/** A consumer that builds and sets the geometry of OpenStreetMap entities via side effects. */
+/**
+ * A consumer that sets the geometry of the entities it accepts, dispatching each one to the builder
+ * of its kind.
+ *
+ * <p>
+ * The maps must already hold the nodes and ways the entity refers to, which is why entities have to
+ * be fed in file order. Recording them is the job of {@link EntityMapBuilder}, kept separate so
+ * that a caller reading from an already populated database does not write back into it.
+ */
 public class EntityGeometryBuilder implements Consumer<Entity> {
 
-  private final Consumer<Entity> nodeGeometryBuilder;
-  private final Consumer<Entity> wayGeometryBuilder;
-  private final Consumer<Entity> relationMultiPolygonBuilder;
+  private final NodeGeometryBuilder nodeGeometryBuilder = new NodeGeometryBuilder();
+  private final WayGeometryBuilder wayGeometryBuilder;
+  private final RelationGeometryBuilder relationGeometryBuilder;
 
   /**
-   * Constructs a consumer that uses the provided caches to create and set geometries.
+   * Constructs a consumer that uses the provided maps to build geometries.
    *
-   * @param coordinateMap the coordinate cache
-   * @param referenceMap the reference cache
+   * @param coordinateMap the coordinates of nodes, indexed by node id
+   * @param referenceMap the node ids of ways, indexed by way id
    */
   public EntityGeometryBuilder(
       Map<Long, Coordinate> coordinateMap,
       Map<Long, List<Long>> referenceMap) {
-    this.nodeGeometryBuilder = new NodeGeometryBuilder();
     this.wayGeometryBuilder = new WayGeometryBuilder(coordinateMap);
-    this.relationMultiPolygonBuilder = new RelationMultiPolygonBuilder(coordinateMap, referenceMap);
+    this.relationGeometryBuilder = new RelationGeometryBuilder(coordinateMap, referenceMap);
   }
 
-  /**
-   * Returns true if the relation describes an area. Only multipolygons and boundaries do:
-   * boundaries are administrative areas whose rings are shared with neighbours, and other relation
-   * types (routes, restrictions, ...) have no single geometry. Coastline relations are excluded
-   * because the coastline of a landmass is too large to assemble in memory.
-   */
-  private static boolean isMultiPolygon(Relation relation) {
-    var tags = relation.getTags();
-    if ("coastline".equals(tags.get("natural"))) {
-      return false;
-    }
-    return "multipolygon".equals(tags.get("type")) || "boundary".equals(tags.get("type"));
-  }
-
-  /** {@inheritDoc} */
   @Override
   public void accept(Entity entity) {
-    if (entity instanceof Node node) {
-      nodeGeometryBuilder.accept(node);
-    } else if (entity instanceof Way way) {
-      wayGeometryBuilder.accept(way);
-    } else if (entity instanceof Relation relation && isMultiPolygon(relation)) {
-      relationMultiPolygonBuilder.accept(relation);
+    switch (entity) {
+      case Node node -> nodeGeometryBuilder.accept(node);
+      case Way way -> wayGeometryBuilder.accept(way);
+      case Relation relation -> relationGeometryBuilder.accept(relation);
+      case Header ignored -> {
+        // The header and the bounds describe the file, not a feature of the map.
+      }
+      case Bound ignored -> {
+        // Idem.
+      }
     }
   }
-
 }

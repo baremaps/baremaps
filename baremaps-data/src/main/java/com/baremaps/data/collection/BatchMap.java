@@ -12,13 +12,18 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.model;
+package com.baremaps.data.collection;
 
+import java.util.List;
+import java.util.Map;
 
+/**
+ * A map whose lookups are cheaper in batches, such as one backed by a database where every
+ * {@link #get(Object)} is a round trip. Geometry builders read the nodes of a way through
+ * {@link #getAll(List)} when the map is one of these.
+ */
+public interface BatchMap<K, V> extends Map<K, V> {
 
-/** Represents the author of an objet in an OpenStreetMap dataset. */
-public record User(int id, String name) {
-
-  public static final User NO_USER = new User(-1, "");
-
+  /** Returns the value of each key, in order, with {@code null} for the absent ones. */
+  List<V> getAll(List<K> keys);
 }

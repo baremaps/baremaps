@@ -87,7 +87,8 @@ final class DataBlockReader {
   }
 
   private void readDenseNodes(DenseNodes denseNodes, List<Node> nodes) {
-    Osmformat.DenseInfo denseInfo = denseNodes.getDenseinfo();
+    // The editing metadata is optional: a file written with omitmeta carries none.
+    Osmformat.DenseInfo denseInfo = denseNodes.hasDenseinfo() ? denseNodes.getDenseinfo() : null;
     long id = 0;
     long lat = 0;
     long lon = 0;
@@ -100,9 +101,6 @@ final class DataBlockReader {
       id += denseNodes.getId(i);
       lat += denseNodes.getLat(i);
       lon += denseNodes.getLon(i);
-      uid += denseInfo.getUid(i);
-      timestamp += denseInfo.getTimestamp(i);
-      changeset += denseInfo.getChangeset(i);
       Map<String, Object> tags = new HashMap<>();
       if (denseNodes.getKeysValsCount() > 0) {
         while (denseNodes.getKeysVals(kv) != 0) {
@@ -111,13 +109,19 @@ final class DataBlockReader {
         }
         kv++;
       }
-      Info info = new Info(denseInfo.getVersion(i), toTimestamp(timestamp), changeset, uid);
+      Info info = Info.NO_INFO;
+      if (denseInfo != null) {
+        uid += denseInfo.getUid(i);
+        timestamp += denseInfo.getTimestamp(i);
+        changeset += denseInfo.getChangeset(i);
+        info = new Info(denseInfo.getVersion(i), toTimestamp(timestamp), changeset, uid);
+      }
       nodes.add(new Node(id, info, tags, toLon(lon), toLat(lat)));
     }
   }
 
   private Node readNode(Osmformat.Node node) {
-    return new Node(node.getId(), toInfo(node.getInfo()),
+    return new Node(node.getId(), toInfo(node.hasInfo() ? node.getInfo() : null),
         toTags(node.getKeysList(), node.getValsList()), toLon(node.getLon()), toLat(node.getLat()));
   }
 
@@ -128,8 +132,8 @@ final class DataBlockReader {
       ref += way.getRefs(i);
       nodes.add(ref);
     }
-    return new Way(way.getId(), toInfo(way.getInfo()), toTags(way.getKeysList(), way.getValsList()),
-        nodes);
+    return new Way(way.getId(), toInfo(way.hasInfo() ? way.getInfo() : null),
+        toTags(way.getKeysList(), way.getValsList()), nodes);
   }
 
   private Relation readRelation(Osmformat.Relation relation) {
@@ -141,11 +145,14 @@ final class DataBlockReader {
       Member.MemberType type = Member.MemberType.forNumber(relation.getTypes(i).getNumber());
       members.add(new Member(ref, type, role));
     }
-    return new Relation(relation.getId(), toInfo(relation.getInfo()),
+    return new Relation(relation.getId(), toInfo(relation.hasInfo() ? relation.getInfo() : null),
         toTags(relation.getKeysList(), relation.getValsList()), members);
   }
 
   private Info toInfo(Osmformat.Info info) {
+    if (info == null) {
+      return Info.NO_INFO;
+    }
     return new Info(info.getVersion(), toTimestamp(info.getTimestamp()), info.getChangeset(),
         info.getUid());
   }

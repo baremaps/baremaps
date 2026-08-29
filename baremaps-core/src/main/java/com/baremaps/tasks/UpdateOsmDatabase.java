@@ -14,14 +14,20 @@
 
 package com.baremaps.tasks;
 
-import com.baremaps.openstreetmap.function.*;
+import com.baremaps.data.collection.BatchMap;
+import com.baremaps.openstreetmap.function.ChangeEntitiesHandler;
+import com.baremaps.openstreetmap.function.EntityMapBuilder;
+import com.baremaps.openstreetmap.function.EntityProjectionTransformer;
+import com.baremaps.openstreetmap.function.NodeGeometryBuilder;
+import com.baremaps.openstreetmap.function.RelationGeometryBuilder;
+import com.baremaps.openstreetmap.function.WayGeometryBuilder;
 import com.baremaps.openstreetmap.model.Change;
+import com.baremaps.openstreetmap.model.Entity;
 import com.baremaps.openstreetmap.model.Header;
 import com.baremaps.openstreetmap.model.Node;
 import com.baremaps.openstreetmap.model.Relation;
 import com.baremaps.openstreetmap.model.Way;
 import com.baremaps.openstreetmap.state.StateReader;
-import com.baremaps.openstreetmap.utils.BatchMap;
 import com.baremaps.openstreetmap.xml.XmlChangeReader;
 import com.baremaps.postgres.openstreetmap.*;
 import com.baremaps.workflow.Task;
@@ -164,26 +170,24 @@ public class UpdateOsmDatabase implements Task {
     Consumer<Change> updateMaps = coordinateMap instanceof BatchMap
         ? change -> {
         }
-        : new ChangeEntitiesHandler(
-            new CoordinateMapBuilder(coordinateMap).andThen(new ReferenceMapBuilder(referenceMap)));
+        : new ChangeEntitiesHandler<>(Entity.class,
+            new EntityMapBuilder(coordinateMap, referenceMap));
 
-    // Process the changeset and update the database
-    var buildNodeGeometry = new NodeGeometryBuilder();
-    var reprojectNodeGeometry = new EntityProjectionTransformer(4326, databaseSrid);
-    var prepareNodeGeometry =
-        new ChangeEntitiesHandler(buildNodeGeometry.andThen(reprojectNodeGeometry));
+    // Process the changeset and update the database, one entity type at a time: a way can only be
+    // built once the nodes of the change are in place. Each pass names the type it prepares, so
+    // that a later pass does not reproject the geometry an earlier one already projected.
+    var reproject = new EntityProjectionTransformer(4326, databaseSrid);
+
+    var prepareNodeGeometry = new ChangeEntitiesHandler<>(Node.class,
+        new NodeGeometryBuilder().andThen(reproject));
     var importNodes = new ChangeElementsImporter<>(Node.class, nodeRepository);
 
-    var buildWayGeometry = new WayGeometryBuilder(coordinateMap);
-    var reprojectWayGeometry = new EntityProjectionTransformer(4326, databaseSrid);
-    var prepareWayGeometry =
-        new ChangeEntitiesHandler(buildWayGeometry.andThen(reprojectWayGeometry));
+    var prepareWayGeometry = new ChangeEntitiesHandler<>(Way.class,
+        new WayGeometryBuilder(coordinateMap).andThen(reproject));
     var importWays = new ChangeElementsImporter<>(Way.class, wayRepository);
 
-    var buildRelationGeometry = new RelationMultiPolygonBuilder(coordinateMap, referenceMap);
-    var reprojectRelationGeometry = new EntityProjectionTransformer(4326, databaseSrid);
-    var prepareRelationGeometry =
-        new ChangeEntitiesHandler(buildRelationGeometry.andThen(reprojectRelationGeometry));
+    var prepareRelationGeometry = new ChangeEntitiesHandler<>(Relation.class,
+        new RelationGeometryBuilder(coordinateMap, referenceMap).andThen(reproject));
     var importRelations = new ChangeElementsImporter<>(Relation.class, relationRepository);
 
     var entityProcessor = updateMaps

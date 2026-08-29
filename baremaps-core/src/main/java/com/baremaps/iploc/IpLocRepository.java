@@ -18,7 +18,7 @@ package com.baremaps.iploc;
 
 import static com.baremaps.iploc.InetAddressUtils.fromByteArray;
 
-import com.baremaps.openstreetmap.stream.StreamUtils;
+import com.baremaps.data.stream.StreamUtils;
 import java.net.InetAddress;
 import java.sql.ResultSet;
 import java.sql.SQLException;

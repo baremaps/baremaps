@@ -16,10 +16,10 @@ package com.baremaps.cli.dem;
 
 
 
+import com.baremaps.data.stream.ProgressLogger;
+import com.baremaps.data.stream.StreamUtils;
 import com.baremaps.maplibre.tileset.Tileset;
 import com.baremaps.maplibre.tileset.TilesetLayer;
-import com.baremaps.openstreetmap.stream.ProgressLogger;
-import com.baremaps.openstreetmap.stream.StreamUtils;
 import com.baremaps.tasks.ExportVectorTiles;
 import com.baremaps.tilestore.TileCoord;
 import com.baremaps.tilestore.TileEntry;

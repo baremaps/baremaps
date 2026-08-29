@@ -14,12 +14,12 @@
 
 package com.baremaps.tasks;
 
-import static com.baremaps.openstreetmap.stream.ConsumerUtils.consumeThenReturn;
+import static com.baremaps.data.stream.ConsumerUtils.consumeThenReturn;
 
+import com.baremaps.data.geometry.ProjectionTransformer;
+import com.baremaps.data.stream.StreamException;
 import com.baremaps.openstreetmap.function.EntityGeometryBuilder;
-import com.baremaps.openstreetmap.function.ProjectionTransformer;
 import com.baremaps.openstreetmap.model.*;
-import com.baremaps.openstreetmap.stream.StreamException;
 import com.baremaps.openstreetmap.xml.XmlChangeReader;
 import com.baremaps.postgres.openstreetmap.HeaderRepository;
 import com.baremaps.postgres.openstreetmap.Repository;

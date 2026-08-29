@@ -16,8 +16,8 @@ package com.baremaps.postgres.openstreetmap;
 
 
 
+import com.baremaps.data.stream.StreamException;
 import com.baremaps.openstreetmap.model.*;
-import com.baremaps.openstreetmap.stream.StreamException;
 import java.util.function.Consumer;
 
 /** A consumer for importing OpenStreetMap blocks in a database. */
@@ -50,12 +50,13 @@ public class BlockImporter implements Consumer<Block> {
   @Override
   public void accept(Block block) {
     try {
-      if (block instanceof HeaderBlock headerBlock) {
-        headerRepository.put(headerBlock.getHeader());
-      } else if (block instanceof DataBlock dataBlock) {
-        nodeRepository.copy(dataBlock.getNodes());
-        wayRepository.copy(dataBlock.getWays());
-        relationRepository.copy(dataBlock.getRelations());
+      switch (block) {
+        case HeaderBlock headerBlock -> headerRepository.put(headerBlock.header());
+        case DataBlock dataBlock -> {
+          nodeRepository.copy(dataBlock.nodes());
+          wayRepository.copy(dataBlock.ways());
+          relationRepository.copy(dataBlock.relations());
+        }
       }
     } catch (Exception e) {
       throw new StreamException(e);

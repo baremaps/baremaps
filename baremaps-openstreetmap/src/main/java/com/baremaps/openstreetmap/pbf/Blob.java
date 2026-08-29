@@ -37,15 +37,34 @@ record Blob(String type, byte[] rawData) {
     Fileformat.Blob blob = Fileformat.Blob.parseFrom(rawData);
     if (blob.hasRaw()) {
       return blob.getRaw();
-    } else if (blob.hasZlibData()) {
-      byte[] bytes = new byte[blob.getRawSize()];
-      Inflater inflater = new Inflater();
-      inflater.setInput(blob.getZlibData().toByteArray());
-      inflater.inflate(bytes);
-      inflater.end();
-      return ByteString.copyFrom(bytes);
-    } else {
+    }
+    if (!blob.hasZlibData()) {
       throw new DataFormatException("Unsupported blob compression");
+    }
+    return ByteString.copyFrom(inflate(blob.getZlibData().toByteArray(), blob.getRawSize()));
+  }
+
+  /**
+   * Inflates the bytes, whose uncompressed size the blob header announces.
+   *
+   * <p>
+   * A truncated blob inflates to fewer bytes than announced without raising anything, and the
+   * partially filled buffer would then fail to parse as protobuf, far from the actual cause. The
+   * size is therefore checked here.
+   */
+  private static byte[] inflate(byte[] compressed, int rawSize) throws DataFormatException {
+    byte[] bytes = new byte[rawSize];
+    Inflater inflater = new Inflater();
+    try {
+      inflater.setInput(compressed);
+      int inflated = inflater.inflate(bytes);
+      if (inflated != rawSize) {
+        throw new DataFormatException(
+            "Truncated blob: inflated %d of the %d announced bytes".formatted(inflated, rawSize));
+      }
+      return bytes;
+    } finally {
+      inflater.end();
     }
   }
 }

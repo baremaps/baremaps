@@ -14,10 +14,10 @@
 
 package com.baremaps.openstreetmap;
 
-import com.baremaps.openstreetmap.function.CoordinateMapBuilder;
+import com.baremaps.data.geometry.GeometryUtils;
 import com.baremaps.openstreetmap.function.EntityGeometryBuilder;
+import com.baremaps.openstreetmap.function.EntityMapBuilder;
 import com.baremaps.openstreetmap.function.EntityProjectionTransformer;
-import com.baremaps.openstreetmap.function.ReferenceMapBuilder;
 import com.baremaps.openstreetmap.model.Entity;
 import java.util.HashMap;
 import java.util.List;
@@ -43,7 +43,7 @@ public record GeometryOptions(
     Map<Long, List<Long>> referenceMap,
     int srid) {
 
-  public static final int WGS84 = 4326;
+  public static final int WGS84 = GeometryUtils.WGS84;
 
   public GeometryOptions {
     Objects.requireNonNull(coordinateMap, "coordinateMap");
@@ -73,9 +73,10 @@ public record GeometryOptions(
    * @return a consumer that sets the geometry of the entities it accepts
    */
   public Consumer<Entity> entityHandler() {
-    return new CoordinateMapBuilder(coordinateMap)
-        .andThen(new ReferenceMapBuilder(referenceMap))
-        .andThen(new EntityGeometryBuilder(coordinateMap, referenceMap))
-        .andThen(new EntityProjectionTransformer(WGS84, srid));
+    Consumer<Entity> handler = new EntityMapBuilder(coordinateMap, referenceMap)
+        .andThen(new EntityGeometryBuilder(coordinateMap, referenceMap));
+    // Reprojecting to the projection the file is already in would cost a pass over every
+    // coordinate to produce the same geometry.
+    return srid == WGS84 ? handler : handler.andThen(new EntityProjectionTransformer(WGS84, srid));
   }
 }

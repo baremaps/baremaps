@@ -15,7 +15,7 @@
 package com.baremaps.openstreetmap.state;
 
 import com.baremaps.openstreetmap.model.State;
-import com.google.common.io.CharStreams;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -32,10 +32,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Reads the state files of an OpenStreetMap replication server and locates the state matching a
- * timestamp. Adapted from pyosmium (BSD 2-Clause "Simplified" License).
- */
+/** Reads the state files of an OpenStreetMap replication server. */
 public class StateReader {
 
   private static final Logger logger = LoggerFactory.getLogger(StateReader.class);
@@ -75,17 +72,18 @@ public class StateReader {
    */
   public State read(InputStream input) {
     try {
-      Map<String, String> map = new HashMap<>();
-      for (String line : CharStreams
-          .readLines(new InputStreamReader(input, StandardCharsets.UTF_8))) {
-        String[] array = line.split("=");
-        if (array.length == 2) {
-          map.put(array[0], array[1]);
+      Map<String, String> values = new HashMap<>();
+      var reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
+      for (String line = reader.readLine(); line != null; line = reader.readLine()) {
+        // The value of a timestamp holds colons, so only the first separator delimits the key.
+        int separator = line.indexOf('=');
+        if (separator > 0) {
+          values.put(line.substring(0, separator), line.substring(separator + 1));
         }
       }
-      long sequenceNumber = Long.parseLong(map.get("sequenceNumber"));
+      long sequenceNumber = Long.parseLong(values.get("sequenceNumber"));
       // The colons of the timestamp are escaped with backslashes in state files.
-      String timestamp = map.get("timestamp").replace("\\", "");
+      String timestamp = values.get("timestamp").replace("\\", "");
       return new State(sequenceNumber, LocalDateTime.parse(timestamp, TIMESTAMP_FORMAT));
     } catch (IOException e) {
       throw new UncheckedIOException(e);
@@ -95,74 +93,20 @@ public class StateReader {
   /**
    * Finds the latest state whose timestamp precedes the given one.
    *
-   * <p>
-   * The search first brackets the timestamp: starting from the latest state as the upper bound, it
-   * halves the sequence number until it finds a state before the timestamp (the lower bound).
-   * Then it bisects between the bounds. State files can be missing on the server, so a probe that
-   * fails is retried on neighbouring sequence numbers.
-   *
    * @param timestamp the timestamp
    * @return the state, or empty if the latest state cannot be read
    */
-  @SuppressWarnings({"squid:S3776", "squid:S6541"})
   public Optional<State> getStateFromTimestamp(LocalDateTime timestamp) {
-    var upper = getLatestState();
-    if (upper.isEmpty()) {
-      return Optional.empty();
-    }
-    if (timestamp.isAfter(upper.get().timestamp()) || upper.get().sequenceNumber() <= 0) {
-      return upper;
-    }
-
-    // Bracket the timestamp between a lower and an upper state.
-    var lower = Optional.<State>empty();
-    var lowerId = 0L;
-    while (lower.isEmpty()) {
-      lower = getState(lowerId);
-      if (lower.isPresent() && lower.get().timestamp().isAfter(timestamp)) {
-        if (lower.get().sequenceNumber() == 0
-            || lower.get().sequenceNumber() + 1 >= upper.get().sequenceNumber()) {
-          return lower;
-        }
-        upper = lower;
-        lower = Optional.empty();
-        lowerId = 0L;
-      }
-      if (lower.isEmpty()) {
-        var newId = (lowerId + upper.get().sequenceNumber()) / 2;
-        if (newId <= lowerId) {
-          return upper;
-        }
-        lowerId = newId;
-      }
-    }
-
-    // Bisect between the bounds.
-    while (true) {
-      var splitId = (lower.get().sequenceNumber() + upper.get().sequenceNumber()) / 2;
-      var split = getState(splitId);
-      for (var id = splitId - 1; split.isEmpty() && id > lower.get().sequenceNumber(); id--) {
-        split = getState(id);
-      }
-      for (var id = splitId + 1; split.isEmpty() && id < upper.get().sequenceNumber(); id++) {
-        split = getState(id);
-      }
-      if (split.isEmpty()) {
-        return lower;
-      }
-      if (split.get().timestamp().isBefore(timestamp)) {
-        lower = split;
-      } else {
-        upper = split;
-      }
-      if (lower.get().sequenceNumber() + 1 >= upper.get().sequenceNumber()) {
-        return lower;
-      }
-    }
+    return getLatestState()
+        .map(latest -> new StateSearch(this::getState).before(timestamp, latest));
   }
 
   /**
    * Downloads the state with the given sequence number.
+   *
+   * <p>
+   * A state that cannot be read is not an error: the server prunes old states, and locating one by
+   * timestamp probes sequence numbers that are expected to be missing.
    *
    * @param sequenceNumber the sequence number
    * @return the state, or empty if it cannot be read
@@ -172,7 +116,7 @@ public class StateReader {
       try (var input = getUrl(sequenceNumber, "state.txt").openStream()) {
         return Optional.of(read(input));
       } catch (Exception e) {
-        logger.error("Error while reading state file", e);
+        logger.debug("Unable to read the state file #{}", sequenceNumber, e);
       }
     }
     return Optional.empty();
@@ -187,7 +131,7 @@ public class StateReader {
     try (var input = URI.create(replicationUrl + "/state.txt").toURL().openStream()) {
       return Optional.of(read(input));
     } catch (Exception e) {
-      logger.error("Error while reading state file", e);
+      logger.error("Unable to read the latest state file of {}", replicationUrl, e);
       return Optional.empty();
     }
   }

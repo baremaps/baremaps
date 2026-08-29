@@ -14,40 +14,37 @@
 
 package com.baremaps.openstreetmap.xml;
 
-import static com.baremaps.openstreetmap.stream.ConsumerUtils.consumeThenReturn;
+import static com.baremaps.data.stream.ConsumerUtils.consumeThenReturn;
 
 import com.baremaps.openstreetmap.EntityReader;
 import com.baremaps.openstreetmap.GeometryOptions;
 import com.baremaps.openstreetmap.model.Entity;
 import java.io.InputStream;
+import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 /** Reads an OpenStreetMap XML file as a stream of entities. */
 public class XmlEntityReader implements EntityReader<Entity> {
 
-  private final GeometryOptions geometryOptions;
+  private final UnaryOperator<Entity> entityHandler;
 
   /** Creates a reader that leaves geometries unset. */
   public XmlEntityReader() {
-    this(null);
+    this.entityHandler = UnaryOperator.identity();
   }
 
   /**
    * Creates a reader that sets the geometry of the elements it reads.
    *
-   * @param geometryOptions the geometry options, or null to leave geometries unset
+   * @param geometryOptions the geometry options
    */
   public XmlEntityReader(GeometryOptions geometryOptions) {
-    this.geometryOptions = geometryOptions;
+    this.entityHandler = consumeThenReturn(geometryOptions.entityHandler());
   }
 
   @Override
   public Stream<Entity> read(InputStream input) {
-    var entities = StreamSupport.stream(new XmlEntitySpliterator(input), false);
-    if (geometryOptions == null) {
-      return entities;
-    }
-    return entities.map(consumeThenReturn(geometryOptions.entityHandler()));
+    return StreamSupport.stream(new XmlEntitySpliterator(input), false).map(entityHandler);
   }
 }

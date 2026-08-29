@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.stream;
+package com.baremaps.data.stream;
 
 
 
@@ -23,9 +23,9 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
- * A spliterator that partition another spliterator.
+ * A spliterator that groups the elements of another spliterator into fixed-size lists.
  *
- * @param <T> the type of elements returned by this {@code Spliterator}
+ * @param <T> the type of the elements being grouped
  */
 public class PartitionedSpliterator<T> implements Spliterator<List<T>> {
 
@@ -34,17 +34,16 @@ public class PartitionedSpliterator<T> implements Spliterator<List<T>> {
   private final int partitionSize;
 
   /**
-   * Constructs a {@code PartitionedSpliterator} from another spliterator
+   * Constructs a spliterator that groups the elements of another one.
    *
    * @param spliterator the spliterator to partition
-   * @param partitionSize the partition size
+   * @param partitionSize the number of elements per partition
    */
   public PartitionedSpliterator(Spliterator<T> spliterator, int partitionSize) {
     this.spliterator = spliterator;
     this.partitionSize = partitionSize;
   }
 
-  /** {@inheritDoc} */
   @Override
   public boolean tryAdvance(Consumer<? super List<T>> action) {
     var list = new ArrayList<T>(partitionSize);
@@ -59,7 +58,6 @@ public class PartitionedSpliterator<T> implements Spliterator<List<T>> {
     return true;
   }
 
-  /** {@inheritDoc} */
   @Override
   public Spliterator<List<T>> trySplit() {
     HoldingConsumer<List<T>> consumer = new HoldingConsumer<>();
@@ -67,13 +65,11 @@ public class PartitionedSpliterator<T> implements Spliterator<List<T>> {
     return Stream.ofNullable(consumer.value()).spliterator();
   }
 
-  /** {@inheritDoc} */
   @Override
   public long estimateSize() {
     return spliterator.estimateSize() / partitionSize;
   }
 
-  /** {@inheritDoc} */
   @Override
   public int characteristics() {
     return spliterator.characteristics();

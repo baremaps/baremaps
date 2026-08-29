@@ -14,48 +14,48 @@
 
 package com.baremaps.openstreetmap.pbf;
 
-import static com.baremaps.openstreetmap.stream.ConsumerUtils.consumeThenReturn;
+import static com.baremaps.data.stream.ConsumerUtils.consumeThenReturn;
 
+import com.baremaps.data.stream.StreamException;
+import com.baremaps.data.stream.StreamUtils;
 import com.baremaps.openstreetmap.EntityReader;
 import com.baremaps.openstreetmap.GeometryOptions;
 import com.baremaps.openstreetmap.model.Block;
-import com.baremaps.openstreetmap.stream.StreamException;
-import com.baremaps.openstreetmap.stream.StreamUtils;
+import com.baremaps.openstreetmap.model.Entity;
 import java.io.InputStream;
+import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 /** Reads an OpenStreetMap PBF file as a stream of blocks. */
 public class PbfBlockReader implements EntityReader<Block> {
 
-  private final GeometryOptions geometryOptions;
+  private final UnaryOperator<Block> blockHandler;
 
   /** Creates a reader that leaves geometries unset. */
   public PbfBlockReader() {
-    this(null);
+    this.blockHandler = UnaryOperator.identity();
   }
 
   /**
    * Creates a reader that sets the geometry of the elements it reads.
    *
-   * @param geometryOptions the geometry options, or null to leave geometries unset
+   * @param geometryOptions the geometry options
    */
   public PbfBlockReader(GeometryOptions geometryOptions) {
-    this.geometryOptions = geometryOptions;
+    Consumer<Entity> entityHandler = geometryOptions.entityHandler();
+    this.blockHandler = consumeThenReturn(block -> block.entities().forEach(entityHandler));
   }
 
   @Override
   public Stream<Block> read(InputStream input) {
     // Blobs are decoded in parallel, but delivered in file order: geometry building relies on
     // nodes being seen before the ways that reference them (see GeometryOptions#entityHandler).
-    var blocks = StreamUtils.bufferInSourceOrder(
+    return StreamUtils.bufferInSourceOrder(
         StreamUtils.stream(new BlobIterator(input)),
         PbfBlockReader::toBlock,
-        Runtime.getRuntime().availableProcessors());
-    if (geometryOptions == null) {
-      return blocks;
-    }
-    var entityHandler = geometryOptions.entityHandler();
-    return blocks.map(consumeThenReturn(block -> block.entities().forEach(entityHandler)));
+        Runtime.getRuntime().availableProcessors())
+        .map(blockHandler);
   }
 
   private static Block toBlock(Blob blob) {

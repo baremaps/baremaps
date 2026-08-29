@@ -16,7 +16,13 @@ package com.baremaps.openstreetmap.model;
 
 
 
-/** Represents a member of a relation in an OpenStreetMap dataset. */
+/**
+ * Represents a member of a relation in an OpenStreetMap dataset.
+ *
+ * @param ref the id of the referenced entity
+ * @param type the type of the referenced entity
+ * @param role the role the member plays in the relation, e.g. "outer" or "inner"
+ */
 public record Member(long ref, MemberType type, String role) {
 
   public enum MemberType {
@@ -24,12 +30,18 @@ public record Member(long ref, MemberType type, String role) {
     WAY,
     RELATION;
 
+    /**
+     * Returns the member type the PBF format encodes with the provided number.
+     *
+     * @param value the encoded type
+     * @return the member type
+     */
     public static MemberType forNumber(int value) {
       return switch (value) {
         case 0 -> NODE;
         case 1 -> WAY;
         case 2 -> RELATION;
-        default -> throw new IllegalArgumentException();
+        default -> throw new IllegalArgumentException("Unknown member type: " + value);
       };
     }
   }

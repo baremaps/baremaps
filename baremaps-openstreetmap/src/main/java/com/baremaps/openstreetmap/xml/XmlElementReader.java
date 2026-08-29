@@ -22,6 +22,7 @@ import static javax.xml.stream.XMLInputFactory.SUPPORT_DTD;
 import static javax.xml.stream.XMLStreamConstants.END_ELEMENT;
 import static javax.xml.stream.XMLStreamConstants.START_ELEMENT;
 
+import com.baremaps.data.stream.StreamException;
 import com.baremaps.openstreetmap.model.Bound;
 import com.baremaps.openstreetmap.model.Element;
 import com.baremaps.openstreetmap.model.Header;
@@ -30,7 +31,6 @@ import com.baremaps.openstreetmap.model.Member;
 import com.baremaps.openstreetmap.model.Node;
 import com.baremaps.openstreetmap.model.Relation;
 import com.baremaps.openstreetmap.model.Way;
-import com.baremaps.openstreetmap.stream.StreamException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -178,10 +178,10 @@ final class XmlElementReader {
     Long changeset = parseLong(attribute("changeset"));
     Long uid = parseLong(attribute("uid"));
     return new Info(
-        version != null ? version.intValue() : 0,
+        version != null ? version.intValue() : Info.NO_INFO.version(),
         parseTimestamp(attribute("timestamp")),
-        changeset != null ? changeset : -1,
-        uid != null ? uid.intValue() : -1);
+        changeset != null ? changeset : Info.NO_INFO.changeset(),
+        uid != null ? uid.intValue() : Info.NO_INFO.uid());
   }
 
   private void readTag(Map<String, Object> tags) throws XMLStreamException {

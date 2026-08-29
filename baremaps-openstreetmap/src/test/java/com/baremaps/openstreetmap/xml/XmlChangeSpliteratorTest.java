@@ -18,12 +18,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import com.baremaps.openstreetmap.model.Change;
-import com.baremaps.openstreetmap.stream.AccumulatingConsumer;
-import com.baremaps.openstreetmap.stream.HoldingConsumer;
 import com.baremaps.testing.TestFiles;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Spliterator;
 import java.util.zip.GZIPInputStream;
 import org.junit.jupiter.api.Assertions;
@@ -37,7 +36,8 @@ class XmlChangeSpliteratorTest {
         InputStream input = new GZIPInputStream(Files.newInputStream(TestFiles.SAMPLE_OSC_XML_2))) {
       Spliterator<Change> spliterator = new XmlChangeSpliterator(input);
       spliterator.forEachRemaining(Assertions::assertNotNull);
-      assertFalse(spliterator.tryAdvance(new HoldingConsumer<>()));
+      assertFalse(spliterator.tryAdvance(change -> {
+      }));
     }
   }
 
@@ -46,10 +46,10 @@ class XmlChangeSpliteratorTest {
     try (
         InputStream input = new GZIPInputStream(Files.newInputStream(TestFiles.SAMPLE_OSC_XML_2))) {
       Spliterator<Change> spliterator = new XmlChangeSpliterator(input);
-      AccumulatingConsumer<Change> accumulator = new AccumulatingConsumer<>();
-      spliterator.forEachRemaining(accumulator);
-      assertEquals(5, accumulator.values().size());
-      assertEquals(36, accumulator.values().stream()
+      var changes = new ArrayList<Change>();
+      spliterator.forEachRemaining(changes::add);
+      assertEquals(5, changes.size());
+      assertEquals(36, changes.stream()
           .flatMap(change -> change.entities().stream())
           .toList().size());
     }

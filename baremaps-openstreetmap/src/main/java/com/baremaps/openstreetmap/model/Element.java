@@ -74,6 +74,11 @@ permits Node, Way, Relation
     this.geometry = geometry;
   }
 
+  /**
+   * Compares the identity of the elements, which the geometry is not part of: an element is the
+   * same element before and after a builder derives its geometry, and a hash code that changed
+   * halfway through a pipeline would lose the element in any collection holding it.
+   */
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -83,12 +88,12 @@ permits Node, Way, Relation
       return false;
     }
     return id == element.id && Objects.equals(info, element.info)
-        && Objects.equals(tags, element.tags) && Objects.equals(geometry, element.geometry);
+        && Objects.equals(tags, element.tags);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, info, tags, geometry);
+    return Objects.hash(id, info, tags);
   }
 
   @Override

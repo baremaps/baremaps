@@ -14,7 +14,7 @@
 
 package com.baremaps.openstreetmap.pbf;
 
-import com.baremaps.openstreetmap.stream.StreamException;
+import com.baremaps.data.stream.StreamException;
 import com.baremaps.osm.binary.Fileformat;
 import java.io.DataInputStream;
 import java.io.EOFException;

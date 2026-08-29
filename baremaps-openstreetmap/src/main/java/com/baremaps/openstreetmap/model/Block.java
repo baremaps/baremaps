@@ -20,9 +20,9 @@ import java.util.List;
  * A block of an OpenStreetMap PBF file. Blocks are the unit of parallel decoding: each one is
  * self-contained and the entities it holds can be listed in file order.
  */
-public abstract sealed
+public sealed
 
-class Block
+interface Block
 permits HeaderBlock, DataBlock
 {
 
@@ -31,5 +31,5 @@ permits HeaderBlock, DataBlock
    *
    * @return the entities
    */
-  public abstract List<Entity> entities();
+  List<Entity> entities();
 }

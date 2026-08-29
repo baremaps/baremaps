@@ -16,12 +16,12 @@ package com.baremaps.tasks;
 
 import static java.lang.Boolean.TRUE;
 
+import com.baremaps.data.stream.StreamUtils;
 import com.baremaps.openstreetmap.GeometryOptions;
 import com.baremaps.openstreetmap.model.Node;
 import com.baremaps.openstreetmap.model.Relation;
 import com.baremaps.openstreetmap.model.Way;
 import com.baremaps.openstreetmap.pbf.PbfBlockReader;
-import com.baremaps.openstreetmap.stream.StreamUtils;
 import com.baremaps.postgres.openstreetmap.*;
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
@@ -156,7 +156,7 @@ public class ImportOsmPbf implements Task {
 
     // Stream and process the blocks
     try (var input = Files.newInputStream(path)) {
-      StreamUtils.batch(reader.read(input)).forEach(importer);
+      StreamUtils.parallel(reader.read(input)).forEach(importer);
     }
   }
 

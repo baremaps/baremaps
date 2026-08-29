@@ -14,23 +14,23 @@
 
 package com.baremaps.openstreetmap.function;
 
-import com.baremaps.openstreetmap.model.Entity;
+import com.baremaps.data.collection.BatchMap;
+import com.baremaps.data.geometry.GeometryUtils;
 import com.baremaps.openstreetmap.model.Way;
-import com.baremaps.openstreetmap.utils.BatchMap;
-import com.baremaps.openstreetmap.utils.GeometryUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.jts.geom.Polygon;
 import org.locationtech.jts.geom.util.GeometryFixer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** A consumer that builds and sets a way geometry via side effects. */
-public class WayGeometryBuilder implements Consumer<Entity> {
+/** A consumer that sets the line or polygon geometry of the ways it accepts. */
+public class WayGeometryBuilder implements Consumer<Way> {
 
   private static final Logger logger = LoggerFactory.getLogger(WayGeometryBuilder.class);
 
@@ -39,39 +39,42 @@ public class WayGeometryBuilder implements Consumer<Entity> {
   /**
    * Constructs a way geometry builder.
    *
-   * @param coordinateMap the coordinates map
+   * @param coordinateMap the coordinates of the nodes seen so far
    */
   public WayGeometryBuilder(Map<Long, Coordinate> coordinateMap) {
     this.coordinateMap = coordinateMap;
   }
 
+  /**
+   * Sets the geometry of the way. A way whose geometry cannot be built gets an empty line rather
+   * than none, so that a consumer can tell "could not be built" from "was never attempted".
+   */
   @Override
-  public void accept(Entity entity) {
-    if (entity instanceof Way way) {
-      try {
-        way.setGeometry(build(way));
-      } catch (Exception e) {
-        logger.debug("Unable to build the geometry for way #" + way.getId(), e);
-        way.setGeometry(GeometryUtils.GEOMETRY_FACTORY_WGS84.createEmpty(0));
-      }
+  public void accept(Way way) {
+    try {
+      way.setGeometry(build(way));
+    } catch (Exception e) {
+      logger.debug("Unable to build the geometry of way #{}", way.getId(), e);
+      way.setGeometry(GeometryUtils.GEOMETRY_FACTORY_WGS84.createLineString());
     }
   }
 
-  private org.locationtech.jts.geom.Geometry build(Way way) {
+  private Geometry build(Way way) {
     LineString line = lineString(way.getNodes(), coordinateMap);
-    if (line.isEmpty()) {
-      return null;
-    }
     // A closed way is an area unless its tags say it is a linear feature, in which case it is a
     // loop (e.g. a roundabout). See https://wiki.openstreetmap.org/wiki/Way
-    if (!line.isClosed()
-        || way.getTags().containsKey("railway")
-        || way.getTags().containsKey("highway")
-        || way.getTags().containsKey("barrier")) {
+    if (!line.isClosed() || isLinearFeature(way)) {
       return line;
     }
     Polygon polygon = GeometryUtils.GEOMETRY_FACTORY_WGS84.createPolygon(line.getCoordinates());
     return polygon.isValid() ? polygon : new GeometryFixer(polygon).getResult();
+  }
+
+  private static boolean isLinearFeature(Way way) {
+    var tags = way.getTags();
+    return tags.containsKey("railway")
+        || tags.containsKey("highway")
+        || tags.containsKey("barrier");
   }
 
   /**

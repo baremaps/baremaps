@@ -14,40 +14,44 @@
 
 package com.baremaps.openstreetmap.model;
 
-import java.util.ArrayList;
+import java.util.AbstractList;
 import java.util.List;
 
-/** A block of an OpenStreetMap PBF file holding nodes, ways and relations. */
-public final class DataBlock extends Block {
+/**
+ * A block of an OpenStreetMap PBF file holding nodes, ways and relations.
+ *
+ * @param nodes the nodes of the block
+ * @param ways the ways of the block
+ * @param relations the relations of the block
+ */
+public record DataBlock(List<Node> nodes, List<Way> ways, List<Relation> relations)
+    implements
+      Block {
 
-  private final List<Node> nodes;
-  private final List<Way> ways;
-  private final List<Relation> relations;
-
-  public DataBlock(List<Node> nodes, List<Way> ways, List<Relation> relations) {
-    this.nodes = nodes;
-    this.ways = ways;
-    this.relations = relations;
-  }
-
-  public List<Node> getNodes() {
-    return nodes;
-  }
-
-  public List<Way> getWays() {
-    return ways;
-  }
-
-  public List<Relation> getRelations() {
-    return relations;
-  }
-
+  /**
+   * Returns a view over the three lists rather than a copy of them: a planet import walks the
+   * entities of every block it decodes, and copying them would double the allocation of the whole
+   * file.
+   */
   @Override
   public List<Entity> entities() {
-    var entities = new ArrayList<Entity>(nodes.size() + ways.size() + relations.size());
-    entities.addAll(nodes);
-    entities.addAll(ways);
-    entities.addAll(relations);
-    return entities;
+    return new AbstractList<>() {
+
+      @Override
+      public Entity get(int index) {
+        if (index < nodes.size()) {
+          return nodes.get(index);
+        }
+        if (index < nodes.size() + ways.size()) {
+          return ways.get(index - nodes.size());
+        }
+        return relations.get(index - nodes.size() - ways.size());
+      }
+
+      @Override
+      public int size() {
+        return nodes.size() + ways.size() + relations.size();
+      }
+    };
   }
 }

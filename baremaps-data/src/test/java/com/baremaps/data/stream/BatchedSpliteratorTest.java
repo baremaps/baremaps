@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.stream;
+package com.baremaps.data.stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -68,9 +68,9 @@ class BatchedSpliteratorTest {
 
   @Test
   void forEachRemaining() {
-    AccumulatingConsumer<Integer> accumulator = new AccumulatingConsumer<>();
-    spliterator.forEachRemaining(accumulator);
-    assertEquals(accumulator.values().size(), spliteratorSize);
+    var values = new ArrayList<Integer>();
+    spliterator.forEachRemaining(values::add);
+    assertEquals(values.size(), spliteratorSize);
   }
 
   @Test

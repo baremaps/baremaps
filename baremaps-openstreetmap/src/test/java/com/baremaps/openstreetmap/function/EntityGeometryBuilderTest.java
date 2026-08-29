@@ -12,18 +12,17 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.geometry;
+package com.baremaps.openstreetmap.function;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.baremaps.openstreetmap.function.EntityGeometryBuilder;
+import com.baremaps.data.geometry.CRSUtils;
 import com.baremaps.openstreetmap.model.Info;
 import com.baremaps.openstreetmap.model.Member;
 import com.baremaps.openstreetmap.model.Member.MemberType;
 import com.baremaps.openstreetmap.model.Node;
 import com.baremaps.openstreetmap.model.Relation;
 import com.baremaps.openstreetmap.model.Way;
-import com.baremaps.openstreetmap.utils.CRSUtils;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.time.LocalDateTime;
@@ -46,7 +45,7 @@ import org.locationtech.proj4j.CoordinateTransform;
 import org.locationtech.proj4j.Proj4jException;
 import org.locationtech.proj4j.ProjCoordinate;
 
-class EntityDataColumnTypeGeometryBuilderTest {
+class EntityGeometryBuilderTest {
 
   static final CRSFactory CRS_FACTORY = new CRSFactory();
 
@@ -170,8 +169,11 @@ class EntityDataColumnTypeGeometryBuilderTest {
 
   @Test
   void handleWay() {
+    // A way whose nodes are unknown gets an empty line, not none: an empty geometry says the
+    // geometry could not be built, a null one says it was never attempted.
     GEOMETRY_BUILDER.accept(WAY_0);
-    assertNull(WAY_0.getGeometry());
+    assertInstanceOf(LineString.class, WAY_0.getGeometry());
+    assertTrue(WAY_0.getGeometry().isEmpty());
     GEOMETRY_BUILDER.accept(WAY_1);
     assertInstanceOf(LineString.class, WAY_1.getGeometry());
     GEOMETRY_BUILDER.accept(WAY_2);

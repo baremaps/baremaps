@@ -16,24 +16,13 @@ package com.baremaps.openstreetmap.model;
 
 import java.util.List;
 
-/** The first block of an OpenStreetMap PBF file, holding its header and bounds. */
-public final class HeaderBlock extends Block {
-
-  private final Header header;
-  private final Bound bound;
-
-  public HeaderBlock(Header header, Bound bound) {
-    this.header = header;
-    this.bound = bound;
-  }
-
-  public Header getHeader() {
-    return header;
-  }
-
-  public Bound getBound() {
-    return bound;
-  }
+/**
+ * The first block of an OpenStreetMap PBF file, holding its header and bounds.
+ *
+ * @param header the header of the file
+ * @param bound the bounds of the data the file holds
+ */
+public record HeaderBlock(Header header, Bound bound) implements Block {
 
   @Override
   public List<Entity> entities() {

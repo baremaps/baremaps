@@ -17,11 +17,11 @@ package com.baremaps.tasks;
 import static com.baremaps.utils.ObjectMapperUtils.objectMapper;
 
 import com.baremaps.config.ConfigReader;
+import com.baremaps.data.stream.ProgressLogger;
+import com.baremaps.data.stream.StreamUtils;
 import com.baremaps.maplibre.style.Style;
 import com.baremaps.maplibre.tileset.Tileset;
 import com.baremaps.maplibre.tileset.TilesetQuery;
-import com.baremaps.openstreetmap.stream.ProgressLogger;
-import com.baremaps.openstreetmap.stream.StreamUtils;
 import com.baremaps.postgres.utils.PostgresUtils;
 import com.baremaps.tilestore.*;
 import com.baremaps.tilestore.file.FileTileStore;

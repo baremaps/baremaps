@@ -18,12 +18,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import com.baremaps.openstreetmap.model.Entity;
-import com.baremaps.openstreetmap.stream.AccumulatingConsumer;
-import com.baremaps.openstreetmap.stream.HoldingConsumer;
 import com.baremaps.testing.TestFiles;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Spliterator;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -35,7 +34,8 @@ class XmlEntitySpliteratorTest {
     try (InputStream input = Files.newInputStream(TestFiles.SAMPLE_OSM_XML)) {
       Spliterator<Entity> spliterator = new XmlEntitySpliterator(input);
       spliterator.forEachRemaining(Assertions::assertNotNull);
-      assertFalse(spliterator.tryAdvance(new HoldingConsumer<>()));
+      assertFalse(spliterator.tryAdvance(entity -> {
+      }));
     }
   }
 
@@ -43,9 +43,9 @@ class XmlEntitySpliteratorTest {
   void forEachRemaining() throws IOException {
     try (InputStream input = Files.newInputStream(TestFiles.SAMPLE_OSM_XML)) {
       Spliterator<Entity> spliterator = new XmlEntitySpliterator(input);
-      AccumulatingConsumer<Object> accumulator = new AccumulatingConsumer<>();
-      spliterator.forEachRemaining(accumulator);
-      assertEquals(38, accumulator.values().size());
+      var entities = new ArrayList<Entity>();
+      spliterator.forEachRemaining(entities::add);
+      assertEquals(38, entities.size());
     }
   }
 }

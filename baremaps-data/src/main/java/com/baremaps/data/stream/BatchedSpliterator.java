@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.stream;
+package com.baremaps.data.stream;
 
 
 
@@ -23,10 +23,13 @@ import java.util.Spliterators;
 import java.util.function.Consumer;
 
 /**
- * A {@code BatchedSpliterator} wraps another spliterator and partition its elements according to a
- * given batch size when trySplit is invoked.
+ * A spliterator that hands out fixed-size batches of another spliterator when it is split.
  *
- * @param <T>
+ * <p>
+ * The wrapped spliterator has an unknown size and therefore cannot be split by the JDK. Splitting
+ * eagerly into batches is what lets such a stream be processed in parallel.
+ *
+ * @param <T> the type of the elements
  */
 public class BatchedSpliterator<T> implements Spliterator<T> {
 
@@ -34,11 +37,10 @@ public class BatchedSpliterator<T> implements Spliterator<T> {
   private final int batchSize;
 
   /**
-   * Creates a spliterator that partitions the underlying spliterator according to a given batch
-   * size.
+   * Creates a spliterator that hands out batches of the underlying spliterator.
    *
-   * @param spliterator the underlying spliterator.
-   * @param batchSize the batch size.
+   * @param spliterator the underlying spliterator
+   * @param batchSize the number of elements per batch
    */
   public BatchedSpliterator(Spliterator<T> spliterator, int batchSize) {
     this.spliterator = spliterator;
@@ -51,9 +53,9 @@ public class BatchedSpliterator<T> implements Spliterator<T> {
   }
 
   /**
-   * Returns a spliterator covering the elements of a batch.
+   * Returns a spliterator covering the next batch, or null once the source is exhausted.
    *
-   * @return a spliterator covering the elements of a batch.
+   * @return a spliterator covering the elements of a batch
    */
   @Override
   public Spliterator<T> trySplit() {
@@ -71,7 +73,7 @@ public class BatchedSpliterator<T> implements Spliterator<T> {
   /**
    * Returns the size of the underlying spliterator.
    *
-   * @return the size of the underlying spliterator.
+   * @return the size of the underlying spliterator
    */
   @Override
   public long estimateSize() {
@@ -79,9 +81,10 @@ public class BatchedSpliterator<T> implements Spliterator<T> {
   }
 
   /**
-   * Returns the characteristics of the underlying spliterator with its ability to be subsized.
+   * Returns the characteristics of the underlying spliterator, plus the sizing guarantees that
+   * splitting into fixed batches provides.
    *
-   * @return a representation of characteristics.
+   * @return a representation of characteristics
    */
   @Override
   public int characteristics() {

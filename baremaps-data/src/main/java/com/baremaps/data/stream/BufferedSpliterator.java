@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.stream;
+package com.baremaps.data.stream;
 
 
 
@@ -65,7 +65,6 @@ class BufferedSpliterator<T> implements Spliterator<CompletableFuture<T>> {
     this.completionOrder = completionOrder;
   }
 
-  /** {@inheritDoc} */
   @Override
   public boolean tryAdvance(Consumer<? super CompletableFuture<T>> action) {
     fillBuffer();
@@ -83,13 +82,11 @@ class BufferedSpliterator<T> implements Spliterator<CompletableFuture<T>> {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public Spliterator<CompletableFuture<T>> trySplit() {
     return null;
   }
 
-  /** {@inheritDoc} */
   @Override
   public long estimateSize() {
     long estimate = pending + spliterator.estimateSize();
@@ -99,7 +96,6 @@ class BufferedSpliterator<T> implements Spliterator<CompletableFuture<T>> {
     return estimate;
   }
 
-  /** {@inheritDoc} */
   @Override
   public int characteristics() {
     return spliterator.characteristics();

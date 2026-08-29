@@ -25,6 +25,10 @@ limitations under the License.
   <dependencies>
     <dependency>
       <groupId>com.baremaps</groupId>
+      <artifactId>baremaps-data</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.baremaps</groupId>
       <artifactId>baremaps-testing</artifactId>
       <scope>test</scope>
     </dependency>
@@ -35,15 +39,6 @@ limitations under the License.
     <dependency>
       <groupId>org.locationtech.jts</groupId>
       <artifactId>jts-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.locationtech.jts.io</groupId>
-      <artifactId>jts-io-common</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.locationtech.proj4j</groupId>
-      <artifactId>proj4j</artifactId>
-      <version>${version.lib.proj4j}</version>
     </dependency>
   </dependencies>
 

@@ -12,24 +12,12 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.utils;
+package com.baremaps.data.geometry;
 
 import org.locationtech.proj4j.CRSFactory;
 import org.locationtech.proj4j.CoordinateReferenceSystem;
 
-/**
- * Utility methods for creating coordinate reference systems.
- * <p>
- * This method first looks into a minimal set of crs definitions that are hardcoded in the
- * application. This includes the "WSG 84" and "WGS 84 / Pseudo-Mercator" coordinate reference
- * systems.
- * <p>
- * Then, it tries to create a CRS from the EPSG code that may be stored in the proj4/nad/epsg
- * resource file of the proj4j-epsg module.
- * <p>
- * The proj4j-epsg module is not included in baremaps by default due to licensing issues. It can be
- * added to the classpath to enable the creation of CRS from EPSG codes.
- */
+/** Utility methods for creating coordinate reference systems. */
 public class CRSUtils {
 
   private CRSUtils() {
@@ -64,17 +52,20 @@ public class CRSUtils {
   /**
    * Creates a coordinate reference system from the provided SRID.
    *
+   * <p>
+   * The two systems baremaps always needs are defined here rather than looked up, because EPSG
+   * codes are resolved from the proj4j-epsg module, which is not on the classpath by default: its
+   * EPSG database is distributed under terms baremaps cannot bundle. Adding it to the classpath
+   * enables every other SRID.
+   *
    * @param srid the SRID
    * @return the coordinate reference system
    */
   public static CoordinateReferenceSystem createFromSrid(int srid) {
-    switch (srid) {
-      case 4326:
-        return WGS_84;
-      case 3857:
-        return WGS_84_PSEUDO_MERCATOR;
-      default:
-        return CRS_FACTORY.createFromName(String.format("EPSG:%s", srid));
-    }
+    return switch (srid) {
+      case 4326 -> WGS_84;
+      case 3857 -> WGS_84_PSEUDO_MERCATOR;
+      default -> CRS_FACTORY.createFromName("EPSG:" + srid);
+    };
   }
 }

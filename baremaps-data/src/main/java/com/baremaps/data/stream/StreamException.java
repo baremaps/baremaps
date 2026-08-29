@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.stream;
+package com.baremaps.data.stream;
 
 /**
  * When a checked exception occurs in a stream, it is a good practice to wrap that exception in an

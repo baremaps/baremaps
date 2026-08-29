@@ -17,8 +17,8 @@ package com.baremaps.server;
 import static com.google.common.net.HttpHeaders.*;
 import static io.netty.handler.codec.http.HttpHeaders.Values.APPLICATION_JSON;
 
+import com.baremaps.data.stream.StreamException;
 import com.baremaps.geocoder.geonames.GeonamesQueryBuilder;
-import com.baremaps.openstreetmap.stream.StreamException;
 import com.linecorp.armeria.common.HttpResponse;
 import com.linecorp.armeria.common.HttpStatus;
 import com.linecorp.armeria.common.ResponseHeaders;

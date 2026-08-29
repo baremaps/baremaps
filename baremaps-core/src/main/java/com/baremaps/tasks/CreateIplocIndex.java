@@ -14,9 +14,9 @@
 
 package com.baremaps.tasks;
 
+import com.baremaps.data.stream.StreamException;
 import com.baremaps.iploc.IpLocReader;
 import com.baremaps.iploc.IpLocRepository;
-import com.baremaps.openstreetmap.stream.StreamException;
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
 import java.io.BufferedInputStream;

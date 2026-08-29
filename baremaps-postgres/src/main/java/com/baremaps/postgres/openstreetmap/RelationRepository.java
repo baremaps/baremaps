@@ -14,11 +14,11 @@
 
 package com.baremaps.postgres.openstreetmap;
 
+import com.baremaps.data.geometry.GeometryUtils;
 import com.baremaps.openstreetmap.model.Info;
 import com.baremaps.openstreetmap.model.Member;
 import com.baremaps.openstreetmap.model.Member.MemberType;
 import com.baremaps.openstreetmap.model.Relation;
-import com.baremaps.openstreetmap.utils.GeometryUtils;
 import com.baremaps.postgres.copy.CopyWriter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import java.io.IOException;

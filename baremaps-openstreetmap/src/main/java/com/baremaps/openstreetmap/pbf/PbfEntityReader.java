@@ -27,13 +27,13 @@ public class PbfEntityReader implements EntityReader<Entity> {
 
   /** Creates a reader that leaves geometries unset. */
   public PbfEntityReader() {
-    this(null);
+    this.blockReader = new PbfBlockReader();
   }
 
   /**
    * Creates a reader that sets the geometry of the elements it reads.
    *
-   * @param geometryOptions the geometry options, or null to leave geometries unset
+   * @param geometryOptions the geometry options
    */
   public PbfEntityReader(GeometryOptions geometryOptions) {
     this.blockReader = new PbfBlockReader(geometryOptions);

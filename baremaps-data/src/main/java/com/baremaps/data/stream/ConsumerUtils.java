@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.stream;
+package com.baremaps.data.stream;
 
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;

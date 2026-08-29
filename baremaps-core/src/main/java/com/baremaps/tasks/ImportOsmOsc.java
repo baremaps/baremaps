@@ -14,9 +14,11 @@
 
 package com.baremaps.tasks;
 
-import static com.baremaps.openstreetmap.stream.ConsumerUtils.consumeThenReturn;
+import static com.baremaps.data.stream.ConsumerUtils.consumeThenReturn;
 
-import com.baremaps.openstreetmap.function.*;
+import com.baremaps.openstreetmap.GeometryOptions;
+import com.baremaps.openstreetmap.function.ChangeEntitiesHandler;
+import com.baremaps.openstreetmap.model.Entity;
 import com.baremaps.openstreetmap.xml.XmlChangeReader;
 import com.baremaps.postgres.openstreetmap.CopyChangeImporter;
 import com.baremaps.postgres.openstreetmap.NodeRepository;
@@ -94,16 +96,9 @@ public class ImportOsmOsc implements Task {
       Map<Long, List<Long>> referenceMap, NodeRepository nodeRepository,
       WayRepository wayRepository, RelationRepository relationRepository, Integer databaseSrid)
       throws IOException {
-    var coordinateMapBuilder = new CoordinateMapBuilder(coordinateMap);
-    var referenceMapBuilder = new ReferenceMapBuilder(referenceMap);
-
-    var buildGeometry = new EntityGeometryBuilder(coordinateMap, referenceMap);
-    var reprojectGeometry = new EntityProjectionTransformer(4326, databaseSrid);
-    var prepareGeometries = coordinateMapBuilder
-        .andThen(referenceMapBuilder)
-        .andThen(buildGeometry)
-        .andThen(reprojectGeometry);
-    var prepareChange = consumeThenReturn(new ChangeEntitiesHandler(prepareGeometries));
+    var geometryOptions = new GeometryOptions(coordinateMap, referenceMap, databaseSrid);
+    var prepareChange = consumeThenReturn(
+        new ChangeEntitiesHandler<>(Entity.class, geometryOptions.entityHandler()));
     var importChange = new CopyChangeImporter(nodeRepository, wayRepository, relationRepository);
 
     try (var changeInputStream =

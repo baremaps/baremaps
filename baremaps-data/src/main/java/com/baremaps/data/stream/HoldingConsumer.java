@@ -12,31 +12,31 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.stream;
+package com.baremaps.data.stream;
 
 
 
 import java.util.function.Consumer;
 
 /**
- * A {@code Consumer} that holds the latest value it accepted.
+ * A {@code Consumer} that holds the latest value it accepted, so a caller can read back what a
+ * spliterator handed over.
  *
- * @param <T>
+ * @param <T> the type of the value
  */
 public class HoldingConsumer<T> implements Consumer<T> {
 
   private T value;
 
-  /** {@inheritDoc} */
   @Override
   public void accept(T value) {
     this.value = value;
   }
 
   /**
-   * Returns the holded value.
+   * Returns the value of the last accepted element, or null if nothing was accepted.
    *
-   * @return the holded value.
+   * @return the held value
    */
   public T value() {
     return value;

@@ -12,9 +12,7 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.stream;
-
-
+package com.baremaps.data.stream;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -22,9 +20,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A utility class for peeking progress when processing a {@code Stream}.
+ * A consumer that logs how far a stream of known size has progressed, at most once per tick.
  *
- * @param <T>
+ * @param <T> the type of the elements
  */
 public class ProgressLogger<T> implements Consumer<T> {
 
@@ -34,41 +32,37 @@ public class ProgressLogger<T> implements Consumer<T> {
 
   private final long size;
 
-  private final int tick;
+  private final long tick;
 
-  // A volatile does not guarantee atomicity but blocking with an AtomicLong is not worth it.
+  // Reading and writing this timestamp is not atomic, so two threads can log the same tick. That
+  // is preferable to making every element of a parallel stream contend on a lock.
   private volatile long timestamp;
 
   /**
-   * Constructs a {@code StreamProgress} that periodically logs progress.
+   * Constructs a consumer that logs progress at most once per tick.
    *
-   * @param size the size of the stream
-   * @param tick the tick in milliseconds at with progress is logged
+   * @param size the number of elements in the stream
+   * @param tick the minimum delay between two logs, in milliseconds
    */
-  public ProgressLogger(Long size, Integer tick) {
+  public ProgressLogger(long size, long tick) {
     this.size = size;
     this.tick = tick;
     this.timestamp = System.currentTimeMillis();
   }
 
-  /**
-   * Accepts stream element and increments progress.
-   *
-   * @param e the element
-   */
+  /** Counts the element and logs the progress if a tick has elapsed or the stream is complete. */
   @Override
-  public void accept(T e) {
-    long progress = position.incrementAndGet();
-    long t = System.currentTimeMillis();
-    long l = timestamp;
-    if (size >= 0 && t - l >= tick) {
-      timestamp = t;
-      double p = Math.round(progress * 10000d / size) / 100d;
-      logger.info("{}%", p);
+  public void accept(T element) {
+    if (size < 0) {
+      return;
     }
-    if (size >= 0 && progress == size) {
-      double p = 100d;
-      logger.info("{}%", p);
+    long progress = position.incrementAndGet();
+    long now = System.currentTimeMillis();
+    if (progress == size) {
+      logger.info("100%");
+    } else if (now - timestamp >= tick) {
+      timestamp = now;
+      logger.info("{}%", Math.round(progress * 10000d / size) / 100d);
     }
   }
 }

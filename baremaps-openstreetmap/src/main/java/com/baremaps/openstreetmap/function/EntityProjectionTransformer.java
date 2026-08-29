@@ -14,41 +14,36 @@
 
 package com.baremaps.openstreetmap.function;
 
-
-
+import com.baremaps.data.geometry.ProjectionTransformer;
 import com.baremaps.openstreetmap.model.Element;
 import com.baremaps.openstreetmap.model.Entity;
 import java.util.function.Consumer;
 
-/** Changes the projection of the geometry of an entity via side-effects. */
+/**
+ * A consumer that reprojects the geometry of the elements it accepts.
+ *
+ * <p>
+ * It has to run after the geometry builders, and exactly once per element: reprojecting an element
+ * twice would reproject an already projected geometry.
+ */
 public class EntityProjectionTransformer implements Consumer<Entity> {
-
-  private final int sourceSrid;
-
-  private final int targetSrid;
 
   private final ProjectionTransformer projectionTransformer;
 
   /**
-   * Creates a consumer that reproject geometries with the provided SRIDs.
+   * Creates a consumer that reprojects geometries with the provided SRIDs.
    *
    * @param sourceSrid the source SRID
    * @param targetSrid the target SRID
    */
   public EntityProjectionTransformer(int sourceSrid, int targetSrid) {
-    this.sourceSrid = sourceSrid;
-    this.targetSrid = targetSrid;
     this.projectionTransformer = new ProjectionTransformer(sourceSrid, targetSrid);
   }
 
-  /** {@inheritDoc} */
   @Override
   public void accept(Entity entity) {
-    if (sourceSrid != targetSrid
-        && entity instanceof Element element
-        && element.getGeometry() != null) {
-      var geometry = projectionTransformer.transform(element.getGeometry());
-      element.setGeometry(geometry);
+    if (entity instanceof Element element && element.getGeometry() != null) {
+      element.setGeometry(projectionTransformer.transform(element.getGeometry()));
     }
   }
 }

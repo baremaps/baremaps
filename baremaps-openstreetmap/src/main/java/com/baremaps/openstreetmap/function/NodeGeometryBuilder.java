@@ -14,25 +14,17 @@
 
 package com.baremaps.openstreetmap.function;
 
-
-import com.baremaps.openstreetmap.model.Entity;
+import com.baremaps.data.geometry.GeometryUtils;
 import com.baremaps.openstreetmap.model.Node;
 import java.util.function.Consumer;
-import org.locationtech.jts.geom.*;
+import org.locationtech.jts.geom.Coordinate;
 
-/**
- * A consumer that builds and sets a node geometry via side effects.
- */
-public class NodeGeometryBuilder implements Consumer<Entity> {
+/** A consumer that sets the point geometry of the nodes it accepts. */
+public class NodeGeometryBuilder implements Consumer<Node> {
 
-  private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
-
-  /** {@inheritDoc} */
   @Override
-  public void accept(Entity entity) {
-    if (entity instanceof Node node) {
-      Point point = geometryFactory.createPoint(new Coordinate(node.getLon(), node.getLat()));
-      node.setGeometry(point);
-    }
+  public void accept(Node node) {
+    node.setGeometry(GeometryUtils.GEOMETRY_FACTORY_WGS84
+        .createPoint(new Coordinate(node.getLon(), node.getLat())));
   }
 }

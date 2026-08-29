@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-package com.baremaps.openstreetmap.stream;
+package com.baremaps.data.stream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

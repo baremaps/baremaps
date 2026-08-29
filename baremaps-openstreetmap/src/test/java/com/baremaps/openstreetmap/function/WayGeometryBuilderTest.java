@@ -16,7 +16,7 @@ package com.baremaps.openstreetmap.function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.baremaps.openstreetmap.utils.BatchMap;
+import com.baremaps.data.collection.BatchMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

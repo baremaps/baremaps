@@ -14,7 +14,7 @@
 
 package com.baremaps.postgres.openstreetmap;
 
-import com.baremaps.openstreetmap.utils.BatchMap;
+import com.baremaps.data.collection.BatchMap;
 import com.google.common.collect.Streams;
 import java.util.*;
 
