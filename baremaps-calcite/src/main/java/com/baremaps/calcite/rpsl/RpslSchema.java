@@ -14,140 +14,18 @@
 
 package com.baremaps.calcite.rpsl;
 
+import com.baremaps.calcite.FileSchema;
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.schema.Table;
-import org.apache.calcite.schema.impl.AbstractSchema;
+import java.util.List;
 
 /**
- * A Calcite schema implementation for RPSL data. This schema provides access to RPSL files through
- * the Apache Calcite framework for SQL querying.
+ * A schema exposing an RPSL file, or the {@code .rpsl}/{@code .txt} files of a directory, as
+ * tables.
  */
-public class RpslSchema extends AbstractSchema {
+public class RpslSchema extends FileSchema {
 
-  private final File directory;
-  private final Map<String, Table> tableMap;
-  private final RelDataTypeFactory typeFactory;
-
-  /**
-   * Constructs a RpslSchema with the specified directory.
-   *
-   * @param directory the directory containing RPSL files
-   * @param typeFactory the type factory to use for creating tables
-   * @throws IOException if an I/O error occurs
-   */
-  public RpslSchema(File directory, RelDataTypeFactory typeFactory) throws IOException {
-    this.directory = Objects.requireNonNull(directory, "Directory cannot be null");
-    this.typeFactory = Objects.requireNonNull(typeFactory, "Type factory cannot be null");
-    this.tableMap = new HashMap<>();
-
-    // Process files in the directory
-    File[] files = directory.listFiles(
-        (dir, name) -> name.toLowerCase().endsWith(".rpsl") || name.toLowerCase().endsWith(".txt"));
-
-    if (files != null) {
-      for (File file : files) {
-        // Extract the base name without extension (e.g., "routing" from "routing.rpsl")
-        String fileName = file.getName();
-        String tableName = fileName;
-
-        // Remove all extensions (e.g., "routing.rpsl" -> "routing")
-        while (tableName.contains(".")) {
-          int lastDotIndex = tableName.lastIndexOf('.');
-          if (lastDotIndex > 0) {
-            tableName = tableName.substring(0, lastDotIndex);
-          } else {
-            break;
-          }
-        }
-
-        // Create the table with the file reference
-        tableMap.put(tableName, createTable(file));
-      }
-    }
-  }
-
-  /**
-   * Constructs a RpslSchema with a single file.
-   *
-   * @param file the RPSL file
-   * @param typeFactory the type factory to use for creating tables
-   * @throws IOException if an I/O error occurs
-   */
-  public RpslSchema(File file, RelDataTypeFactory typeFactory, boolean isDirectory)
-      throws IOException {
-    if (isDirectory) {
-      // If isDirectory is true, treat the file as a directory
-      this.directory = Objects.requireNonNull(file, "Directory cannot be null");
-      this.typeFactory = Objects.requireNonNull(typeFactory, "Type factory cannot be null");
-      this.tableMap = new HashMap<>();
-
-      // Process files in the directory
-      File[] files = file.listFiles((dir, name) -> name.toLowerCase().endsWith(".rpsl")
-          || name.toLowerCase().endsWith(".txt"));
-
-      if (files != null) {
-        for (File rpslFile : files) {
-          // Extract the base name without extension (e.g., "routing" from "routing.rpsl")
-          String fileName = rpslFile.getName();
-          String tableName = fileName;
-
-          // Remove all extensions (e.g., "routing.rpsl" -> "routing")
-          while (tableName.contains(".")) {
-            int lastDotIndex = tableName.lastIndexOf('.');
-            if (lastDotIndex > 0) {
-              tableName = tableName.substring(0, lastDotIndex);
-            } else {
-              break;
-            }
-          }
-
-          // Create the table with the file reference
-          tableMap.put(tableName, createTable(rpslFile));
-        }
-      }
-    } else {
-      // If isDirectory is false, treat the file as a single file
-      this.directory = Objects.requireNonNull(file, "File cannot be null");
-      this.typeFactory = Objects.requireNonNull(typeFactory, "Type factory cannot be null");
-      this.tableMap = new HashMap<>();
-
-      // Extract the base name without extension (e.g., "routing" from "routing.rpsl")
-      String fileName = file.getName();
-      String tableName = fileName;
-
-      // Remove all extensions (e.g., "routing.rpsl" -> "routing")
-      while (tableName.contains(".")) {
-        int lastDotIndex = tableName.lastIndexOf('.');
-        if (lastDotIndex > 0) {
-          tableName = tableName.substring(0, lastDotIndex);
-        } else {
-          break;
-        }
-      }
-
-      // Create the table with the file reference
-      tableMap.put(tableName, createTable(file));
-    }
-  }
-
-  /**
-   * Creates a table for the given file.
-   *
-   * @param file the RPSL file
-   * @return the created table
-   * @throws IOException if an I/O error occurs
-   */
-  private Table createTable(File file) throws IOException {
-    return new RpslTable(file);
-  }
-
-  @Override
-  protected Map<String, Table> getTableMap() {
-    return tableMap;
+  public RpslSchema(File fileOrDirectory) throws IOException {
+    super(fileOrDirectory, List.of(".rpsl", ".txt"), RpslTable::new);
   }
 }

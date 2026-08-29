@@ -16,7 +16,6 @@ package com.baremaps.calcite.postgres;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.baremaps.calcite.data.DataTableSchema;
 import com.baremaps.testing.PostgresContainerTest;
 import java.sql.*;
 import java.util.ArrayList;
@@ -86,19 +85,14 @@ class PostgresModifiableTableTest extends PostgresContainerTest {
     @Tag("integration")
     void schemaContainsExpectedColumns() throws Exception {
       PostgresModifiableTable table = new PostgresModifiableTable(dataSource(), TEST_TABLE);
-      DataTableSchema schema = table.schema();
+      RelDataType rowType = table.getRowType(new JavaTypeFactoryImpl());
 
-      assertNotNull(schema, "Schema should not be null");
-      assertEquals(TEST_TABLE, schema.name(), "Schema should have correct name");
-      assertEquals(7, schema.columns().size(), "Schema should have 7 columns");
-
-      // Verify column names
-      assertTrue(schema.columns().stream().anyMatch(c -> c.name().equals("id")),
-          "Schema should have 'id' column");
-      assertTrue(schema.columns().stream().anyMatch(c -> c.name().equals("name")),
-          "Schema should have 'name' column");
-      assertTrue(schema.columns().stream().anyMatch(c -> c.name().equals("geometry")),
-          "Schema should have 'geometry' column");
+      assertNotNull(rowType, "Row type should not be null");
+      assertEquals(7, rowType.getFieldCount(), "Row type should have 7 columns");
+      assertTrue(rowType.getFieldNames().contains("id"), "Row type should have 'id' column");
+      assertTrue(rowType.getFieldNames().contains("name"), "Row type should have 'name' column");
+      assertTrue(rowType.getFieldNames().contains("geometry"),
+          "Row type should have 'geometry' column");
     }
 
     @Test
@@ -106,7 +100,7 @@ class PostgresModifiableTableTest extends PostgresContainerTest {
     void rowTypeMatchesSchema() throws Exception {
       RelDataTypeFactory typeFactory = new JavaTypeFactoryImpl();
       PostgresModifiableTable table =
-          new PostgresModifiableTable(dataSource(), TEST_TABLE, typeFactory);
+          new PostgresModifiableTable(dataSource(), "public", TEST_TABLE, typeFactory);
       RelDataType rowType = table.getRowType(typeFactory);
 
       assertNotNull(rowType, "Row type should not be null");

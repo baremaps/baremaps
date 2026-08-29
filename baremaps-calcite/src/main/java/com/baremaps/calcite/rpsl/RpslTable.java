@@ -20,7 +20,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
+import java.io.UncheckedIOException;
 import java.util.Iterator;
 import java.util.List;
 import org.apache.calcite.DataContext;
@@ -32,146 +32,80 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
- * A Calcite table implementation for RPSL data. This table reads data from a RPSL file and makes it
- * available through the Apache Calcite framework for SQL querying.
+ * A read-only table over an RPSL file. Every object becomes a row with a fixed set of attribute
+ * columns; attributes that may occur several times are exposed as {@code VARCHAR} arrays.
  */
 public class RpslTable extends AbstractTable implements ScannableTable {
 
-  private static final Logger logger = LoggerFactory.getLogger(RpslTable.class);
+  private record Column(String name, boolean repeated) {
+  }
+
+  private static final List<Column> COLUMNS = List.of(
+      new Column("type", false),
+      new Column("id", false),
+      new Column("inetnum", false),
+      new Column("inet6num", false),
+      new Column("netname", false),
+      new Column("descr", true),
+      new Column("country", false),
+      new Column("admin-c", false),
+      new Column("tech-c", false),
+      new Column("status", false),
+      new Column("mnt-by", false),
+      new Column("created", false),
+      new Column("last-modified", false),
+      new Column("changed", true));
 
   private final File file;
-  private final String tableName;
-  private final List<RpslColumn> columns;
-  private RelDataType rowType;
 
-  /**
-   * Represents a column in the RPSL table.
-   */
-  private static class RpslColumn {
-    private final String name;
-    private final boolean repeated;
-
-    public RpslColumn(String name, boolean repeated) {
-      this.name = name;
-      this.repeated = repeated;
-    }
-
-    public String getName() {
-      return name;
-    }
-
-    public boolean isRepeated() {
-      return repeated;
-    }
-  }
-
-  /**
-   * Constructs a RpslTable with the specified file.
-   *
-   * @param file the RPSL file to read data from
-   * @throws IOException if an I/O error occurs
-   */
   public RpslTable(File file) throws IOException {
+    if (!file.isFile()) {
+      throw new IOException("Not a file: " + file);
+    }
     this.file = file;
-    this.tableName = file.getName();
-    this.columns = buildColumns();
-  }
-
-  /**
-   * Builds the columns for the RPSL data.
-   *
-   * @return the list of columns
-   */
-  private List<RpslColumn> buildColumns() {
-    var columns = new ArrayList<RpslColumn>();
-
-    // Add standard RPSL columns
-    columns.add(new RpslColumn("type", false));
-    columns.add(new RpslColumn("id", false));
-    columns.add(new RpslColumn("inetnum", false));
-    columns.add(new RpslColumn("inet6num", false));
-    columns.add(new RpslColumn("netname", false));
-    columns.add(new RpslColumn("descr", true));
-    columns.add(new RpslColumn("country", false));
-    columns.add(new RpslColumn("admin-c", false));
-    columns.add(new RpslColumn("tech-c", false));
-    columns.add(new RpslColumn("status", false));
-    columns.add(new RpslColumn("mnt-by", false));
-    columns.add(new RpslColumn("created", false));
-    columns.add(new RpslColumn("last-modified", false));
-    columns.add(new RpslColumn("changed", true));
-
-    return columns;
   }
 
   @Override
   public RelDataType getRowType(RelDataTypeFactory typeFactory) {
-    if (rowType == null) {
-      rowType = createRowType(typeFactory);
-    }
-    return rowType;
-  }
-
-  /**
-   * Creates the row type (schema) for the RPSL data.
-   *
-   * @param typeFactory the type factory
-   * @return the RelDataType representing the schema
-   */
-  private RelDataType createRowType(RelDataTypeFactory typeFactory) {
     RelDataTypeFactory.Builder builder = typeFactory.builder();
-
-    // Define the columns based on the schema
-    for (RpslColumn column : columns) {
-      if (column.isRepeated()) {
-        // For repeated fields, use a list type
-        builder.add(column.getName(),
-            typeFactory.createArrayType(typeFactory.createSqlType(SqlTypeName.VARCHAR), -1));
-      } else {
-        builder.add(column.getName(), typeFactory.createSqlType(SqlTypeName.VARCHAR));
-      }
+    RelDataType varchar = typeFactory.createSqlType(SqlTypeName.VARCHAR);
+    for (Column column : COLUMNS) {
+      builder.add(column.name(),
+          column.repeated() ? typeFactory.createArrayType(varchar, -1) : varchar);
     }
-
     return builder.build();
   }
 
   @Override
   public Enumerable<Object[]> scan(DataContext root) {
-    return new AbstractEnumerable<Object[]>() {
+    return new AbstractEnumerable<>() {
       @Override
       public Enumerator<Object[]> enumerator() {
-        return new RpslEnumerator(file, columns);
+        return new RpslEnumerator(file);
       }
     };
   }
 
-  /**
-   * Enumerator for RPSL data.
-   */
   private static class RpslEnumerator implements Enumerator<Object[]> {
+
     private final File file;
-    private final List<RpslColumn> columns;
     private InputStream inputStream;
-    private Iterator<RpslObject> rpslObjectIterator;
+    private Iterator<RpslObject> objects;
     private RpslObject current;
 
-    public RpslEnumerator(File file, List<RpslColumn> columns) {
+    RpslEnumerator(File file) {
       this.file = file;
-      this.columns = columns;
-      initialize();
+      open();
     }
 
-    private void initialize() {
+    private void open() {
       try {
-        this.inputStream = new FileInputStream(file);
-        RpslReader rpslReader = new RpslReader();
-        this.rpslObjectIterator = rpslReader.read(inputStream).iterator();
+        inputStream = new FileInputStream(file);
+        objects = new RpslReader().read(inputStream).iterator();
       } catch (IOException e) {
-        throw new RuntimeException("Failed to initialize RPSL iterator", e);
+        throw new UncheckedIOException(e);
       }
     }
 
@@ -180,13 +114,28 @@ public class RpslTable extends AbstractTable implements ScannableTable {
       if (current == null) {
         return null;
       }
-      return createRow(current);
+      Object[] row = new Object[COLUMNS.size()];
+      for (int i = 0; i < COLUMNS.size(); i++) {
+        Column column = COLUMNS.get(i);
+        row[i] = switch (column.name()) {
+          case "type" -> current.type();
+          case "id" -> current.id();
+          default -> column.repeated()
+              ? nullIfEmpty(current.all(column.name()))
+              : current.first(column.name()).orElse(null);
+        };
+      }
+      return row;
+    }
+
+    private static List<String> nullIfEmpty(List<String> values) {
+      return values.isEmpty() ? null : values;
     }
 
     @Override
     public boolean moveNext() {
-      if (rpslObjectIterator.hasNext()) {
-        current = rpslObjectIterator.next();
+      if (objects.hasNext()) {
+        current = objects.next();
         return true;
       }
       return false;
@@ -194,49 +143,17 @@ public class RpslTable extends AbstractTable implements ScannableTable {
 
     @Override
     public void reset() {
-      try {
-        if (inputStream != null) {
-          inputStream.close();
-        }
-        initialize();
-      } catch (IOException e) {
-        throw new RuntimeException("Failed to reset RPSL iterator", e);
-      }
+      close();
+      open();
     }
 
     @Override
     public void close() {
       try {
-        if (inputStream != null) {
-          inputStream.close();
-        }
+        inputStream.close();
       } catch (IOException e) {
-        // Ignore
+        throw new UncheckedIOException(e);
       }
-    }
-
-    private Object[] createRow(RpslObject rpslObject) {
-      Object[] row = new Object[columns.size()];
-
-      for (int i = 0; i < columns.size(); i++) {
-        RpslColumn column = columns.get(i);
-        String columnName = column.getName().toLowerCase();
-
-        if (columnName.equals("type")) {
-          row[i] = rpslObject.type();
-        } else if (columnName.equals("id")) {
-          row[i] = rpslObject.id();
-        } else {
-          if (column.isRepeated()) {
-            List<String> values = rpslObject.all(columnName);
-            row[i] = values.isEmpty() ? null : values;
-          } else {
-            row[i] = rpslObject.first(columnName).orElse(null);
-          }
-        }
-      }
-
-      return row;
     }
   }
 }

@@ -16,7 +16,6 @@ package com.baremaps.calcite.openstreetmap;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.baremaps.openstreetmap.pbf.PbfEntityReader;
 import com.baremaps.testing.TestFiles;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -42,11 +41,8 @@ public class OpenStreetMapTableTest {
   @Test
   void testSchemaVerification() throws Exception {
     try (var inputStream = Files.newInputStream(SAMPLE_OSM_PATH)) {
-      // Create a PBF entity reader
-      PbfEntityReader entityReader = new PbfEntityReader();
-
       // Create the OpenStreetMapTable
-      OpenStreetMapTable osmTable = new OpenStreetMapTable(SAMPLE_OSM_PATH.toFile(), entityReader);
+      OpenStreetMapTable osmTable = new OpenStreetMapTable(SAMPLE_OSM_PATH.toFile());
 
       // Verify the schema structure
       RelDataTypeFactory typeFactory = new JavaTypeFactoryImpl();
@@ -77,11 +73,9 @@ public class OpenStreetMapTableTest {
   @Test
   void testSqlQueryWithRealPbfFile() throws Exception {
     // Create a properly configured reader and table directly
-    PbfEntityReader entityReader = new PbfEntityReader();
-
     try (var inputStream = new FileInputStream(SAMPLE_OSM_PATH.toFile())) {
       // Create the table with our configured reader
-      OpenStreetMapTable osmTable = new OpenStreetMapTable(SAMPLE_OSM_PATH.toFile(), entityReader);
+      OpenStreetMapTable osmTable = new OpenStreetMapTable(SAMPLE_OSM_PATH.toFile());
 
       // Configure Calcite connection properties
       Properties info = new Properties();

@@ -14,50 +14,15 @@
 
 package com.baremaps.calcite.csv;
 
+import com.baremaps.calcite.FileSchema;
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import org.apache.calcite.schema.Table;
-import org.apache.calcite.schema.impl.AbstractSchema;
+import java.util.List;
 
-/**
- * A Calcite schema implementation for CSV data. This schema provides access to CSV files through
- * the Apache Calcite framework for SQL querying.
- */
-public class CsvSchema extends AbstractSchema {
+/** A schema exposing the {@code .csv} files of a directory as tables. */
+public class CsvSchema extends FileSchema {
 
-  private final File directory;
-  private final Map<String, Table> tableMap;
-  private final char separator;
-  private final boolean hasHeader;
-
-  /**
-   * Constructs a CsvSchema with the specified directory.
-   *
-   * @param directory the directory containing CSV files
-   * @param separator the separator character used in CSV files
-   * @param hasHeader whether CSV files have headers
-   * @throws IOException if an I/O error occurs
-   */
   public CsvSchema(File directory, char separator, boolean hasHeader) throws IOException {
-    this.directory = directory;
-    this.separator = separator;
-    this.hasHeader = hasHeader;
-    this.tableMap = new HashMap<>();
-
-    // Only process .csv files in the directory
-    File[] files = directory.listFiles((dir, name) -> name.toLowerCase().endsWith(".csv"));
-    if (files != null) {
-      for (File file : files) {
-        String tableName = file.getName().replaceFirst("[.][^.]+$", ""); // Remove extension
-        tableMap.put(tableName, new CsvTable(file, separator, hasHeader));
-      }
-    }
-  }
-
-  @Override
-  protected Map<String, Table> getTableMap() {
-    return tableMap;
+    super(directory, List.of(".csv"), file -> new CsvTable(file, separator, hasHeader));
   }
 }

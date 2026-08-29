@@ -14,169 +14,80 @@
 
 package com.baremaps.calcite.postgres;
 
-import com.baremaps.calcite.data.DataColumn;
-import com.baremaps.calcite.data.DataTableSchema;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Locale;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-/**
- * Utility class for converting between PostgreSQL/PostGIS types and Calcite types.
- */
-public class PostgresTypeConversion {
+/** Maps between PostgreSQL type names and Calcite types. */
+final class PostgresTypeConversion {
 
-  private PostgresTypeConversion() {
-    // Prevent instantiation
-  }
+  private PostgresTypeConversion() {}
 
   /**
-   * Converts a PostgreSQL type to a Calcite RelDataType.
-   *
-   * @param typeFactory the type factory
-   * @param postgresType the PostgreSQL type
-   * @return the corresponding RelDataType
+   * Converts a PostgreSQL type name, as written in DDL or reported by {@code format_type}, into a
+   * Calcite type. Type modifiers such as {@code (Point, 4326)} are ignored; unknown types become
+   * {@code VARCHAR} so that any column can at least be read as text.
    */
-  public static RelDataType postgresTypeToRelDataType(
-      RelDataTypeFactory typeFactory, String postgresType) {
-    switch (postgresType.toLowerCase()) {
-      case "int4":
-      case "integer":
-        return typeFactory.createSqlType(SqlTypeName.INTEGER);
-      case "bigint":
-      case "int8":
-        return typeFactory.createSqlType(SqlTypeName.BIGINT);
-      case "smallint":
-      case "int2":
-        return typeFactory.createSqlType(SqlTypeName.SMALLINT);
-      case "real":
-      case "float4":
-        return typeFactory.createSqlType(SqlTypeName.FLOAT);
-      case "double precision":
-      case "float8":
-        return typeFactory.createSqlType(SqlTypeName.DOUBLE);
-      case "numeric":
-      case "decimal":
-        return typeFactory.createSqlType(SqlTypeName.DECIMAL);
-      case "boolean":
-      case "bool":
-        return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
-      case "varchar":
-      case "character varying":
-      case "text":
-        return typeFactory.createSqlType(SqlTypeName.VARCHAR);
-      case "char":
-      case "character":
-        return typeFactory.createSqlType(SqlTypeName.CHAR);
-      case "date":
-        return typeFactory.createSqlType(SqlTypeName.DATE);
-      case "timestamp":
-      case "timestamp without time zone":
-        return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
-      case "timestamp with time zone":
-        return typeFactory.createSqlType(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE);
-      case "time":
-      case "time without time zone":
-        return typeFactory.createSqlType(SqlTypeName.TIME);
-      case "time with time zone":
-        return typeFactory.createSqlType(SqlTypeName.TIME_WITH_LOCAL_TIME_ZONE);
-      case "bytea":
-        return typeFactory.createSqlType(SqlTypeName.BINARY);
-      case "geometry":
-        return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
-      case "json":
-      case "jsonb":
-        return typeFactory.createSqlType(SqlTypeName.OTHER);
-      default:
-        // Default to VARCHAR for unknown types
-        return typeFactory.createSqlType(SqlTypeName.VARCHAR);
+  static RelDataType toRelDataType(RelDataTypeFactory typeFactory, String postgresType) {
+    String name = postgresType.toLowerCase(Locale.ROOT);
+    int modifier = name.indexOf('(');
+    if (modifier >= 0) {
+      name = name.substring(0, modifier).trim();
     }
+    SqlTypeName sqlTypeName = switch (name) {
+      case "int4", "integer", "int", "serial" -> SqlTypeName.INTEGER;
+      case "int8", "bigint", "bigserial" -> SqlTypeName.BIGINT;
+      case "int2", "smallint" -> SqlTypeName.SMALLINT;
+      case "float4", "real" -> SqlTypeName.FLOAT;
+      case "float8", "double precision" -> SqlTypeName.DOUBLE;
+      case "numeric", "decimal" -> SqlTypeName.DECIMAL;
+      case "bool", "boolean" -> SqlTypeName.BOOLEAN;
+      case "varchar", "character varying", "text" -> SqlTypeName.VARCHAR;
+      case "char", "character", "bpchar" -> SqlTypeName.CHAR;
+      case "date" -> SqlTypeName.DATE;
+      case "timestamp", "timestamp without time zone" -> SqlTypeName.TIMESTAMP;
+      case "timestamptz", "timestamp with time zone" -> SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE;
+      case "time", "time without time zone" -> SqlTypeName.TIME;
+      case "timetz", "time with time zone" -> SqlTypeName.TIME_WITH_LOCAL_TIME_ZONE;
+      case "bytea" -> SqlTypeName.BINARY;
+      case "geometry", "geography" -> SqlTypeName.GEOMETRY;
+      case "json", "jsonb" -> SqlTypeName.OTHER;
+      default -> SqlTypeName.VARCHAR;
+    };
+    return typeFactory.createSqlType(sqlTypeName);
   }
 
-  /**
-   * Converts a RelDataType to a PostgreSQL type string.
-   *
-   * @param type the RelDataType
-   * @return the corresponding PostgreSQL type string
-   */
-  public static String toPostgresTypeString(RelDataType type) {
-    // Handle record types (structs)
+  /** Converts a Calcite type into the PostgreSQL type to declare in {@code CREATE TABLE}. */
+  static String toPostgresTypeString(RelDataType type) {
     if (type.isStruct()) {
-      // For struct types, use JSONB in PostgreSQL
       return "JSONB";
     }
-
-    SqlTypeName typeName = type.getSqlTypeName();
-    switch (typeName) {
-      case INTEGER:
-        return "INTEGER";
-      case BIGINT:
-        return "BIGINT";
-      case SMALLINT:
-        return "SMALLINT";
-      case TINYINT:
-        return "SMALLINT";
-      case FLOAT:
-        return "REAL";
-      case DOUBLE:
-      case DECIMAL:
-        return "DOUBLE PRECISION";
-      case BOOLEAN:
-        return "BOOLEAN";
-      case VARCHAR:
-      case CHAR:
+    return switch (type.getSqlTypeName()) {
+      case INTEGER -> "INTEGER";
+      case BIGINT -> "BIGINT";
+      case SMALLINT, TINYINT -> "SMALLINT";
+      case FLOAT, REAL -> "REAL";
+      case DOUBLE, DECIMAL -> "DOUBLE PRECISION";
+      case BOOLEAN -> "BOOLEAN";
+      case VARCHAR, CHAR -> {
         int precision = type.getPrecision();
         if (precision == RelDataType.PRECISION_NOT_SPECIFIED) {
-          return "TEXT";
-        } else {
-          return typeName == SqlTypeName.VARCHAR
-              ? "VARCHAR(" + precision + ")"
-              : "CHAR(" + precision + ")";
+          yield "TEXT";
         }
-      case DATE:
-        return "DATE";
-      case TIMESTAMP:
-        return "TIMESTAMP";
-      case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-        return "TIMESTAMP WITH TIME ZONE";
-      case TIME:
-        return "TIME";
-      case TIME_WITH_LOCAL_TIME_ZONE:
-        return "TIME WITH LOCAL TIME ZONE";
-      case BINARY:
-      case VARBINARY:
-        return "BYTEA";
-      case GEOMETRY:
-        return "GEOMETRY";
-      case ARRAY:
-        return toPostgresTypeString(type.getComponentType()) + "[]";
-      case OTHER:
-        // For JSON/JSONB and other types
-        return "JSONB";
-      default:
-        // Default to TEXT for unknown types
-        return "TEXT";
-    }
-  }
-
-  /**
-   * Converts a DataSchema to a RelDataType.
-   *
-   * @param typeFactory the type factory
-   * @param schema the data schema
-   * @return the corresponding RelDataType
-   */
-  public static RelDataType toRelDataType(RelDataTypeFactory typeFactory,
-      DataTableSchema schema) {
-    List<RelDataType> types = new ArrayList<>();
-    List<String> names = new ArrayList<>();
-
-    for (DataColumn column : schema.columns()) {
-      names.add(column.name());
-      types.add(column.relDataType());
-    }
-
-    return typeFactory.createStructType(types, names);
+        yield (type.getSqlTypeName() == SqlTypeName.VARCHAR ? "VARCHAR(" : "CHAR(")
+            + precision + ")";
+      }
+      case DATE -> "DATE";
+      case TIMESTAMP -> "TIMESTAMP";
+      case TIMESTAMP_WITH_LOCAL_TIME_ZONE -> "TIMESTAMP WITH TIME ZONE";
+      case TIME -> "TIME";
+      case TIME_WITH_LOCAL_TIME_ZONE -> "TIME WITH TIME ZONE";
+      case BINARY, VARBINARY -> "BYTEA";
+      case GEOMETRY -> "GEOMETRY";
+      case ARRAY -> toPostgresTypeString(type.getComponentType()) + "[]";
+      case OTHER -> "JSONB";
+      default -> "TEXT";
+    };
   }
 }

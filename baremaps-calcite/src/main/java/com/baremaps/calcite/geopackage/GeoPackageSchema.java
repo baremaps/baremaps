@@ -21,35 +21,24 @@ import java.util.List;
 import java.util.Map;
 import mil.nga.geopackage.GeoPackage;
 import mil.nga.geopackage.GeoPackageManager;
+import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.impl.AbstractSchema;
 
-/**
- * A Calcite schema implementation for GeoPackage data. This schema provides access to tables in a
- * GeoPackage file through the Apache Calcite framework for SQL querying.
- */
+/** A schema exposing the feature tables of a GeoPackage file. */
 public class GeoPackageSchema extends AbstractSchema {
 
-  private final File file;
-  private final Map<String, Table> tableMap;
+  private final Map<String, Table> tableMap = new HashMap<>();
 
-  /**
-   * Constructs a GeoPackageSchema with the specified file.
-   *
-   * @param file the GeoPackage file to read data from
-   * @throws IOException if an I/O error occurs
-   */
   public GeoPackageSchema(File file) throws IOException {
-    this.file = file;
-    this.tableMap = new HashMap<>();
-
-    // Open the GeoPackage file and get all feature tables
-    GeoPackage geoPackage = GeoPackageManager.open(file);
-    List<String> featureTables = geoPackage.getFeatureTables();
-
-    // Create a table for each feature table
+    RelDataTypeFactory typeFactory = new JavaTypeFactoryImpl();
+    List<String> featureTables;
+    try (GeoPackage geoPackage = GeoPackageManager.open(file)) {
+      featureTables = geoPackage.getFeatureTables();
+    }
     for (String tableName : featureTables) {
-      tableMap.put(tableName, new GeoPackageTable(file, tableName));
+      tableMap.put(tableName, new GeoPackageTable(file, tableName, typeFactory));
     }
   }
 

@@ -18,6 +18,7 @@ import com.baremaps.flatgeobuf.FlatGeoBuf;
 import com.baremaps.flatgeobuf.FlatGeoBufReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -31,84 +32,38 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
-import org.locationtech.jts.geom.Geometry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
- * A Calcite table implementation for FlatGeoBuf data. This table reads data from a FlatGeoBuf file
- * and makes it available through the Apache Calcite framework for SQL querying.
+ * A read-only table over a FlatGeoBuf file: its properties followed by a {@code geometry} column.
  */
 public class FlatGeoBufTable extends AbstractTable implements ScannableTable {
 
-  private static final Logger logger = LoggerFactory.getLogger(FlatGeoBufTable.class);
-
   private final File file;
-  private final String tableName;
   private final List<FlatGeoBuf.Column> columns;
-  private RelDataType rowType;
 
-  /**
-   * Constructs a FlatGeoBufTable with the specified file.
-   *
-   * @param file the FlatGeoBuf file to read data from
-   * @throws IOException if an I/O error occurs
-   */
   public FlatGeoBufTable(File file) throws IOException {
     this.file = file;
-    this.tableName = file.getName().replaceFirst("[.][^.]+$", ""); // Remove extension
-
-    // Read header to get columns information
-    try (FlatGeoBufReader reader =
-        new FlatGeoBufReader(FileChannel.open(file.toPath(), StandardOpenOption.READ))) {
-      FlatGeoBuf.Header header = reader.readHeader();
-      this.columns = header.columns();
+    try (FlatGeoBufReader reader = open(file)) {
+      this.columns = reader.readHeader().columns();
     }
+  }
+
+  private static FlatGeoBufReader open(File file) throws IOException {
+    return new FlatGeoBufReader(FileChannel.open(file.toPath(), StandardOpenOption.READ));
   }
 
   @Override
   public RelDataType getRowType(RelDataTypeFactory typeFactory) {
-    if (rowType == null) {
-      rowType = createRowType(typeFactory);
-    }
-    return rowType;
-  }
-
-  /**
-   * Creates the row type (schema) for the FlatGeoBuf data.
-   *
-   * @param typeFactory the type factory
-   * @return the RelDataType representing the schema
-   */
-  private RelDataType createRowType(RelDataTypeFactory typeFactory) {
     RelDataTypeFactory.Builder builder = typeFactory.builder();
-
-    // Add columns from the FlatGeoBuf schema
     for (FlatGeoBuf.Column column : columns) {
-      SqlTypeName sqlTypeName = mapFlatGeoBufTypeToSqlType(column.type());
-      RelDataType fieldType = typeFactory.createSqlType(sqlTypeName);
-
-      // Handle nullability
-      if (column.nullable()) {
-        fieldType = typeFactory.createTypeWithNullability(fieldType, true);
-      }
-
-      builder.add(column.name(), fieldType);
+      RelDataType type = typeFactory.createSqlType(sqlType(column.type()));
+      builder.add(column.name(), typeFactory.createTypeWithNullability(type, column.nullable()));
     }
-
-    // Add geometry column
-    builder.add("geometry", typeFactory.createJavaType(Geometry.class));
-
+    builder.add("geometry", typeFactory.createSqlType(SqlTypeName.GEOMETRY));
     return builder.build();
   }
 
-  /**
-   * Maps FlatGeoBuf column types to SqlTypeName
-   * 
-   * @param columnType the FlatGeoBuf column type
-   * @return the corresponding SqlTypeName
-   */
-  private SqlTypeName mapFlatGeoBufTypeToSqlType(FlatGeoBuf.ColumnType columnType) {
+  private static SqlTypeName sqlType(FlatGeoBuf.ColumnType columnType) {
     return switch (columnType) {
       case BYTE, UBYTE -> SqlTypeName.TINYINT;
       case BOOL -> SqlTypeName.BOOLEAN;
@@ -117,15 +72,14 @@ public class FlatGeoBufTable extends AbstractTable implements ScannableTable {
       case LONG, ULONG -> SqlTypeName.BIGINT;
       case FLOAT -> SqlTypeName.FLOAT;
       case DOUBLE -> SqlTypeName.DOUBLE;
-      case STRING -> SqlTypeName.VARCHAR;
-      case JSON, DATETIME -> SqlTypeName.VARCHAR;
+      case STRING, JSON, DATETIME -> SqlTypeName.VARCHAR;
       case BINARY -> SqlTypeName.VARBINARY;
     };
   }
 
   @Override
   public Enumerable<Object[]> scan(DataContext root) {
-    return new AbstractEnumerable<Object[]>() {
+    return new AbstractEnumerable<>() {
       @Override
       public Enumerator<Object[]> enumerator() {
         return new FlatGeoBufEnumerator(file);
@@ -133,29 +87,25 @@ public class FlatGeoBufTable extends AbstractTable implements ScannableTable {
     };
   }
 
-  /**
-   * Enumerator for FlatGeoBuf data.
-   */
   private static class FlatGeoBufEnumerator implements Enumerator<Object[]> {
+
     private final File file;
     private FlatGeoBufReader reader;
+    private long remaining;
     private Object[] current;
-    private long cursor = 0;
-    private long featureCount;
 
-    public FlatGeoBufEnumerator(File file) {
+    FlatGeoBufEnumerator(File file) {
       this.file = file;
-      initialize();
+      open();
     }
 
-    private void initialize() {
+    private void open() {
       try {
-        reader = new FlatGeoBufReader(FileChannel.open(file.toPath(), StandardOpenOption.READ));
-        FlatGeoBuf.Header header = reader.readHeader();
-        featureCount = header.featuresCount();
+        reader = FlatGeoBufTable.open(file);
+        remaining = reader.readHeader().featuresCount();
         reader.skipIndex();
       } catch (IOException e) {
-        throw new RuntimeException("Failed to initialize FlatGeoBuf iterator", e);
+        throw new UncheckedIOException(e);
       }
     }
 
@@ -166,49 +116,33 @@ public class FlatGeoBufTable extends AbstractTable implements ScannableTable {
 
     @Override
     public boolean moveNext() {
+      if (remaining <= 0) {
+        return false;
+      }
       try {
-        if (cursor >= featureCount) {
-          return false;
-        }
-
         FlatGeoBuf.Feature feature = reader.readFeature();
-        cursor++;
-
-        // Convert feature to row
-        List<Object> values = new ArrayList<>();
-
-        // Add properties
-        values.addAll(feature.properties());
-
-        // Add geometry
+        remaining--;
+        List<Object> values = new ArrayList<>(feature.properties());
         values.add(feature.geometry());
-
         current = values.toArray();
         return true;
       } catch (IOException e) {
-        logger.error("Error reading FlatGeoBuf row", e);
-        return false;
+        throw new UncheckedIOException(e);
       }
     }
 
     @Override
     public void reset() {
-      try {
-        reader.close();
-        initialize();
-      } catch (IOException e) {
-        throw new RuntimeException("Failed to reset FlatGeoBuf iterator", e);
-      }
+      close();
+      open();
     }
 
     @Override
     public void close() {
       try {
-        if (reader != null) {
-          reader.close();
-        }
+        reader.close();
       } catch (IOException e) {
-        // Ignore
+        throw new UncheckedIOException(e);
       }
     }
   }

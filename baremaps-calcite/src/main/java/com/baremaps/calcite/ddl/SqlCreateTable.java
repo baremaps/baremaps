@@ -48,7 +48,7 @@ public class SqlCreateTable extends SqlCreate {
   @SuppressWarnings("nullness")
   @Override
   public List<SqlNode> getOperandList() {
-    return ImmutableNullableList.of(name, columnList, query);
+    return ImmutableNullableList.of(name, columnList, query, withOptions);
   }
 
   @Override

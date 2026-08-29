@@ -14,70 +14,79 @@
 
 package com.baremaps.calcite;
 
-import com.baremaps.calcite.csv.CsvTableFactory;
-import com.baremaps.calcite.data.DataTableFactory;
-import com.baremaps.calcite.flatgeobuf.FlatGeoBufTableFactory;
-import com.baremaps.calcite.geopackage.GeoPackageTableFactory;
-import com.baremaps.calcite.geoparquet.GeoParquetTableFactory;
-import com.baremaps.calcite.openstreetmap.OpenStreetMapTableFactory;
-import com.baremaps.calcite.rpsl.RpslTableFactory;
-import com.baremaps.calcite.shapefile.ShapefileTableFactory;
+import com.baremaps.calcite.csv.CsvTable;
+import com.baremaps.calcite.data.DataModifiableTable;
+import com.baremaps.calcite.flatgeobuf.FlatGeoBufTable;
+import com.baremaps.calcite.geopackage.GeoPackageTable;
+import com.baremaps.calcite.geoparquet.GeoParquetTable;
+import com.baremaps.calcite.openstreetmap.OpenStreetMapTable;
+import com.baremaps.calcite.rpsl.RpslTable;
+import com.baremaps.calcite.shapefile.ShapefileTable;
+import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
+import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.TableFactory;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * A table factory for creating tables in the calcite2 package. This factory routes to the
- * appropriate specialized factory based on the format.
+ * Creates a table from a {@code format} operand naming the file format and a {@code file} operand
+ * pointing at the data. This is the entry point for Calcite model files and for
+ * {@code CREATE TABLE ... WITH (...)}.
  */
 public class BaremapsTableFactory implements TableFactory<Table> {
 
-  private final CsvTableFactory csvTableFactory;
-  private final DataTableFactory dataTableFactory;
-  private final FlatGeoBufTableFactory flatGeoBufTableFactory;
-  private final GeoPackageTableFactory geoPackageTableFactory;
-  private final GeoParquetTableFactory geoParquetTableFactory;
-  private final OpenStreetMapTableFactory openStreetMapTableFactory;
-  private final RpslTableFactory rpslTableFactory;
-  private final ShapefileTableFactory shapefileTableFactory;
-
-  /**
-   * Constructor.
-   */
-  public BaremapsTableFactory() {
-    this.csvTableFactory = new CsvTableFactory();
-    this.dataTableFactory = new DataTableFactory();
-    this.flatGeoBufTableFactory = new FlatGeoBufTableFactory();
-    this.geoPackageTableFactory = new GeoPackageTableFactory();
-    this.geoParquetTableFactory = new GeoParquetTableFactory();
-    this.openStreetMapTableFactory = new OpenStreetMapTableFactory();
-    this.rpslTableFactory = new RpslTableFactory();
-    this.shapefileTableFactory = new ShapefileTableFactory();
-  }
+  // Calcite does not hand a type factory to table factories, so file formats that must know their
+  // row type up front use a default one.
+  private static final RelDataTypeFactory TYPE_FACTORY = new JavaTypeFactoryImpl();
 
   @Override
-  public Table create(
-      SchemaPlus schema,
-      String name,
-      Map<String, Object> operand,
-      RelDataType rowType) {
-    String format = (String) operand.get("format");
-    if (format == null) {
-      throw new IllegalArgumentException("Format must be specified in the 'format' operand");
+  public Table create(SchemaPlus schema, String name, Map<String, Object> operand,
+      @Nullable RelDataType rowType) {
+    String format = require(operand, "format");
+    File file = new File(require(operand, "file"));
+    try {
+      return switch (format) {
+        case "data" -> dataTable(file.toPath(), name, rowType);
+        case "csv" -> new CsvTable(file,
+            ((String) operand.getOrDefault("separator", ",")).charAt(0),
+            (Boolean) operand.getOrDefault("hasHeader", true));
+        case "shp" -> new ShapefileTable(file);
+        case "rpsl" -> new RpslTable(file);
+        case "fgb" -> new FlatGeoBufTable(file);
+        case "parquet" -> new GeoParquetTable(file, TYPE_FACTORY);
+        case "geopackage" -> new GeoPackageTable(file, require(operand, "table"), TYPE_FACTORY);
+        case "osm" -> new OpenStreetMapTable(file);
+        default -> throw new IllegalArgumentException("Unsupported format: " + format);
+      };
+    } catch (IOException e) {
+      throw new UncheckedIOException("Failed to open " + format + " table " + file, e);
     }
+  }
 
-    return switch (format) {
-      case "data" -> dataTableFactory.create(schema, name, operand, rowType);
-      case "osm" -> openStreetMapTableFactory.create(schema, name, operand, rowType);
-      case "csv" -> csvTableFactory.create(schema, name, operand, rowType);
-      case "shp" -> shapefileTableFactory.create(schema, name, operand, rowType);
-      case "rpsl" -> rpslTableFactory.create(schema, name, operand, rowType);
-      case "fgb" -> flatGeoBufTableFactory.create(schema, name, operand, rowType);
-      case "parquet" -> geoParquetTableFactory.create(schema, name, operand, rowType);
-      case "geopackage" -> geoPackageTableFactory.create(schema, name, operand, rowType);
-      default -> throw new IllegalArgumentException("Unsupported format: " + format);
-    };
+  private static String require(Map<String, Object> operand, String key) {
+    Object value = operand.get(key);
+    if (value == null) {
+      throw new IllegalArgumentException("The '" + key + "' operand must be specified");
+    }
+    return value.toString();
+  }
+
+  /** Opens the table stored in {@code directory}, creating it when the directory is new. */
+  private static Table dataTable(Path directory, String name, @Nullable RelDataType rowType) {
+    if (Files.isDirectory(directory) && directory.resolve("header").toFile().exists()) {
+      return DataModifiableTable.open(directory, TYPE_FACTORY);
+    }
+    if (rowType == null) {
+      throw new IllegalArgumentException("A row type is required to create " + directory);
+    }
+    return DataModifiableTable.create(directory, name, rowType);
   }
 }

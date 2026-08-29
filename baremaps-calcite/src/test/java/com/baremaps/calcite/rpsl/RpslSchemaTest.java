@@ -63,7 +63,7 @@ public class RpslSchemaTest {
 
     // Create and register the RPSL schema
     RpslSchema schema =
-        new RpslSchema(tempDir.resolve("rpsl-test").toFile(), calciteConnection.getTypeFactory());
+        new RpslSchema(tempDir.resolve("rpsl-test").toFile());
     rootSchema.add("rpsl", schema);
 
     // Verify that the schema contains the expected table
@@ -82,7 +82,7 @@ public class RpslSchemaTest {
 
     // Create and register the RPSL schema
     RpslSchema schema =
-        new RpslSchema(tempDir.resolve("rpsl-test").toFile(), calciteConnection.getTypeFactory());
+        new RpslSchema(tempDir.resolve("rpsl-test").toFile());
     rootSchema.add("rpsl", schema);
 
     // Execute a simple SQL query - use lowercase for schema and table names
@@ -116,7 +116,7 @@ public class RpslSchemaTest {
     File sampleFile = tempDir.resolve("rpsl-test").resolve("sample.txt").toFile();
 
     // Create and register the RPSL schema with a single file
-    RpslSchema schema = new RpslSchema(sampleFile, calciteConnection.getTypeFactory(), false);
+    RpslSchema schema = new RpslSchema(sampleFile);
     rootSchema.add("single", schema);
 
     // Verify that the schema contains the expected table

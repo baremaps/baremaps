@@ -20,15 +20,20 @@ import com.baremaps.data.collection.AppendOnlyLog;
 import com.baremaps.data.collection.DataCollection;
 import com.baremaps.data.memory.Memory;
 import com.baremaps.data.memory.MemoryMappedDirectory;
+import com.baremaps.data.memory.OnHeapMemory;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Type;
-import java.nio.MappedByteBuffer;
-import java.nio.file.Paths;
+import java.nio.ByteBuffer;
+import java.nio.file.Path;
 import java.util.AbstractCollection;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Objects;
 import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.linq4j.Linq4j;
 import org.apache.calcite.linq4j.QueryProvider;
@@ -42,8 +47,7 @@ import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.rel.type.RelDataTypeImpl;
-import org.apache.calcite.rel.type.RelProtoDataType;
+import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.ModifiableTable;
 import org.apache.calcite.schema.SchemaPlus;
@@ -55,94 +59,106 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * A modifiable table implementation for Calcite that stores data in an AppendOnlyLog.
+ * A modifiable table whose rows live in a {@code baremaps-data} collection, either on the heap or
+ * in a memory-mapped directory.
+ *
+ * <p>
+ * A memory-mapped table is self-describing: its row type is stored as JSON in the header of the
+ * memory, after the {@code long} that {@link AppendOnlyLog} reserves for its size, so that
+ * {@link #open(Path, RelDataTypeFactory)} can reopen it without any side file.
  */
-public class DataModifiableTable extends AbstractTable implements ModifiableTable, Wrapper {
+public class DataModifiableTable extends AbstractTable
+    implements ModifiableTable, Wrapper, AutoCloseable {
+
+  private static final int SCHEMA_OFFSET = Long.BYTES;
+
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private final String name;
-  private final RelProtoDataType protoRowType;
   private final RelDataType rowType;
-  private final DataTableSchema schema;
-  public final DataCollection<DataRow> rows;
+  private final DataCollection<Object[]> rows;
 
-  /**
-   * Constructs a DataModifiableTable with the specified name and prototype row type.
-   *
-   * @param name the name of the table
-   * @param protoRowType the prototype row type
-   * @param typeFactory the type factory
-   */
-  public DataModifiableTable(String name,
-      RelProtoDataType protoRowType,
-      RelDataTypeFactory typeFactory) {
-    super();
+  /** Creates a table over an existing collection of rows matching {@code rowType}. */
+  public DataModifiableTable(String name, RelDataType rowType, DataCollection<Object[]> rows) {
     this.name = requireNonNull(name, "name");
-    this.protoRowType = requireNonNull(protoRowType, "protoRowType");
-    this.rowType = this.protoRowType.apply(typeFactory);
-
-    // Create the schema
-    List<DataColumn> columns = new ArrayList<>();
-    rowType.getFieldList().forEach(field -> {
-      String columnName = field.getName();
-      RelDataType relDataType = field.getType();
-      DataColumn.Cardinality columnCardinality = determineCardinality(relDataType);
-      columns.add(new DataColumnFixed(columnName, columnCardinality, relDataType));
-    });
-
-    this.schema = new DataTableSchema(name, columns);
-
-    // Create the collection
-    DataRowType dataRowType = new DataRowType(schema);
-    Memory<MappedByteBuffer> memory = new MemoryMappedDirectory(Paths.get(this.name));
-    this.rows = AppendOnlyLog.<DataRow>builder().dataType(dataRowType).memory(memory).build();
-  }
-
-  /**
-   * Constructs a DataModifiableTable with an existing schema and data collection.
-   *
-   * @param name the name of the table
-   * @param schema the data schema
-   * @param rows the data collection
-   * @param typeFactory the type factory
-   */
-  public DataModifiableTable(String name,
-      DataTableSchema schema,
-      DataCollection<DataRow> rows,
-      RelDataTypeFactory typeFactory) {
-    super();
-    this.name = requireNonNull(name, "name");
-    this.schema = requireNonNull(schema, "schema");
+    this.rowType = requireNonNull(rowType, "rowType");
     this.rows = requireNonNull(rows, "rows");
-
-    // Create row type from schema
-    List<RelDataType> fieldTypes = new ArrayList<>();
-    List<String> fieldNames = new ArrayList<>();
-
-    for (DataColumn column : schema.columns()) {
-      fieldNames.add(column.name());
-      fieldTypes.add(column.relDataType());
-    }
-
-    this.rowType = typeFactory.createStructType(fieldTypes, fieldNames);
-    this.protoRowType = RelDataTypeImpl.proto(rowType);
   }
 
-  /**
-   * Determines the cardinality from a RelDataType.
-   *
-   * @param columnType the Calcite RelDataType
-   * @return the corresponding DataColumn.Cardinality
-   */
-  private DataColumn.Cardinality determineCardinality(RelDataType columnType) {
-    Objects.requireNonNull(columnType, "Column type cannot be null");
+  /** Creates an empty table held on the heap. */
+  public static DataModifiableTable inMemory(String name, RelDataType rowType) {
+    return new DataModifiableTable(name, rowType, log(rowType, new OnHeapMemory()));
+  }
 
-    if (columnType.getSqlTypeName() == SqlTypeName.ARRAY) {
-      return DataColumn.Cardinality.REPEATED;
-    } else if (columnType.isNullable()) {
-      return DataColumn.Cardinality.OPTIONAL;
-    } else {
-      return DataColumn.Cardinality.REQUIRED;
+  /** Creates an empty table in {@code directory}, which must be empty or absent. */
+  public static DataModifiableTable create(Path directory, String name, RelDataType rowType) {
+    Memory<?> memory = new MemoryMappedDirectory(directory);
+    writeSchema(memory.header(), rowType);
+    return new DataModifiableTable(name, rowType, log(rowType, memory));
+  }
+
+  /** Opens the table previously created in {@code directory}; its name is the directory name. */
+  public static DataModifiableTable open(Path directory, RelDataTypeFactory typeFactory) {
+    Memory<?> memory = new MemoryMappedDirectory(directory);
+    RelDataType rowType = readSchema(memory.header(), typeFactory);
+    String name = directory.getFileName().toString();
+    return new DataModifiableTable(name, rowType, log(rowType, memory));
+  }
+
+  private static DataCollection<Object[]> log(RelDataType rowType, Memory<?> memory) {
+    return AppendOnlyLog.<Object[]>builder()
+        .dataType(new DataRowType(rowType))
+        .memory(memory)
+        .build();
+  }
+
+  private static void writeSchema(ByteBuffer header, RelDataType rowType) {
+    ArrayNode columns = MAPPER.createArrayNode();
+    for (RelDataTypeField field : rowType.getFieldList()) {
+      columns.addObject()
+          .put("name", field.getName())
+          .put("type", field.getType().getSqlTypeName().name())
+          .put("nullable", field.getType().isNullable());
     }
+    try {
+      byte[] bytes = MAPPER.writeValueAsBytes(columns);
+      header.putInt(SCHEMA_OFFSET, bytes.length);
+      header.put(SCHEMA_OFFSET + Integer.BYTES, bytes);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
+  private static RelDataType readSchema(ByteBuffer header, RelDataTypeFactory typeFactory) {
+    int length = header.getInt(SCHEMA_OFFSET);
+    byte[] bytes = new byte[length];
+    header.get(SCHEMA_OFFSET + Integer.BYTES, bytes);
+    RelDataTypeFactory.Builder builder = typeFactory.builder();
+    try {
+      for (JsonNode column : MAPPER.readTree(bytes)) {
+        ObjectNode node = (ObjectNode) column;
+        RelDataType type =
+            typeFactory.createSqlType(SqlTypeName.valueOf(node.get("type").asText()));
+        type = typeFactory.createTypeWithNullability(type, node.get("nullable").asBoolean());
+        builder.add(node.get("name").asText(), type);
+      }
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+    return builder.build();
+  }
+
+  public String name() {
+    return name;
+  }
+
+  public DataCollection<Object[]> rows() {
+    return rows;
+  }
+
+  @Override
+  public RelDataType getRowType(RelDataTypeFactory typeFactory) {
+    return rowType;
   }
 
   @Override
@@ -160,18 +176,18 @@ public class DataModifiableTable extends AbstractTable implements ModifiableTabl
   }
 
   @Override
-  public Collection getModifiableCollection() {
-    return new RowCollectionAdapter();
+  public Collection<Object[]> getModifiableCollection() {
+    return new RowCollection();
   }
 
   @Override
   public <T> Queryable<T> asQueryable(QueryProvider queryProvider, SchemaPlus schema,
       String tableName) {
-    return new AbstractTableQueryable<T>(queryProvider, schema, this,
-        tableName) {
+    return new AbstractTableQueryable<>(queryProvider, schema, this, tableName) {
       @Override
+      @SuppressWarnings("unchecked")
       public Enumerator<T> enumerator() {
-        return (Enumerator<T>) Linq4j.enumerator(new RowCollectionAdapter());
+        return (Enumerator<T>) Linq4j.enumerator(new RowCollection());
       }
     };
   }
@@ -186,91 +202,32 @@ public class DataModifiableTable extends AbstractTable implements ModifiableTabl
     return Schemas.tableExpression(schema, getElementType(), tableName, clazz);
   }
 
+  /** Persists the row count of a memory-mapped table. */
   @Override
-  public RelDataType getRowType(final RelDataTypeFactory typeFactory) {
-    return rowType;
+  public void close() throws Exception {
+    rows.close();
   }
 
-  /**
-   * Adapter that makes the data collection appear as a collection of Object arrays. This provides
-   * compatibility with Calcite's ModifiableTable interface.
-   */
-  private class RowCollectionAdapter extends AbstractCollection<Object[]> {
-
-    private final int size;
-
-    public RowCollectionAdapter() {
-      this.size = (int) Math.min(rows.size(), Integer.MAX_VALUE);
-    }
+  /** The {@link Collection} view of the rows that Calcite mutates. */
+  private class RowCollection extends AbstractCollection<Object[]> {
 
     @Override
     public int size() {
-      return size;
-    }
-
-    @Override
-    public boolean isEmpty() {
-      return rows.isEmpty();
-    }
-
-    @Override
-    public boolean contains(Object o) {
-      if (!(o instanceof Object[])) {
-        return false;
-      }
-      return rows.stream().anyMatch(row -> {
-        Object[] values = row.values().toArray();
-        Object[] other = (Object[]) o;
-        if (values.length != other.length) {
-          return false;
-        }
-        for (int i = 0; i < values.length; i++) {
-          if (!Objects.equals(values[i], other[i])) {
-            return false;
-          }
-        }
-        return true;
-      });
+      return (int) Math.min(rows.size(), Integer.MAX_VALUE);
     }
 
     @Override
     public Iterator<Object[]> iterator() {
-      return rows.stream().map(row -> row.values().toArray()).iterator();
+      return rows.iterator();
     }
 
     @Override
-    public Object[] toArray() {
-      return rows.stream().map(row -> row.values().toArray()).toArray();
-    }
-
-    @Override
-    public <T> T[] toArray(T[] a) {
-      return (T[]) rows.stream().map(row -> row.values().toArray()).toArray();
-    }
-
-    @Override
-    public boolean add(Object[] objects) {
-      Objects.requireNonNull(objects, "Values cannot be null");
-      if (objects.length != schema.columns().size()) {
+    public boolean add(Object[] row) {
+      if (row.length != rowType.getFieldCount()) {
         throw new IllegalArgumentException(
-            "Expected " + schema.columns().size() + " values, got " + objects.length);
+            "Expected " + rowType.getFieldCount() + " values, got " + row.length);
       }
-      return rows.add(new DataRow(schema, List.of(objects)));
-    }
-
-    @Override
-    public boolean addAll(Collection<? extends Object[]> c) {
-      Objects.requireNonNull(c, "Collection cannot be null");
-      return rows.addAll(c.stream()
-          .map(objects -> {
-            Objects.requireNonNull(objects, "Values cannot be null");
-            if (objects.length != schema.columns().size()) {
-              throw new IllegalArgumentException(
-                  "Expected " + schema.columns().size() + " values, got " + objects.length);
-            }
-            return new DataRow(schema, List.of(objects));
-          })
-          .toList());
+      return rows.add(row);
     }
 
     @Override

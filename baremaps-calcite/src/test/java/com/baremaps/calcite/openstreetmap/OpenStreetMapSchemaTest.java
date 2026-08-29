@@ -82,7 +82,7 @@ public class OpenStreetMapSchemaTest {
   @Test
   void testSchemaCreation() throws IOException {
     // Create an OpenStreetMapSchema with the test directory
-    OpenStreetMapSchema schema = new OpenStreetMapSchema(sampleDataDir.toFile(), typeFactory);
+    OpenStreetMapSchema schema = new OpenStreetMapSchema(sampleDataDir.toFile());
 
     // Verify that the schema contains the expected tables
     // The table name is based on the filename without extension
@@ -100,7 +100,7 @@ public class OpenStreetMapSchemaTest {
   @Test
   void testSqlQueryWithDirectory() throws Exception {
     // Create an OpenStreetMapSchema with the test directory
-    OpenStreetMapSchema schema = new OpenStreetMapSchema(sampleDataDir.toFile(), typeFactory);
+    OpenStreetMapSchema schema = new OpenStreetMapSchema(sampleDataDir.toFile());
 
     // Configure Calcite connection properties
     Properties info = new Properties();
@@ -144,7 +144,7 @@ public class OpenStreetMapSchemaTest {
 
     // Create an OpenStreetMapSchema with a single file
     File pbfFile = sampleDataDir.resolve("sample.osm.pbf").toFile();
-    OpenStreetMapSchema schema = new OpenStreetMapSchema(pbfFile, typeFactory, false);
+    OpenStreetMapSchema schema = new OpenStreetMapSchema(pbfFile);
 
     // Configure Calcite connection properties
     Properties info = new Properties();

@@ -24,6 +24,7 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -64,9 +65,8 @@ class FlatGeoBufTableTest {
           .filter(field -> field.getName().equals("geometry"))
           .findFirst()
           .ifPresent(field -> {
-            String typeString = field.getType().getFullTypeString();
-            assertTrue(typeString.contains(Geometry.class.getName()),
-                "Geometry field should have the correct type: " + typeString);
+            assertEquals(SqlTypeName.GEOMETRY, field.getType().getSqlTypeName(),
+                "Geometry field should have the correct type");
           });
     }
 

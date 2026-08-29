@@ -29,6 +29,7 @@ import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Geometry;
 
@@ -40,7 +41,8 @@ class GeoPackageTableTest {
   @Test
   void testSchemaVerification() throws IOException {
     // Create a GeoPackageTable instance
-    GeoPackageTable geoPackageTable = new GeoPackageTable(SAMPLE_GEOPACKAGE, TABLE_NAME);
+    GeoPackageTable geoPackageTable =
+        new GeoPackageTable(SAMPLE_GEOPACKAGE, TABLE_NAME, new JavaTypeFactoryImpl());
 
     // Get the schema
     RelDataTypeFactory typeFactory = new JavaTypeFactoryImpl();
@@ -55,11 +57,8 @@ class GeoPackageTableTest {
     for (int i = 0; i < rowType.getFieldCount(); i++) {
       RelDataType fieldType = rowType.getFieldList().get(i).getType();
       String columnName = rowType.getFieldList().get(i).getName();
-      if (columnName.equalsIgnoreCase("geom") &&
-          (fieldType.getSqlTypeName().getName().equals("GEOMETRY") ||
-              fieldType.getSqlTypeName().getName().equals("JAVA_OBJECT"))
-          &&
-          fieldType.getFullTypeString().contains("org.locationtech.jts.geom.Geometry")) {
+      if (columnName.equalsIgnoreCase("geom")
+          && fieldType.getSqlTypeName() == SqlTypeName.GEOMETRY) {
         hasGeometryColumn = true;
         break;
       }
@@ -70,7 +69,8 @@ class GeoPackageTableTest {
   @Test
   void testSqlQueryWithRealGeoPackage() throws Exception {
     // Create a GeoPackageTable instance
-    GeoPackageTable geoPackageTable = new GeoPackageTable(SAMPLE_GEOPACKAGE, TABLE_NAME);
+    GeoPackageTable geoPackageTable =
+        new GeoPackageTable(SAMPLE_GEOPACKAGE, TABLE_NAME, new JavaTypeFactoryImpl());
 
     // Configure Calcite connection properties
     Properties info = new Properties();
@@ -102,7 +102,8 @@ class GeoPackageTableTest {
   @Test
   void testGeometryConversion() throws IOException {
     // Create a GeoPackageTable instance
-    GeoPackageTable geoPackageTable = new GeoPackageTable(SAMPLE_GEOPACKAGE, TABLE_NAME);
+    GeoPackageTable geoPackageTable =
+        new GeoPackageTable(SAMPLE_GEOPACKAGE, TABLE_NAME, new JavaTypeFactoryImpl());
 
     // Configure Calcite connection properties
     Properties info = new Properties();

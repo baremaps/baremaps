@@ -87,8 +87,7 @@ public class ShapefileSchemaTest {
     SchemaPlus rootSchema = calciteConnection.getRootSchema();
 
     // Create and register the shapefile schema
-    schema = new ShapefileSchema(tempDir.resolve("shapefile-test").toFile(),
-        calciteConnection.getTypeFactory());
+    schema = new ShapefileSchema(tempDir.resolve("shapefile-test").toFile());
     rootSchema.add("shapefile", schema);
 
     // Verify that the schema contains the expected table
@@ -104,8 +103,7 @@ public class ShapefileSchemaTest {
     SchemaPlus rootSchema = calciteConnection.getRootSchema();
 
     // Create and register the shapefile schema
-    schema = new ShapefileSchema(tempDir.resolve("shapefile-test").toFile(),
-        calciteConnection.getTypeFactory());
+    schema = new ShapefileSchema(tempDir.resolve("shapefile-test").toFile());
     rootSchema.add("shapefile", schema);
 
     // Execute a simple SQL query - use lowercase for schema and table names
@@ -138,7 +136,7 @@ public class ShapefileSchemaTest {
 
     // Create and register the shapefile schema with a single file
     schema =
-        new ShapefileSchema(sampleFile, calciteConnection.getTypeFactory(), false);
+        new ShapefileSchema(sampleFile);
     rootSchema.add("single", schema);
 
     // Verify that the schema contains the expected table

@@ -14,134 +14,72 @@
 
 package com.baremaps.calcite;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.baremaps.calcite.data.*;
-import com.baremaps.data.collection.AppendOnlyLog;
-import com.baremaps.data.collection.DataCollection;
-import com.baremaps.data.memory.MemoryMappedDirectory;
-import com.baremaps.testing.FileUtils;
-import java.io.IOException;
+import com.baremaps.calcite.data.DataModifiableTable;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.sql.*;
-import java.util.List;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Properties;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
+import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.SchemaPlus;
-import org.junit.jupiter.api.AfterEach;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
-import org.locationtech.jts.geom.Point;
 
-/**
- * Tests for the BaremapsDdlExecutor class, which provides DDL execution abilities for Baremaps
- * tables through Calcite.
- */
-public class BaremapsDdlExecutorTest {
+/** Tests the DDL statements executed against in-memory {@link DataModifiableTable}s. */
+class BaremapsDdlExecutorTest {
 
   @TempDir
-  Path cityDataDir;
+  Path tempDir;
 
-  @TempDir
-  Path cityPopulationDir;
+  private final RelDataTypeFactory typeFactory = new JavaTypeFactoryImpl();
 
-  @TempDir
-  Path populationDataDir;
-
-  @TempDir
-  Path testTableDataDir;
-
-  private DataCollection<DataRow> cityCollection;
-  private DataCollection<DataRow> populationCollection;
-  private DataCollection<DataRow> testTableCollection;
-  private DataTableSchema citySchema;
-  private DataTableSchema populationSchema;
-  private DataTableSchema testTableSchema;
-  private RelDataTypeFactory typeFactory;
+  private DataModifiableTable city;
+  private DataModifiableTable population;
+  private DataModifiableTable testTable;
 
   @BeforeEach
-  void setUp() throws IOException {
-    // Initialize type factory
-    typeFactory = new JavaTypeFactoryImpl();
+  void setUp() {
+    GeometryFactory geometryFactory = new GeometryFactory();
+    city = DataModifiableTable.inMemory("city", typeFactory.builder()
+        .add("id", SqlTypeName.INTEGER)
+        .add("name", SqlTypeName.VARCHAR)
+        .add("geometry", SqlTypeName.GEOMETRY)
+        .build());
+    city.rows().add(new Object[] {1, "Paris",
+        geometryFactory.createPoint(new Coordinate(2.3522, 48.8566))});
+    city.rows().add(new Object[] {2, "New York",
+        geometryFactory.createPoint(new Coordinate(-74.0060, 40.7128))});
 
-    // Create schemas
-    citySchema = createCitySchema();
-    populationSchema = createPopulationSchema();
-    testTableSchema = createTestTableSchema();
+    population = DataModifiableTable.inMemory("population", typeFactory.builder()
+        .add("city_id", SqlTypeName.INTEGER)
+        .add("population", SqlTypeName.INTEGER)
+        .build());
+    population.rows().add(new Object[] {1, 2_161_000});
+    population.rows().add(new Object[] {2, 8_336_000});
 
-    // Create and initialize collections
-    MemoryMappedDirectory cityMemory = new MemoryMappedDirectory(cityDataDir);
-    DataRowType cityRowType = new DataRowType(citySchema);
-    cityCollection = AppendOnlyLog.<DataRow>builder()
-        .dataType(cityRowType)
-        .memory(cityMemory)
-        .build();
-
-    MemoryMappedDirectory populationMemory =
-        new MemoryMappedDirectory(populationDataDir);
-    DataRowType populationRowType = new DataRowType(populationSchema);
-    populationCollection = AppendOnlyLog.<DataRow>builder()
-        .dataType(populationRowType)
-        .memory(populationMemory)
-        .build();
-
-    MemoryMappedDirectory testTableMemory =
-        new MemoryMappedDirectory(testTableDataDir);
-    DataRowType testTableRowType = new DataRowType(testTableSchema);
-    testTableCollection = AppendOnlyLog.<DataRow>builder()
-        .dataType(testTableRowType)
-        .memory(testTableMemory)
-        .build();
+    testTable = DataModifiableTable.inMemory("test_table", typeFactory.builder()
+        .add("id", SqlTypeName.INTEGER)
+        .add("name", SqlTypeName.VARCHAR)
+        .build());
+    testTable.rows().add(new Object[] {1, "Test Name"});
   }
 
-  @AfterEach
-  void tearDown() throws Exception {
-    // Clean up any additional directories created during test execution
-    FileUtils.deleteRecursively(Paths.get("options_table").toFile());
-    FileUtils.deleteRecursively(Paths.get("options_table_as").toFile());
-    FileUtils.deleteRecursively(Paths.get("new_table").toFile());
-    FileUtils.deleteRecursively(Paths.get("city_view").toFile());
-    FileUtils.deleteRecursively(Paths.get("city_population").toFile());
-    FileUtils.deleteRecursively(Paths.get("test_table").toFile());
-  }
-
-  private DataTableSchema createCitySchema() {
-    return new DataTableSchema("city", List.of(
-        new DataColumnFixed("id", DataColumn.Cardinality.REQUIRED,
-            typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.INTEGER)),
-        new DataColumnFixed("name", DataColumn.Cardinality.OPTIONAL,
-            typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.VARCHAR)),
-        new DataColumnFixed("geometry", DataColumn.Cardinality.OPTIONAL,
-            typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.GEOMETRY))));
-  }
-
-  private DataTableSchema createPopulationSchema() {
-    return new DataTableSchema("population", List.of(
-        new DataColumnFixed("city_id", DataColumn.Cardinality.REQUIRED,
-            typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.INTEGER)),
-        new DataColumnFixed("population", DataColumn.Cardinality.OPTIONAL,
-            typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.INTEGER))));
-  }
-
-  private DataTableSchema createTestTableSchema() {
-    return new DataTableSchema("test_table", List.of(
-        new DataColumnFixed("id", DataColumn.Cardinality.REQUIRED,
-            typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.INTEGER)),
-        new DataColumnFixed("name", DataColumn.Cardinality.OPTIONAL,
-            typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.VARCHAR))));
-  }
-
-  /**
-   * Helper method to set up Calcite connection with BaremapsDdlExecutor
-   */
-  private Connection createCalciteConnection() throws SQLException {
+  private Connection connect() throws SQLException {
     Properties info = new Properties();
     info.setProperty("lex", "MYSQL");
     info.setProperty("caseSensitive", "false");
@@ -149,127 +87,66 @@ public class BaremapsDdlExecutorTest {
     info.setProperty("quotedCasing", "TO_LOWER");
     info.setProperty("parserFactory", BaremapsDdlExecutor.class.getName() + "#PARSER_FACTORY");
     info.setProperty("materializationsEnabled", "true");
-
-    return DriverManager.getConnection("jdbc:calcite:", info);
+    Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
+    SchemaPlus rootSchema = connection.unwrap(CalciteConnection.class).getRootSchema();
+    rootSchema.add("city", city);
+    rootSchema.add("population", population);
+    rootSchema.add("test_table", testTable);
+    return connection;
   }
 
-  /**
-   * Helper method to populate test data
-   */
-  private void populateTestData() {
-    GeometryFactory geometryFactory = new GeometryFactory();
+  private static void execute(Connection connection, String sql) throws SQLException {
+    try (Statement statement = connection.createStatement()) {
+      statement.execute(sql);
+    }
+  }
 
-    // Add data to the city table
-    Point parisPoint = geometryFactory.createPoint(new Coordinate(2.3522, 48.8566));
-    Point nyPoint = geometryFactory.createPoint(new Coordinate(-74.0060, 40.7128));
+  private static void assertCityPopulation(Connection connection, String table)
+      throws SQLException {
+    try (Statement statement = connection.createStatement();
+        ResultSet resultSet = statement.executeQuery(
+            "SELECT id, name, population FROM " + table + " ORDER BY id")) {
+      assertTrue(resultSet.next());
+      assertEquals(1, resultSet.getInt("id"));
+      assertEquals("Paris", resultSet.getString("name"));
+      assertEquals(2_161_000, resultSet.getInt("population"));
+      assertTrue(resultSet.next());
+      assertEquals(2, resultSet.getInt("id"));
+      assertEquals("New York", resultSet.getString("name"));
+      assertEquals(8_336_000, resultSet.getInt("population"));
+      assertFalse(resultSet.next());
+    }
+  }
 
-    cityCollection.add(new DataRow(citySchema, List.of(1, "Paris", parisPoint)));
-    cityCollection.add(new DataRow(citySchema, List.of(2, "New York", nyPoint)));
-
-    // Add data to the population table
-    populationCollection.add(new DataRow(populationSchema, List.of(1, 2_161_000)));
-    populationCollection.add(new DataRow(populationSchema, List.of(2, 8_336_000)));
-
-    // Add data to the test table
-    testTableCollection.add(new DataRow(testTableSchema, List.of(1, "Test Name")));
+  private static void assertNotFound(Connection connection, String table) {
+    SQLException e = assertThrows(SQLException.class, () -> {
+      try (Statement statement = connection.createStatement()) {
+        statement.executeQuery("SELECT * FROM " + table);
+      }
+    });
+    assertTrue(e.getMessage().contains("not found"));
   }
 
   @Test
   @Tag("integration")
-  void testMaterializedView() throws SQLException {
-    // Set up test data
-    populateTestData();
-
-    try (Connection connection = createCalciteConnection()) {
-      CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class);
-      SchemaPlus rootSchema = calciteConnection.getRootSchema();
-
-      // Create the city table
-      DataModifiableTable cityTable = new DataModifiableTable(
-          "city",
-          citySchema,
-          cityCollection,
-          typeFactory);
-
-      // Add city table to the schema
-      rootSchema.add("city", cityTable);
-
-      // Create the population table
-      DataModifiableTable populationTable = new DataModifiableTable(
-          "population",
-          populationSchema,
-          populationCollection,
-          typeFactory);
-
-      // Add population table to the schema
-      rootSchema.add("population", populationTable);
-
-      // Create a materialized view
-      String mv = "CREATE MATERIALIZED VIEW city_population AS "
+  void materializedView() throws SQLException {
+    try (Connection connection = connect()) {
+      execute(connection, "CREATE MATERIALIZED VIEW city_population AS "
           + "SELECT c.id, c.name, c.geometry, p.population "
-          + "FROM city c "
-          + "JOIN population p ON c.id = p.city_id";
+          + "FROM city c JOIN population p ON c.id = p.city_id");
+      assertCityPopulation(connection, "city_population");
 
-      // Execute the DDL statement to create the materialized view
-      try (Statement statement = connection.createStatement()) {
-        statement.execute(mv);
-      }
-
-      // Query the materialized view
-      String sql = "SELECT id, name, population FROM city_population ORDER BY id";
-
-      try (Statement statement = connection.createStatement();
-          ResultSet resultSet = statement.executeQuery(sql)) {
-
-        // Verify the first row (Paris)
-        assertTrue(resultSet.next());
-        assertEquals(1, resultSet.getInt("id"));
-        assertEquals("Paris", resultSet.getString("name"));
-        assertEquals(2_161_000, resultSet.getInt("population"));
-
-        // Verify the second row (New York)
-        assertTrue(resultSet.next());
-        assertEquals(2, resultSet.getInt("id"));
-        assertEquals("New York", resultSet.getString("name"));
-        assertEquals(8_336_000, resultSet.getInt("population"));
-
-        // No more rows
-        assertFalse(resultSet.next());
-      }
+      execute(connection, "DROP MATERIALIZED VIEW city_population");
+      assertNotFound(connection, "city_population");
     }
   }
 
   @Test
   @Tag("integration")
-  void testCreateAndDropTable() throws SQLException {
-    // Set up test data
-    populateTestData();
-
-    try (Connection connection = createCalciteConnection()) {
-      CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class);
-      SchemaPlus rootSchema = calciteConnection.getRootSchema();
-
-      // Create the test table
-      DataModifiableTable testTable = new DataModifiableTable(
-          "test_table",
-          testTableSchema,
-          testTableCollection,
-          typeFactory);
-
-      // Add test table to the schema
-      rootSchema.add("test_table", testTable);
-
-      // Test CREATE TABLE
-      try (Statement statement = connection.createStatement()) {
-        statement.execute("CREATE TABLE new_table (id INTEGER, name VARCHAR)");
-      }
-
-      // Add data to the new table
-      try (Statement statement = connection.createStatement()) {
-        statement.execute("INSERT INTO new_table VALUES (1, 'New Table Name')");
-      }
-
-      // Query the new table
+  void createAndDropTable() throws SQLException {
+    try (Connection connection = connect()) {
+      execute(connection, "CREATE TABLE new_table (id INTEGER, name VARCHAR)");
+      execute(connection, "INSERT INTO new_table VALUES (1, 'New Table Name')");
       try (Statement statement = connection.createStatement();
           ResultSet resultSet = statement.executeQuery("SELECT * FROM new_table")) {
         assertTrue(resultSet.next());
@@ -277,126 +154,30 @@ public class BaremapsDdlExecutorTest {
         assertEquals("New Table Name", resultSet.getString("name"));
       }
 
-      // Test DROP TABLE
-      try (Statement statement = connection.createStatement()) {
-        statement.execute("DROP TABLE new_table");
-      }
-
-      // Verify table no longer exists
-      try (Statement statement = connection.createStatement()) {
-        statement.executeQuery("SELECT * FROM new_table");
-        fail("Table should have been dropped");
-      } catch (SQLException e) {
-        // Expected exception
-        assertTrue(e.getMessage().contains("not found"));
-      }
+      execute(connection, "DROP TABLE new_table");
+      assertNotFound(connection, "new_table");
     }
   }
 
   @Test
   @Tag("integration")
-  void testCreateAndDropView() throws SQLException {
-    // Set up test data
-    populateTestData();
+  void createAndDropView() throws SQLException {
+    try (Connection connection = connect()) {
+      execute(connection, "CREATE VIEW city_view AS "
+          + "SELECT c.id, c.name, p.population "
+          + "FROM city c JOIN population p ON c.id = p.city_id");
+      assertCityPopulation(connection, "city_view");
 
-    try (Connection connection = createCalciteConnection()) {
-      CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class);
-      SchemaPlus rootSchema = calciteConnection.getRootSchema();
-
-      // Create the city table
-      DataModifiableTable cityTable = new DataModifiableTable(
-          "city",
-          citySchema,
-          cityCollection,
-          typeFactory);
-
-      // Add city table to the schema
-      rootSchema.add("city", cityTable);
-
-      // Create the population table
-      DataModifiableTable populationTable = new DataModifiableTable(
-          "population",
-          populationSchema,
-          populationCollection,
-          typeFactory);
-
-      // Add population table to the schema
-      rootSchema.add("population", populationTable);
-
-      // Test CREATE VIEW
-      try (Statement statement = connection.createStatement()) {
-        statement.execute("CREATE VIEW city_view AS " +
-            "SELECT c.id, c.name, p.population " +
-            "FROM city c JOIN population p ON c.id = p.city_id");
-      }
-
-      // Query the view
-      try (Statement statement = connection.createStatement();
-          ResultSet resultSet = statement.executeQuery("SELECT * FROM city_view ORDER BY id")) {
-
-        // Verify the first row (Paris)
-        assertTrue(resultSet.next());
-        assertEquals(1, resultSet.getInt("id"));
-        assertEquals("Paris", resultSet.getString("name"));
-        assertEquals(2_161_000, resultSet.getInt("population"));
-
-        // Verify the second row (New York)
-        assertTrue(resultSet.next());
-        assertEquals(2, resultSet.getInt("id"));
-        assertEquals("New York", resultSet.getString("name"));
-        assertEquals(8_336_000, resultSet.getInt("population"));
-      }
-
-      // Test DROP VIEW
-      try (Statement statement = connection.createStatement()) {
-        statement.execute("DROP VIEW city_view");
-      }
-
-      // Verify view no longer exists
-      try (Statement statement = connection.createStatement()) {
-        statement.executeQuery("SELECT * FROM city_view");
-        fail("View should have been dropped");
-      } catch (SQLException e) {
-        // Expected exception
-        assertTrue(e.getMessage().contains("not found"));
-      }
+      execute(connection, "DROP VIEW city_view");
+      assertNotFound(connection, "city_view");
     }
   }
 
   @Test
   @Tag("integration")
-  void testTruncateTable() throws SQLException {
-    // Set up test data
-    populateTestData();
-
-    try (Connection connection = createCalciteConnection()) {
-      CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class);
-      SchemaPlus rootSchema = calciteConnection.getRootSchema();
-
-      // Create the test table
-      DataModifiableTable testTable = new DataModifiableTable(
-          "test_table",
-          testTableSchema,
-          testTableCollection,
-          typeFactory);
-
-      // Add test table to the schema
-      rootSchema.add("test_table", testTable);
-
-      // Force data to be persisted by accessing it
-      try (Statement statement = connection.createStatement();
-          ResultSet resultSet = statement.executeQuery("SELECT * FROM test_table")) {
-        assertTrue(resultSet.next());
-        assertEquals(1, resultSet.getInt("id"));
-        assertEquals("Test Name", resultSet.getString("name"));
-      }
-
-      // Test TRUNCATE TABLE
-      try (Statement statement = connection.createStatement()) {
-        statement.execute("TRUNCATE TABLE test_table");
-      }
-
-      // Verify table is empty
+  void truncateTable() throws SQLException {
+    try (Connection connection = connect()) {
+      execute(connection, "TRUNCATE TABLE test_table");
       try (Statement statement = connection.createStatement();
           ResultSet resultSet = statement.executeQuery("SELECT * FROM test_table")) {
         assertFalse(resultSet.next());
@@ -406,62 +187,41 @@ public class BaremapsDdlExecutorTest {
 
   @Test
   @Tag("integration")
-  void testCreateTableWithOptions() throws SQLException {
-    // Set up test data
-    populateTestData();
-
-    try (Connection connection = createCalciteConnection()) {
-      CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class);
-      SchemaPlus rootSchema = calciteConnection.getRootSchema();
-
-      // Create the test table
-      DataModifiableTable testTable = new DataModifiableTable(
-          "test_table",
-          testTableSchema,
-          testTableCollection,
-          typeFactory);
-
-      // Add test table to the schema
-      rootSchema.add("test_table", testTable);
-
-      // Test CREATE TABLE with WITH options
-      try (Statement statement = connection.createStatement()) {
-        statement.execute("CREATE TABLE options_table (id INTEGER, name VARCHAR) " +
-            "WITH (option1 = 'value1', option2 = 'value2')");
-      }
-
-      // Add data to the new table
-      try (Statement statement = connection.createStatement()) {
-        statement.execute("INSERT INTO options_table VALUES (1, 'Options Table Name')");
-      }
-
-      // Query the new table
+  void createTableInDirectory() throws Exception {
+    Path directory = tempDir.resolve("persisted");
+    try (Connection connection = connect()) {
+      execute(connection, "CREATE TABLE persisted AS SELECT id, name FROM test_table "
+          + "WITH (format = 'data', file = '" + directory + "')");
       try (Statement statement = connection.createStatement();
-          ResultSet resultSet = statement.executeQuery("SELECT * FROM options_table")) {
-        assertTrue(resultSet.next());
-        assertEquals(1, resultSet.getInt("id"));
-        assertEquals("Options Table Name", resultSet.getString("name"));
-      }
-
-      // Test CREATE TABLE AS with WITH options
-      try (Statement statement = connection.createStatement()) {
-        statement.execute("CREATE TABLE options_table_as AS " +
-            "SELECT id, name FROM test_table " +
-            "WITH (option3 = 'value3', option4 = 'value4')");
-      }
-
-      // Query the new table created with AS
-      try (Statement statement = connection.createStatement();
-          ResultSet resultSet = statement.executeQuery("SELECT * FROM options_table_as")) {
+          ResultSet resultSet = statement.executeQuery("SELECT * FROM persisted")) {
         assertTrue(resultSet.next());
         assertEquals(1, resultSet.getInt("id"));
         assertEquals("Test Name", resultSet.getString("name"));
       }
+      // Persist the row count so that the directory can be reopened
+      ((DataModifiableTable) connection.unwrap(CalciteConnection.class).getRootSchema()
+          .getTable("persisted")).close();
+    }
 
-      // Clean up
-      try (Statement statement = connection.createStatement()) {
-        statement.execute("DROP TABLE options_table");
-        statement.execute("DROP TABLE options_table_as");
+    try (DataModifiableTable reopened = DataModifiableTable.open(directory, typeFactory)) {
+      RelDataType rowType = reopened.getRowType(typeFactory);
+      assertEquals(2, rowType.getFieldCount());
+      assertEquals("id", rowType.getFieldNames().get(0));
+      assertEquals(1, reopened.rows().size());
+      assertEquals("Test Name", reopened.rows().iterator().next()[1]);
+    }
+  }
+
+  @Test
+  @Tag("integration")
+  void createTableFromFormat() throws Exception {
+    try (Connection connection = connect()) {
+      execute(connection, "CREATE TABLE shapefile (id INTEGER) WITH (format = 'shp', file = '"
+          + com.baremaps.testing.TestFiles.POINT_SHP + "')");
+      try (Statement statement = connection.createStatement();
+          ResultSet resultSet = statement.executeQuery("SELECT COUNT(*) FROM shapefile")) {
+        assertTrue(resultSet.next());
+        assertTrue(resultSet.getInt(1) > 0);
       }
     }
   }

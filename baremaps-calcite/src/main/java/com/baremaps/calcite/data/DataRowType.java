@@ -14,343 +14,182 @@
 
 package com.baremaps.calcite.data;
 
-import com.baremaps.data.type.*;
+import com.baremaps.data.type.BooleanDataType;
+import com.baremaps.data.type.ByteArrayDataType;
+import com.baremaps.data.type.ByteDataType;
+import com.baremaps.data.type.DataType;
+import com.baremaps.data.type.DoubleDataType;
+import com.baremaps.data.type.FloatDataType;
+import com.baremaps.data.type.GeometryDataType;
+import com.baremaps.data.type.IntegerDataType;
+import com.baremaps.data.type.LongDataType;
+import com.baremaps.data.type.MemoryAlignedDataType;
+import com.baremaps.data.type.ShortDataType;
+import com.baremaps.data.type.StringDataType;
 import java.nio.ByteBuffer;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.type.SqlTypeName;
 
 /**
- * A {@link DataType} for reading and writing {@link DataRow} objects in {@link ByteBuffer}s.
+ * Serializes Calcite rows ({@code Object[]}) into the binary format of the {@code baremaps-data}
+ * collections.
+ *
+ * <p>
+ * Layout: an {@code int} holding the total row size, then one value per column. Each value is a
+ * null marker byte followed, when the marker is set, by the column's encoding. The marker lives
+ * here rather than in {@code NullableDataType} because the latter cannot compute the size of a null
+ * variable-length value from the buffer.
  */
-public class DataRowType implements DataType<DataRow> {
+public final class DataRowType implements DataType<Object[]> {
 
-  /**
-   * Registry of data types for each of the supported SQL type names.
-   */
-  private static final Map<SqlTypeName, DataType<?>> TYPE_REGISTRY = new ConcurrentHashMap<>();
+  private static final Map<SqlTypeName, DataType<?>> TYPES = new EnumMap<>(SqlTypeName.class);
 
-  // Initialize standard type mappings
   static {
-    registerStandardTypes();
+    TYPES.put(SqlTypeName.BOOLEAN, new BooleanDataType());
+    TYPES.put(SqlTypeName.TINYINT, new ByteDataType());
+    TYPES.put(SqlTypeName.SMALLINT, new ShortDataType());
+    TYPES.put(SqlTypeName.INTEGER, new IntegerDataType());
+    TYPES.put(SqlTypeName.BIGINT, new LongDataType());
+    TYPES.put(SqlTypeName.FLOAT, new FloatDataType());
+    TYPES.put(SqlTypeName.REAL, new FloatDataType());
+    TYPES.put(SqlTypeName.DOUBLE, new DoubleDataType());
+    TYPES.put(SqlTypeName.DECIMAL, new DoubleDataType()); // precision is not preserved
+    TYPES.put(SqlTypeName.CHAR, new StringDataType());
+    TYPES.put(SqlTypeName.VARCHAR, new StringDataType());
+    TYPES.put(SqlTypeName.BINARY, new ByteArrayDataType());
+    TYPES.put(SqlTypeName.VARBINARY, new ByteArrayDataType());
+    TYPES.put(SqlTypeName.DATE, new LocalDateDataType());
+    TYPES.put(SqlTypeName.TIME, new LocalTimeDataType());
+    TYPES.put(SqlTypeName.TIMESTAMP, new LocalDateTimeDataType());
+    TYPES.put(SqlTypeName.GEOMETRY, new GeometryDataType());
   }
 
-  /**
-   * Registers standard data types.
-   */
-  private static void registerStandardTypes() {
-    registerType(SqlTypeName.BOOLEAN, new BooleanDataType());
-    registerType(SqlTypeName.TINYINT, new ByteDataType());
-    registerType(SqlTypeName.SMALLINT, new ShortDataType());
-    registerType(SqlTypeName.INTEGER, new IntegerDataType());
-    registerType(SqlTypeName.BIGINT, new LongDataType());
-    registerType(SqlTypeName.FLOAT, new FloatDataType());
-    registerType(SqlTypeName.REAL, new FloatDataType());
-    registerType(SqlTypeName.DOUBLE, new DoubleDataType());
-    registerType(SqlTypeName.DECIMAL, new DoubleDataType()); // Simplified mapping
-    registerType(SqlTypeName.CHAR, new StringDataType());
-    registerType(SqlTypeName.VARCHAR, new StringDataType());
-    registerType(SqlTypeName.BINARY, new BinaryDataType());
-    registerType(SqlTypeName.VARBINARY, new BinaryDataType());
-    registerType(SqlTypeName.DATE, new LocalDateDataType());
-    registerType(SqlTypeName.TIME, new LocalTimeDataType());
-    registerType(SqlTypeName.TIMESTAMP, new LocalDateTimeDataType());
-
-    // Geometry Types
-    registerType(SqlTypeName.GEOMETRY, new GeometryDataType());
-
-    // Custom mappings for JTS geometry types
-    // These would ideally be based on Calcite types, but we'll handle them specially for now
-    registerGeometrySubtypes();
-  }
+  private final List<DataType<Object>> columnTypes;
 
   /**
-   * Registers geometry subtypes.
-   */
-  private static void registerGeometrySubtypes() {
-    // Custom handler for different geometry types
-    // In a full implementation, we might extend SqlTypeName or use attributes
-    // For now, we'll handle these as special cases
-    TYPE_REGISTRY.put(SqlTypeName.OTHER, new PointDataType()); // Special case for POINT
-    TYPE_REGISTRY.put(SqlTypeName.DISTINCT, new LineStringDataType()); // Special case for
-                                                                       // LINESTRING
-    TYPE_REGISTRY.put(SqlTypeName.STRUCTURED, new PolygonDataType()); // Special case for POLYGON
-    // We're using some SqlTypeNames that aren't perfect matches but work for the registry
-    // In a real implementation, we might use a more sophisticated approach
-  }
-
-  /**
-   * Registers a custom data type for a SQL type name.
+   * Creates a row type for the given Calcite row type.
    *
-   * @param sqlTypeName the SQL type name
-   * @param dataType the data type
-   * @param <T> the data type's value type
-   * @throws IllegalArgumentException if a type is already registered for the SQL type name
-   */
-  public static <T> void registerType(SqlTypeName sqlTypeName, DataType<T> dataType) {
-    Objects.requireNonNull(sqlTypeName, "SQL type name cannot be null");
-    Objects.requireNonNull(dataType, "Data type cannot be null");
-
-    TYPE_REGISTRY.put(sqlTypeName, dataType);
-  }
-
-  /**
-   * Gets the data type for a SQL type name.
-   *
-   * @param sqlTypeName the SQL type name
-   * @return the data type
-   * @throws IllegalArgumentException if no type is registered for the SQL type name
+   * @throws IllegalArgumentException if a column has a type that cannot be persisted
    */
   @SuppressWarnings("unchecked")
-  public static <T> DataType<T> getType(SqlTypeName sqlTypeName) {
-    Objects.requireNonNull(sqlTypeName, "SQL type name cannot be null");
-
-    DataType<T> dataType = (DataType<T>) TYPE_REGISTRY.get(sqlTypeName);
-    if (dataType == null) {
-      throw new IllegalArgumentException(
-          "No data type registered for SQL type name: " + sqlTypeName);
+  public DataRowType(RelDataType rowType) {
+    this.columnTypes = new ArrayList<>(rowType.getFieldCount());
+    for (RelDataTypeField field : rowType.getFieldList()) {
+      DataType<?> type = TYPES.get(field.getType().getSqlTypeName());
+      if (type == null) {
+        throw new IllegalArgumentException(
+            "Column " + field.getName() + " has unsupported type " + field.getType());
+      }
+      columnTypes.add((DataType<Object>) type);
     }
-    return dataType;
   }
 
-  private final DataTableSchema rowType;
-
-  /**
-   * Constructs a DataRowType with the given schema.
-   *
-   * @param rowType the row schema
-   */
-  public DataRowType(DataTableSchema rowType) {
-    this.rowType = Objects.requireNonNull(rowType, "Row type cannot be null");
-  }
-
-  /** {@inheritDoc} */
   @Override
-  public int size(final DataRow row) {
-    Objects.requireNonNull(row, "Row cannot be null");
-
+  public int size(Object[] row) {
     int size = Integer.BYTES;
-    var columns = rowType.columns();
-    for (int i = 0; i < columns.size(); i++) {
-      var column = columns.get(i);
-      try {
-        var dataType = getType(column.sqlTypeName());
-        var value = row.get(i);
-        size += dataType.size(value);
-      } catch (IllegalArgumentException e) {
-        throw new IllegalStateException("Error determining size for column " + i +
-            " with type " + column.sqlTypeName(), e);
+    for (int i = 0; i < columnTypes.size(); i++) {
+      size += Byte.BYTES;
+      if (row[i] != null) {
+        size += columnTypes.get(i).size(row[i]);
       }
     }
     return size;
   }
 
-  /** {@inheritDoc} */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    Objects.requireNonNull(buffer, "Buffer cannot be null");
-    if (position < 0 || position >= buffer.capacity()) {
-      throw new IllegalArgumentException("Invalid position: " + position);
-    }
-
+  public int size(ByteBuffer buffer, int position) {
     return buffer.getInt(position);
   }
 
-  /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final DataRow row) {
-    Objects.requireNonNull(buffer, "Buffer cannot be null");
-    Objects.requireNonNull(row, "Row cannot be null");
-    if (position < 0 || position >= buffer.capacity()) {
-      throw new IllegalArgumentException("Invalid position: " + position);
-    }
-
+  public void write(ByteBuffer buffer, int position, Object[] row) {
     int p = position + Integer.BYTES;
-    var columns = rowType.columns();
-    for (int i = 0; i < columns.size(); i++) {
-      var column = columns.get(i);
-      try {
-        var dataType = getType(column.sqlTypeName());
-        var value = row.get(i);
-        dataType.write(buffer, p, value);
-        p += dataType.size(buffer, p);
-      } catch (IllegalArgumentException e) {
-        throw new IllegalStateException("Error writing column " + i +
-            " with type " + column.sqlTypeName(), e);
+    for (int i = 0; i < columnTypes.size(); i++) {
+      Object value = row[i];
+      buffer.put(p++, (byte) (value == null ? 0 : 1));
+      if (value != null) {
+        DataType<Object> type = columnTypes.get(i);
+        type.write(buffer, p, value);
+        p += type.size(buffer, p);
       }
     }
     buffer.putInt(position, p - position);
   }
 
-  /** {@inheritDoc} */
   @Override
-  public DataRow read(final ByteBuffer buffer, final int position) {
-    Objects.requireNonNull(buffer, "Buffer cannot be null");
-    if (position < 0 || position >= buffer.capacity()) {
-      throw new IllegalArgumentException("Invalid position: " + position);
-    }
-
+  public Object[] read(ByteBuffer buffer, int position) {
+    Object[] row = new Object[columnTypes.size()];
     int p = position + Integer.BYTES;
-    var columns = rowType.columns();
-    var values = new ArrayList<>(columns.size());
-    for (int i = 0; i < columns.size(); i++) {
-      var column = columns.get(i);
-      try {
-        var dataType = getType(column.sqlTypeName());
-        values.add(dataType.read(buffer, p));
-        p += dataType.size(buffer, p);
-      } catch (IllegalArgumentException e) {
-        throw new IllegalStateException("Error reading column " + i +
-            " with type " + column.sqlTypeName(), e);
+    for (int i = 0; i < columnTypes.size(); i++) {
+      if (buffer.get(p++) != 0) {
+        DataType<Object> type = columnTypes.get(i);
+        row[i] = type.read(buffer, p);
+        p += type.size(buffer, p);
       }
     }
-    return new DataRow(rowType, values);
+    return row;
   }
 
-  /**
-   * Class for handling binary data.
-   */
-  private static class BinaryDataType implements DataType<byte[]> {
-    @Override
-    public int size(byte[] value) {
-      return Integer.BYTES + (value != null ? value.length : 0);
+  private static final class LocalDateDataType extends MemoryAlignedDataType<LocalDate> {
+
+    LocalDateDataType() {
+      super(Long.BYTES);
     }
 
     @Override
-    public int size(ByteBuffer buffer, int position) {
-      int length = buffer.getInt(position);
-      return Integer.BYTES + (length >= 0 ? length : 0);
+    public void write(ByteBuffer buffer, int position, LocalDate value) {
+      buffer.putLong(position, value.toEpochDay());
     }
 
     @Override
-    public void write(ByteBuffer buffer, int position, byte[] value) {
-      if (value == null) {
-        buffer.putInt(position, -1);
-      } else {
-        buffer.putInt(position, value.length);
-        for (int i = 0; i < value.length; i++) {
-          buffer.put(position + Integer.BYTES + i, value[i]);
-        }
-      }
-    }
-
-    @Override
-    public byte[] read(ByteBuffer buffer, int position) {
-      int length = buffer.getInt(position);
-      if (length < 0) {
-        return null;
-      }
-      byte[] value = new byte[length];
-      for (int i = 0; i < length; i++) {
-        value[i] = buffer.get(position + Integer.BYTES + i);
-      }
-      return value;
+    public LocalDate read(ByteBuffer buffer, int position) {
+      return LocalDate.ofEpochDay(buffer.getLong(position));
     }
   }
 
-  /**
-   * Class for handling LocalDate data.
-   */
-  private static class LocalDateDataType implements DataType<java.time.LocalDate> {
-    @Override
-    public int size(java.time.LocalDate value) {
-      return value == null ? Integer.BYTES : (Integer.BYTES + Long.BYTES);
+  private static final class LocalTimeDataType extends MemoryAlignedDataType<LocalTime> {
+
+    LocalTimeDataType() {
+      super(Long.BYTES);
     }
 
     @Override
-    public int size(ByteBuffer buffer, int position) {
-      return buffer.getInt(position) < 0 ? Integer.BYTES : (Integer.BYTES + Long.BYTES);
+    public void write(ByteBuffer buffer, int position, LocalTime value) {
+      buffer.putLong(position, value.toNanoOfDay());
     }
 
     @Override
-    public void write(ByteBuffer buffer, int position, java.time.LocalDate value) {
-      if (value == null) {
-        buffer.putInt(position, -1);
-      } else {
-        buffer.putInt(position, 0); // Not null
-        buffer.putLong(position + Integer.BYTES, value.toEpochDay());
-      }
-    }
-
-    @Override
-    public java.time.LocalDate read(ByteBuffer buffer, int position) {
-      if (buffer.getInt(position) < 0) {
-        return null;
-      }
-      return java.time.LocalDate.ofEpochDay(buffer.getLong(position + Integer.BYTES));
+    public LocalTime read(ByteBuffer buffer, int position) {
+      return LocalTime.ofNanoOfDay(buffer.getLong(position));
     }
   }
 
-  /**
-   * Class for handling LocalTime data.
-   */
-  private static class LocalTimeDataType implements DataType<java.time.LocalTime> {
-    @Override
-    public int size(java.time.LocalTime value) {
-      return value == null ? Integer.BYTES : (Integer.BYTES + Long.BYTES);
+  private static final class LocalDateTimeDataType
+      extends MemoryAlignedDataType<LocalDateTime> {
+
+    LocalDateTimeDataType() {
+      super(2 * Long.BYTES);
     }
 
     @Override
-    public int size(ByteBuffer buffer, int position) {
-      return buffer.getInt(position) < 0 ? Integer.BYTES : (Integer.BYTES + Long.BYTES);
+    public void write(ByteBuffer buffer, int position, LocalDateTime value) {
+      buffer.putLong(position, value.toLocalDate().toEpochDay());
+      buffer.putLong(position + Long.BYTES, value.toLocalTime().toNanoOfDay());
     }
 
     @Override
-    public void write(ByteBuffer buffer, int position, java.time.LocalTime value) {
-      if (value == null) {
-        buffer.putInt(position, -1);
-      } else {
-        buffer.putInt(position, 0); // Not null
-        buffer.putLong(position + Integer.BYTES, value.toNanoOfDay());
-      }
-    }
-
-    @Override
-    public java.time.LocalTime read(ByteBuffer buffer, int position) {
-      if (buffer.getInt(position) < 0) {
-        return null;
-      }
-      return java.time.LocalTime.ofNanoOfDay(buffer.getLong(position + Integer.BYTES));
-    }
-  }
-
-  /**
-   * Class for handling LocalDateTime data.
-   */
-  private static class LocalDateTimeDataType implements DataType<java.time.LocalDateTime> {
-    @Override
-    public int size(java.time.LocalDateTime value) {
-      return value == null ? Integer.BYTES : (Integer.BYTES + 2 * Long.BYTES);
-    }
-
-    @Override
-    public int size(ByteBuffer buffer, int position) {
-      return buffer.getInt(position) < 0 ? Integer.BYTES : (Integer.BYTES + 2 * Long.BYTES);
-    }
-
-    @Override
-    public void write(ByteBuffer buffer, int position, java.time.LocalDateTime value) {
-      if (value == null) {
-        buffer.putInt(position, -1);
-      } else {
-        buffer.putInt(position, 0); // Not null
-        buffer.putLong(position + Integer.BYTES, value.toLocalDate().toEpochDay());
-        buffer.putLong(position + Integer.BYTES + Long.BYTES, value.toLocalTime().toNanoOfDay());
-      }
-    }
-
-    @Override
-    public java.time.LocalDateTime read(ByteBuffer buffer, int position) {
-      if (buffer.getInt(position) < 0) {
-        return null;
-      }
-      java.time.LocalDate date = java.time.LocalDate.ofEpochDay(
-          buffer.getLong(position + Integer.BYTES));
-      java.time.LocalTime time = java.time.LocalTime.ofNanoOfDay(
-          buffer.getLong(position + Integer.BYTES + Long.BYTES));
-      return java.time.LocalDateTime.of(date, time);
+    public LocalDateTime read(ByteBuffer buffer, int position) {
+      return LocalDateTime.of(
+          LocalDate.ofEpochDay(buffer.getLong(position)),
+          LocalTime.ofNanoOfDay(buffer.getLong(position + Long.BYTES)));
     }
   }
 }

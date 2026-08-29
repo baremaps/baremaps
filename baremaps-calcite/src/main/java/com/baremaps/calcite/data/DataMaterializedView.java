@@ -14,50 +14,23 @@
 
 package com.baremaps.calcite.data;
 
-
 import org.apache.calcite.materialize.MaterializationKey;
-import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.rel.type.RelProtoDataType;
+import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.schema.Schema;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * A table that implements a materialized view. This extends the standard modifiable table with
- * materialization capabilities.
+ * An in-memory table registered with Calcite's {@code MaterializationService} so that the planner
+ * can substitute it for its defining query.
  */
 public class DataMaterializedView extends DataModifiableTable {
-  /**
-   * The key with which this was stored in the materialization service, or null if not (yet)
-   * materialized.
-   */
+
+  /** The key under which the materialization was registered; null until it is. */
   @Nullable
-  public MaterializationKey key;
+  MaterializationKey key;
 
-  /**
-   * Constructs a new materialized view.
-   *
-   * @param name the name of the materialized view
-   * @param protoRowType the prototype row type
-   * @param typeFactory the type factory
-   * @throws NullPointerException if name, protoRowType, or typeFactory is null
-   */
-  public DataMaterializedView(
-      String name,
-      RelProtoDataType protoRowType,
-      RelDataTypeFactory typeFactory) {
-    super(name, protoRowType, typeFactory);
-    // key is initially null until the materialization is registered
-  }
-
-  /**
-   * Sets the materialization key.
-   *
-   * @param key the materialization key
-   * @return this materialized view
-   */
-  public DataMaterializedView withKey(MaterializationKey key) {
-    this.key = key;
-    return this;
+  DataMaterializedView(String name, RelDataType rowType) {
+    super(name, rowType, DataModifiableTable.inMemory(name, rowType).rows());
   }
 
   @Override
@@ -65,10 +38,10 @@ public class DataMaterializedView extends DataModifiableTable {
     return Schema.TableType.MATERIALIZED_VIEW;
   }
 
+  /** Exposes the key so that {@code DROP} can unregister the materialization. */
   @Override
   public <C> @Nullable C unwrap(Class<C> aClass) {
-    if (MaterializationKey.class.isAssignableFrom(aClass)
-        && aClass.isInstance(key)) {
+    if (MaterializationKey.class.isAssignableFrom(aClass) && aClass.isInstance(key)) {
       return aClass.cast(key);
     }
     return super.unwrap(aClass);

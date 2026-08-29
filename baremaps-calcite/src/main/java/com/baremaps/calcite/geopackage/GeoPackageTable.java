@@ -16,9 +16,7 @@ package com.baremaps.calcite.geopackage;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import mil.nga.geopackage.GeoPackage;
 import mil.nga.geopackage.GeoPackageManager;
 import mil.nga.geopackage.features.user.FeatureColumn;
@@ -44,107 +42,58 @@ import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.LinearRing;
 import org.locationtech.jts.geom.PrecisionModel;
 
-/**
- * A Calcite table implementation for GeoPackage data. This table reads data from a GeoPackage file
- * and makes it available through the Apache Calcite framework for SQL querying.
- */
+/** A read-only table over a feature table of a GeoPackage file. */
 public class GeoPackageTable extends AbstractTable implements ScannableTable {
 
-  private final File file;
-  private final String tableName;
-  private final RelDataType rowType;
   private final FeatureDao featureDao;
   private final GeometryFactory geometryFactory;
+  private final RelDataType rowType;
 
-  /**
-   * Constructs a GeoPackageTable with the specified file and table name.
-   *
-   * @param file the GeoPackage file to read data from
-   * @param tableName the name of the table in the GeoPackage
-   * @throws IOException if an I/O error occurs
-   */
-  public GeoPackageTable(File file, String tableName) throws IOException {
-    this(file, tableName, new org.apache.calcite.jdbc.JavaTypeFactoryImpl());
-  }
-
-  /**
-   * Constructs a GeoPackageTable with the specified file, table name, and type factory.
-   *
-   * @param file the GeoPackage file to read data from
-   * @param tableName the name of the table in the GeoPackage
-   * @param typeFactory the type factory
-   * @throws IOException if an I/O error occurs
-   */
   public GeoPackageTable(File file, String tableName, RelDataTypeFactory typeFactory)
       throws IOException {
-    this.file = file;
-    this.tableName = tableName;
-
-    // Open the GeoPackage file
+    // The GeoPackage stays open for the lifetime of the table: the DAO needs its connection.
     GeoPackage geoPackage = GeoPackageManager.open(file);
     this.featureDao = geoPackage.getFeatureDao(tableName);
-
-    // Create a geometry factory with the SRS from the feature DAO
-    this.geometryFactory = new GeometryFactory(
-        new PrecisionModel(),
-        (int) featureDao.getSrs().getId());
-
-    // Create the row type based on the feature columns
-    this.rowType = createRowType(typeFactory);
+    this.geometryFactory =
+        new GeometryFactory(new PrecisionModel(), (int) featureDao.getSrs().getId());
+    this.rowType = rowType(typeFactory);
   }
 
-  /**
-   * Creates a row type based on the feature columns.
-   *
-   * @param typeFactory the type factory
-   * @return the row type
-   */
-  private RelDataType createRowType(RelDataTypeFactory typeFactory) {
-    List<RelDataType> types = new ArrayList<>();
-    List<String> names = new ArrayList<>();
-
+  private RelDataType rowType(RelDataTypeFactory typeFactory) {
+    RelDataTypeFactory.Builder builder = typeFactory.builder();
     for (FeatureColumn column : featureDao.getColumns()) {
-      String columnName = column.getName();
-      RelDataType sqlType;
-
-      if (column.isGeometry()) {
-        // For geometry columns, use a proper geometry type
-        sqlType = typeFactory.createJavaType(org.locationtech.jts.geom.Geometry.class);
-      } else {
-        // Map Java types to SQL types
-        Class<?> javaType = column.getDataType().getClassType();
-        if (javaType == String.class) {
-          sqlType = typeFactory.createSqlType(SqlTypeName.VARCHAR);
-        } else if (javaType == Integer.class || javaType == int.class) {
-          sqlType = typeFactory.createSqlType(SqlTypeName.INTEGER);
-        } else if (javaType == Long.class || javaType == long.class) {
-          sqlType = typeFactory.createSqlType(SqlTypeName.BIGINT);
-        } else if (javaType == Double.class || javaType == double.class) {
-          sqlType = typeFactory.createSqlType(SqlTypeName.DOUBLE);
-        } else if (javaType == Float.class || javaType == float.class) {
-          sqlType = typeFactory.createSqlType(SqlTypeName.FLOAT);
-        } else if (javaType == Boolean.class || javaType == boolean.class) {
-          sqlType = typeFactory.createSqlType(SqlTypeName.BOOLEAN);
-        } else if (javaType == Date.class) {
-          sqlType = typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
-        } else {
-          // Default to VARCHAR for unknown types
-          sqlType = typeFactory.createSqlType(SqlTypeName.VARCHAR);
-        }
-      }
-
-      // Handle nullability
-      if (!column.isNotNull()) {
-        sqlType = typeFactory.createTypeWithNullability(sqlType, true);
-      }
-
-      types.add(sqlType);
-      names.add(columnName);
+      RelDataType type = typeFactory.createSqlType(sqlType(column));
+      builder.add(column.getName(),
+          typeFactory.createTypeWithNullability(type, !column.isNotNull()));
     }
+    return builder.build();
+  }
 
-    return typeFactory.createStructType(types, names);
+  private static SqlTypeName sqlType(FeatureColumn column) {
+    if (column.isGeometry()) {
+      return SqlTypeName.GEOMETRY;
+    }
+    Class<?> javaType = column.getDataType().getClassType();
+    if (javaType == String.class) {
+      return SqlTypeName.VARCHAR;
+    } else if (javaType == Integer.class || javaType == int.class) {
+      return SqlTypeName.INTEGER;
+    } else if (javaType == Long.class || javaType == long.class) {
+      return SqlTypeName.BIGINT;
+    } else if (javaType == Double.class || javaType == double.class) {
+      return SqlTypeName.DOUBLE;
+    } else if (javaType == Float.class || javaType == float.class) {
+      return SqlTypeName.FLOAT;
+    } else if (javaType == Boolean.class || javaType == boolean.class) {
+      return SqlTypeName.BOOLEAN;
+    } else if (javaType == Date.class) {
+      return SqlTypeName.TIMESTAMP;
+    } else {
+      return SqlTypeName.VARCHAR;
+    }
   }
 
   @Override
@@ -157,42 +106,34 @@ public class GeoPackageTable extends AbstractTable implements ScannableTable {
     return new AbstractEnumerable<>() {
       @Override
       public Enumerator<Object[]> enumerator() {
-        try {
-          return new GeoPackageEnumerator(featureDao.queryForAll());
-        } catch (Exception e) {
-          throw new RuntimeException("Failed to create GeoPackage enumerator", e);
-        }
+        return new GeoPackageEnumerator(featureDao.queryForAll());
       }
     };
   }
 
-  /**
-   * Enumerator for GeoPackage data.
-   */
   private class GeoPackageEnumerator implements Enumerator<Object[]> {
 
-    private final FeatureResultSet featureResultSet;
+    private final FeatureResultSet resultSet;
     private boolean hasNext;
 
-    public GeoPackageEnumerator(FeatureResultSet featureResultSet) {
-      this.featureResultSet = featureResultSet;
-      this.hasNext = featureResultSet.moveToFirst();
+    GeoPackageEnumerator(FeatureResultSet resultSet) {
+      this.resultSet = resultSet;
+      this.hasNext = resultSet.moveToFirst();
     }
 
     @Override
     public Object[] current() {
       if (!hasNext) {
-        return new Object[0];
+        return null;
       }
-
-      Object[] values = new Object[featureResultSet.getColumns().getColumns().size()];
+      Object[] values = new Object[resultSet.getColumns().getColumns().size()];
       int i = 0;
-
-      for (FeatureColumn column : featureResultSet.getColumns().getColumns()) {
-        Object value = featureResultSet.getValue(column);
-        values[i++] = convertValue(value);
+      for (FeatureColumn column : resultSet.getColumns().getColumns()) {
+        Object value = resultSet.getValue(column);
+        values[i++] = value instanceof GeoPackageGeometryData data
+            ? toJts(data.getGeometry())
+            : value;
       }
-
       return values;
     }
 
@@ -201,171 +142,66 @@ public class GeoPackageTable extends AbstractTable implements ScannableTable {
       if (!hasNext) {
         return false;
       }
-
-      hasNext = featureResultSet.moveToNext();
+      hasNext = resultSet.moveToNext();
       return hasNext;
     }
 
     @Override
     public void reset() {
-      featureResultSet.moveToFirst();
-      hasNext = true;
+      hasNext = resultSet.moveToFirst();
     }
 
     @Override
     public void close() {
-      featureResultSet.close();
+      resultSet.close();
     }
   }
 
-  /**
-   * Converts a GeoPackage value to a Java value.
-   *
-   * @param value the GeoPackage value
-   * @return the Java value
-   */
-  private Object convertValue(Object value) {
-    if (value == null) {
-      return null;
-    }
-
-    if (value instanceof GeoPackageGeometryData) {
-      GeoPackageGeometryData geometryData = (GeoPackageGeometryData) value;
-      return convertGeometry(geometryData.getGeometry());
-    }
-
-    return value;
-  }
-
-  /**
-   * Converts a GeoPackage geometry to a JTS geometry.
-   *
-   * @param geometry the GeoPackage geometry
-   * @return the JTS geometry
-   */
-  private org.locationtech.jts.geom.Geometry convertGeometry(Geometry geometry) {
-    if (geometry == null) {
-      return null;
-    }
-
+  /** Converts a GeoPackage geometry to JTS; unsupported geometries become null. */
+  private org.locationtech.jts.geom.Geometry toJts(Geometry geometry) {
     if (geometry instanceof Point point) {
-      return convertPoint(point);
+      return toJts(point);
     } else if (geometry instanceof LineString lineString) {
-      return convertLineString(lineString);
+      return toJts(lineString);
     } else if (geometry instanceof Polygon polygon) {
-      return convertPolygon(polygon);
+      return toJts(polygon);
     } else if (geometry instanceof MultiPoint multiPoint) {
-      return convertMultiPoint(multiPoint);
+      return geometryFactory.createMultiPoint(multiPoint.getPoints().stream()
+          .map(this::toJts).toArray(org.locationtech.jts.geom.Point[]::new));
     } else if (geometry instanceof MultiLineString multiLineString) {
-      return convertMultiLineString(multiLineString);
+      return geometryFactory.createMultiLineString(multiLineString.getLineStrings().stream()
+          .map(this::toJts).toArray(org.locationtech.jts.geom.LineString[]::new));
     } else if (geometry instanceof MultiPolygon multiPolygon) {
-      return convertMultiPolygon(multiPolygon);
-    } else if (geometry instanceof GeometryCollection<? extends Geometry>geometryCollection) {
-      return convertGeometryCollection(geometryCollection);
+      return geometryFactory.createMultiPolygon(multiPolygon.getPolygons().stream()
+          .map(this::toJts).toArray(org.locationtech.jts.geom.Polygon[]::new));
+    } else if (geometry instanceof GeometryCollection<?>collection) {
+      return geometryFactory.createGeometryCollection(collection.getGeometries().stream()
+          .map(this::toJts).toArray(org.locationtech.jts.geom.Geometry[]::new));
     } else {
-      // Unknown geometries are discarded
       return null;
     }
   }
 
-  /**
-   * Converts a GeoPackage geometry collection to a JTS geometry collection.
-   *
-   * @param geometryCollection the GeoPackage geometry collection
-   * @return the JTS geometry collection
-   */
-  private org.locationtech.jts.geom.Geometry convertGeometryCollection(
-      GeometryCollection<? extends Geometry> geometryCollection) {
-    List<? extends Geometry> geometries = geometryCollection.getGeometries();
-    org.locationtech.jts.geom.Geometry[] jtsGeometries = geometries.stream()
-        .map(this::convertGeometry)
-        .toArray(org.locationtech.jts.geom.Geometry[]::new);
-    return geometryFactory.createGeometryCollection(jtsGeometries);
+  private org.locationtech.jts.geom.Point toJts(Point point) {
+    return geometryFactory.createPoint(new Coordinate(point.getX(), point.getY()));
   }
 
-  /**
-   * Converts a GeoPackage multi polygon to a JTS multipolygon.
-   *
-   * @param multiPolygon the GeoPackage multipolygon
-   * @return the JTS multipolygon
-   */
-  private org.locationtech.jts.geom.Geometry convertMultiPolygon(MultiPolygon multiPolygon) {
-    org.locationtech.jts.geom.Polygon[] polygons = multiPolygon.getPolygons().stream()
-        .map(this::convertPolygon)
-        .toArray(org.locationtech.jts.geom.Polygon[]::new);
-    return geometryFactory.createMultiPolygon(polygons);
+  private org.locationtech.jts.geom.LineString toJts(LineString lineString) {
+    return geometryFactory.createLineString(coordinates(lineString));
   }
 
-  /**
-   * Converts a GeoPackage multilinestring to a JTS multi line string.
-   *
-   * @param multiLineString the GeoPackage multi line string
-   * @return the JTS multi line string
-   */
-  private org.locationtech.jts.geom.Geometry convertMultiLineString(
-      MultiLineString multiLineString) {
-    org.locationtech.jts.geom.LineString[] lineStrings = multiLineString.getLineStrings().stream()
-        .map(this::convertLineString)
-        .toArray(org.locationtech.jts.geom.LineString[]::new);
-    return geometryFactory.createMultiLineString(lineStrings);
-  }
-
-  /**
-   * Converts a GeoPackage multipoint to a JTS multipoint.
-   * 
-   * @param multiPoint the GeoPackage multipoint
-   * @return the JTS multipoint
-   */
-  private org.locationtech.jts.geom.Geometry convertMultiPoint(MultiPoint multiPoint) {
-    org.locationtech.jts.geom.Point[] points = multiPoint.getPoints().stream()
-        .map(this::convertPoint)
-        .toArray(org.locationtech.jts.geom.Point[]::new);
-    return geometryFactory.createMultiPoint(points);
-  }
-
-  /**
-   * Converts a GeoPackage polygon to a JTS polygon.
-   * 
-   * @param polygon the GeoPackage polygon
-   * @return the JTS polygon
-   */
-  private org.locationtech.jts.geom.Polygon convertPolygon(Polygon polygon) {
-    org.locationtech.jts.geom.LinearRing shell = geometryFactory.createLinearRing(
-        polygon.getExteriorRing().getPoints().stream()
-            .map(point -> new Coordinate(point.getX(), point.getY()))
-            .toArray(Coordinate[]::new));
-
-    org.locationtech.jts.geom.LinearRing[] holes = polygon.getRings().stream()
+  private org.locationtech.jts.geom.Polygon toJts(Polygon polygon) {
+    LinearRing shell = geometryFactory.createLinearRing(coordinates(polygon.getExteriorRing()));
+    LinearRing[] holes = polygon.getRings().stream()
         .skip(1)
-        .map(lineString -> geometryFactory.createLinearRing(
-            lineString.getPoints().stream()
-                .map(point -> new Coordinate(point.getX(), point.getY()))
-                .toArray(Coordinate[]::new)))
-        .toArray(org.locationtech.jts.geom.LinearRing[]::new);
-
+        .map(ring -> geometryFactory.createLinearRing(coordinates(ring)))
+        .toArray(LinearRing[]::new);
     return geometryFactory.createPolygon(shell, holes);
   }
 
-  /**
-   * Converts a GeoPackage linestring to a JTS linestring.
-   *
-   * @param lineString the GeoPackage linestring
-   * @return the JTS linestring
-   */
-  private org.locationtech.jts.geom.LineString convertLineString(LineString lineString) {
-    Coordinate[] coordinates = lineString.getPoints().stream()
+  private static Coordinate[] coordinates(LineString lineString) {
+    return lineString.getPoints().stream()
         .map(point -> new Coordinate(point.getX(), point.getY()))
         .toArray(Coordinate[]::new);
-    return geometryFactory.createLineString(coordinates);
-  }
-
-  /**
-   * Converts a GeoPackage point to a JTS point.
-   *
-   * @param point the GeoPackage point
-   * @return the JTS point
-   */
-  private org.locationtech.jts.geom.Geometry convertPoint(Point point) {
-    return geometryFactory.createPoint(new Coordinate(point.getX(), point.getY()));
   }
 }
