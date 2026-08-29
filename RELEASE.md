@@ -20,7 +20,7 @@ Everything is published on GitHub. Pushing a tag of the form `vX.Y.Z` triggers t
 - sets the Maven version from the tag,
 - publishes the Maven artifacts (jars, sources, javadocs) to
   [GitHub Packages](https://github.com/orgs/baremaps/packages?repo_name=baremaps),
-- builds the source and binary archives with their SHA-512 checksums,
+- builds the binary archive with its SHA-512 checksum,
 - drafts a GitHub release with generated release notes and the archives attached.
 
 Tags with a suffix (e.g. `v1.2.3-rc1`, `v1.2.3-beta1`) are marked as pre-releases.
@@ -59,9 +59,8 @@ personal access token (`read:packages` scope) to your `~/.m2/settings.xml` and d
 </repository>
 ```
 
-## Verifying the archives
+## Verifying the archive
 
 ```bash
 shasum -a 512 -c baremaps-$RELEASE_VERSION-bin.tar.gz.sha512
-shasum -a 512 -c baremaps-$RELEASE_VERSION-src.tar.gz.sha512
 ```

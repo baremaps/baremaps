@@ -102,14 +102,6 @@ Before making a pull request, check that your source code is formatted according
 This file can typically used to [configure](https://www.jetbrains.com/help/idea/settings-code-style.html) your favourite IDE.
 You can run `mvn spotless:apply` to format your code automatically.
 
-Execute a run of Apache Rat to check that every source file carries the Apache License 2.0 header. A textual report is added in `target/rat.txt`.
-```
-mvn clean && mvn apache-rat:check
-```
-Notes: 
- - It is required to do the `clean` separately in two commands given that the parent module scan submodules files.
- - The check currently fails on `NOTICE-binary` (third-party notices), please check for newly added content in the Apache Rat report.
-
 Finally, verify that your contribution passes all the tests (integration included).
 Once everything looks good, we'll merge it.
 

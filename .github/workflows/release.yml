@@ -47,12 +47,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./mvnw -B -V deploy -Prelease -DskipTests
 
-      - name: Hash the archives
+      - name: Hash the archive
         working-directory: ./baremaps-cli/target
-        run: |
-          for kind in src bin; do
-            shasum -a 512 "baremaps-${{ steps.variables.outputs.git_version }}-$kind.tar.gz" > "baremaps-${{ steps.variables.outputs.git_version }}-$kind.tar.gz.sha512"
-          done
+        run: shasum -a 512 "baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz" > "baremaps-${{ steps.variables.outputs.git_version }}-bin.tar.gz.sha512"
 
       - name: Draft the release on GitHub
         env:

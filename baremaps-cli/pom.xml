@@ -110,21 +110,6 @@ limitations under the License.
         <version>3.7.1</version>
         <executions>
           <execution>
-            <id>src</id>
-            <goals>
-              <goal>single</goal>
-            </goals>
-            <phase>package</phase>
-            <configuration>
-              <finalName>${project.parent.artifactId}-${project.parent.version}-src</finalName>
-              <appendAssemblyId>false</appendAssemblyId>
-              <tarLongFileMode>posix</tarLongFileMode>
-              <descriptors>
-                <descriptor>src/assembly/src.xml</descriptor>
-              </descriptors>
-            </configuration>
-          </execution>
-          <execution>
             <id>bin</id>
             <goals>
               <goal>single</goal>

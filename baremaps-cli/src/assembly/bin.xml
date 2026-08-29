@@ -26,9 +26,6 @@ limitations under the License.
       <outputDirectory>.</outputDirectory>
       <includes>
         <include>licenses/**</include>
-        <include>licenses-binary/**</include>
-        <include>notices/**</include>
-        <include>notices-binary/**</include>
       </includes>
       <lineEnding>unix</lineEnding>
     </fileSet>
@@ -36,9 +33,8 @@ limitations under the License.
       <directory>../.</directory>
       <outputDirectory>.</outputDirectory>
       <includes>
-        <include>README</include>
+        <include>README.md</include>
       </includes>
-      <filtered>true</filtered>
       <lineEnding>unix</lineEnding>
     </fileSet>
     <fileSet>
@@ -78,7 +74,7 @@ limitations under the License.
   </fileSets>
   <files>
     <file>
-      <source>../NOTICE-binary</source>
+      <source>../NOTICE</source>
       <outputDirectory>.</outputDirectory>
       <destName>NOTICE</destName>
       <fileMode>0644</fileMode>

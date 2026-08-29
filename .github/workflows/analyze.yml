@@ -24,21 +24,6 @@ jobs:
       - name: Run linter
         run: ./mvnw spotless:check
 
-  rat:
-    name: Apache Rat Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Set up Java 25
-        uses: actions/setup-java@v3
-        with:
-          java-version: 25
-          distribution: temurin
-          cache: maven
-      - name: Run Apache Rat
-        run: ./mvnw -B apache-rat:check
-
   javadoc:
     name: Javadoc Build
     runs-on: ubuntu-latest
