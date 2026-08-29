@@ -107,7 +107,8 @@ class PersistenceTest {
       assertNull(map.get(1L));
       assertNull(map.get(1500L));
       // New keys land in new pages after the persisted page count, not over existing ones. The far
-      // key stays small: the table is filled contiguously, and 1 KiB segments in a directory map one
+      // key stays small: the table is filled contiguously, and 1 KiB segments in a directory map
+      // one
       // file per segment.
       map.put(1500L, 500L);
       map.put(1L << 16, 501L);
