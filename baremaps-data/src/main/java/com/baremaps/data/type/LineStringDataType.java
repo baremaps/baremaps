@@ -14,12 +14,12 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.LineString;
 
 /**
- * A {@link DataType} for reading and writing {@link LineString} objects in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing {@link LineString} objects in {@link MemorySegment}s.
  */
 public class LineStringDataType implements DataType<LineString> {
 
@@ -56,24 +56,24 @@ public class LineStringDataType implements DataType<LineString> {
    * {@inheritDoc}
    */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return coordinateArrayDataType.size(buffer, position);
+  public int size(final MemorySegment segment, final long position) {
+    return coordinateArrayDataType.size(segment, position);
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final LineString value) {
-    coordinateArrayDataType.write(buffer, position, value.getCoordinates());
+  public void write(final MemorySegment segment, final long position, final LineString value) {
+    coordinateArrayDataType.write(segment, position, value.getCoordinates());
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
-  public LineString read(final ByteBuffer buffer, final int position) {
-    var coordinates = coordinateArrayDataType.read(buffer, position);
+  public LineString read(final MemorySegment segment, final long position) {
+    var coordinates = coordinateArrayDataType.read(segment, position);
     return geometryFactory.createLineString(coordinates);
   }
 }

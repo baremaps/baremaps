@@ -32,7 +32,7 @@ class LargePositionTest {
   @Test
   void positionsBeyondIntRange(@TempDir Path dir) throws Exception {
     var type = new LongDataType();
-    try (var memory = new MemoryMappedDirectory(dir, SEGMENT)) {
+    try (var memory = Memory.mappedDirectory(dir, SEGMENT)) {
       long[] positions = {
           Integer.MAX_VALUE - 7L, // last long of segment 1
           (long) Integer.MAX_VALUE + 1, // first byte of segment 2

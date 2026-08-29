@@ -17,7 +17,7 @@ package com.baremaps.data.type;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -27,7 +27,7 @@ class DataTypeTest {
   @MethodSource("com.baremaps.data.type.DataTypeProvider#dataTypes")
   void writeAndRead(DataType dataType, Object value) {
     var size = dataType.size(value);
-    var buffer = ByteBuffer.allocate(size);
+    var buffer = MemorySegment.ofArray(new byte[size]);
     dataType.write(buffer, 0, value);
     var recordSize = dataType.size(buffer, 0);
     var recordValue = dataType.read(buffer, 0);

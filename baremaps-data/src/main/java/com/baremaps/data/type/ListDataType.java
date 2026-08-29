@@ -14,7 +14,9 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -48,33 +50,33 @@ public class ListDataType<T> implements DataType<List<T>> {
   }
 
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
+  public int size(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_INT_UNALIGNED, position);
   }
 
   @Override
-  public void write(final ByteBuffer buffer, final int position, final List<T> values) {
-    int p = position + Integer.BYTES;
+  public void write(final MemorySegment segment, final long position, final List<T> values) {
+    long p = position + Integer.BYTES;
     for (T value : values) {
-      dataType.write(buffer, p, value);
-      p += stride > 0 ? stride : dataType.size(buffer, p);
+      dataType.write(segment, p, value);
+      p += stride > 0 ? stride : dataType.size(segment, p);
     }
-    buffer.putInt(position, p - position);
+    segment.set(JAVA_INT_UNALIGNED, position, (int) (p - position));
   }
 
   @Override
-  public List<T> read(final ByteBuffer buffer, final int position) {
-    int limit = position + buffer.getInt(position);
+  public List<T> read(final MemorySegment segment, final long position) {
+    long limit = position + segment.get(JAVA_INT_UNALIGNED, position);
     if (stride > 0) {
-      var list = new ArrayList<T>((limit - position - Integer.BYTES) / stride);
-      for (int p = position + Integer.BYTES; p < limit; p += stride) {
-        list.add(dataType.read(buffer, p));
+      var list = new ArrayList<T>((int) ((limit - position - Integer.BYTES) / stride));
+      for (long p = position + Integer.BYTES; p < limit; p += stride) {
+        list.add(dataType.read(segment, p));
       }
       return list;
     }
     var list = new ArrayList<T>();
-    for (int p = position + Integer.BYTES; p < limit; p += dataType.size(buffer, p)) {
-      list.add(dataType.read(buffer, p));
+    for (long p = position + Integer.BYTES; p < limit; p += dataType.size(segment, p)) {
+      list.add(dataType.read(segment, p));
     }
     return list;
   }

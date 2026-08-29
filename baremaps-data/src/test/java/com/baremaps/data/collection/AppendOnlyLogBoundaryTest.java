@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.baremaps.data.memory.OnHeapMemory;
+import com.baremaps.data.memory.Memory;
 import com.baremaps.data.type.ByteArrayDataType;
 import com.baremaps.data.type.LongDataType;
 import java.util.ArrayList;
@@ -45,14 +45,14 @@ class AppendOnlyLogBoundaryTest {
 
   @Test
   void exactFitStaysInSegment() {
-    var log = new AppendOnlyLog<>(new ByteArrayDataType(), new OnHeapMemory(SEGMENT));
+    var log = new AppendOnlyLog<>(new ByteArrayDataType(), Memory.offHeap(SEGMENT));
     assertEquals(0, log.addPositioned(bytes(SEGMENT - encoded(0))));
     assertEquals(SEGMENT, log.addPositioned(bytes(1)));
   }
 
   @Test
   void oneByteShortStartsNextSegment() {
-    var log = new AppendOnlyLog<>(new ByteArrayDataType(), new OnHeapMemory(SEGMENT));
+    var log = new AppendOnlyLog<>(new ByteArrayDataType(), Memory.offHeap(SEGMENT));
     int first = SEGMENT - encoded(0) - 1;
     assertEquals(0, log.addPositioned(bytes(first)));
     // 1 byte left: the next 5-byte value cannot fit, it goes to the next segment.
@@ -62,7 +62,7 @@ class AppendOnlyLogBoundaryTest {
 
   @Test
   void tailTooSmallForASizeHeader() {
-    var log = new AppendOnlyLog<>(new ByteArrayDataType(), new OnHeapMemory(SEGMENT));
+    var log = new AppendOnlyLog<>(new ByteArrayDataType(), Memory.offHeap(SEGMENT));
     // Leave 3 bytes: not even a size fits, the iterator must skip the tail without reading it.
     log.add(bytes(SEGMENT - encoded(0) - 3));
     log.add(bytes(0));
@@ -76,14 +76,14 @@ class AppendOnlyLogBoundaryTest {
 
   @Test
   void largerThanSegmentIsRejected() {
-    var log = new AppendOnlyLog<>(new ByteArrayDataType(), new OnHeapMemory(SEGMENT));
+    var log = new AppendOnlyLog<>(new ByteArrayDataType(), Memory.offHeap(SEGMENT));
     assertThrows(DataCollectionException.class, () -> log.add(bytes(SEGMENT)));
     assertEquals(0, log.size());
   }
 
   @Test
   void iterationMatchesPositionsAcrossManyBoundaries() {
-    var log = new AppendOnlyLog<>(new ByteArrayDataType(), new OnHeapMemory(SEGMENT));
+    var log = new AppendOnlyLog<>(new ByteArrayDataType(), Memory.offHeap(SEGMENT));
     List<byte[]> values = new ArrayList<>();
     List<Long> positions = new ArrayList<>();
     for (int i = 0; i < 2000; i++) {
@@ -105,7 +105,7 @@ class AppendOnlyLogBoundaryTest {
     // A geometry's size is read from a tag byte, so a zero-filled tail must read as "nothing".
     var factory = new org.locationtech.jts.geom.GeometryFactory();
     var log = new AppendOnlyLog<>(new com.baremaps.data.type.GeometryDataType(factory),
-        new OnHeapMemory(128));
+        Memory.offHeap(128));
     var values = new ArrayList<org.locationtech.jts.geom.Geometry>();
     for (int i = 0; i < 500; i++) {
       var coordinates = new org.locationtech.jts.geom.Coordinate[1 + i % 5];
@@ -127,7 +127,7 @@ class AppendOnlyLogBoundaryTest {
   @Test
   void fixedSizeValuesNeverStraddle() {
     // 8-byte values in 64-byte segments with a 24-byte one first: 5 more fit, the 7th moves on.
-    var log = new AppendOnlyLog<>(new LongDataType(), new OnHeapMemory(SEGMENT));
+    var log = new AppendOnlyLog<>(new LongDataType(), Memory.offHeap(SEGMENT));
     for (int i = 0; i < 100; i++) {
       long position = log.addPositioned((long) i);
       assertEquals(position / SEGMENT, (position + Long.BYTES - 1) / SEGMENT);

@@ -14,10 +14,10 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing values in {@link ByteBuffer}s whose size is fixed.
+ * A {@link DataType} for reading and writing values in {@link MemorySegment}s whose size is fixed.
  *
  * @param <T> the type of value being read or written
  */
@@ -42,7 +42,7 @@ public abstract class FixedSizeDataType<T> implements DataType<T> {
 
   /** {@inheritDoc} */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
+  public int size(final MemorySegment segment, final long position) {
     return size;
   }
 

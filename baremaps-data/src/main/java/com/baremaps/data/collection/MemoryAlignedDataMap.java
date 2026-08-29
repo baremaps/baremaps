@@ -37,13 +37,13 @@ public class MemoryAlignedDataMap<E> implements DataMap<Long, E> {
 
   private final FixedSizeDataType<E> dataType;
 
-  private final Memory<?> memory;
+  private final Memory memory;
 
   private final int valueShift;
 
   private final long maxKey;
 
-  public MemoryAlignedDataMap(FixedSizeDataType<E> dataType, Memory<?> memory) {
+  public MemoryAlignedDataMap(FixedSizeDataType<E> dataType, Memory memory) {
     int valueSize = dataType.size();
     if (valueSize <= 0 || (valueSize & -valueSize) != valueSize) {
       throw new DataCollectionException("The data type size must be a power of 2");
@@ -55,7 +55,7 @@ public class MemoryAlignedDataMap<E> implements DataMap<Long, E> {
     this.memory = memory;
     this.valueShift = Integer.numberOfTrailingZeros(valueSize);
     // Segments are indexed by an int, which bounds the addressable keys.
-    int segmentShift = Integer.numberOfTrailingZeros(memory.segmentSize());
+    int segmentShift = Long.numberOfTrailingZeros(memory.segmentSize());
     this.maxKey = (1L << (Integer.SIZE - 1 + segmentShift - valueShift)) - 1;
   }
 
@@ -137,10 +137,6 @@ public class MemoryAlignedDataMap<E> implements DataMap<Long, E> {
 
   @Override
   public void close() {
-    try {
-      memory.close();
-    } catch (IOException e) {
-      throw new DataCollectionException(e);
-    }
+    memory.close();
   }
 }

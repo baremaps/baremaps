@@ -14,12 +14,14 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * A {@link DataType} for reading and writing map objects in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing map objects in {@link MemorySegment}s.
  *
  * @param <K> the type of keys in the map
  * @param <V> the type of values in the map
@@ -54,32 +56,32 @@ public class MapDataType<K, V> implements DataType<Map<K, V>> {
 
   /** {@inheritDoc} */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
+  public int size(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_INT_UNALIGNED, position);
   }
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Map<K, V> value) {
-    buffer.putInt(position, size(value));
-    int p = position + Integer.BYTES;
+  public void write(final MemorySegment segment, final long position, final Map<K, V> value) {
+    segment.set(JAVA_INT_UNALIGNED, position, size(value));
+    long p = position + Integer.BYTES;
     for (Map.Entry<K, V> entry : value.entrySet()) {
-      keyType.write(buffer, p, entry.getKey());
+      keyType.write(segment, p, entry.getKey());
       p += keyType.size(entry.getKey());
-      valueType.write(buffer, p, entry.getValue());
+      valueType.write(segment, p, entry.getValue());
       p += valueType.size(entry.getValue());
     }
   }
 
   /** {@inheritDoc} */
   @Override
-  public Map<K, V> read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
+  public Map<K, V> read(final MemorySegment segment, final long position) {
+    int size = segment.get(JAVA_INT_UNALIGNED, position);
     var map = new HashMap<K, V>(size);
-    for (int p = position + Integer.BYTES; p < position + size;) {
-      K key = keyType.read(buffer, p);
+    for (long p = position + Integer.BYTES; p < position + size;) {
+      K key = keyType.read(segment, p);
       p += keyType.size(key);
-      V value = valueType.read(buffer, p);
+      V value = valueType.read(segment, p);
       p += valueType.size(value);
       map.put(key, value);
     }

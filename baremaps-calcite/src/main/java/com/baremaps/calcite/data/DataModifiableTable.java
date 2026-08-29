@@ -14,21 +14,21 @@
 
 package com.baremaps.calcite.data;
 
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
 import static java.util.Objects.requireNonNull;
 
 import com.baremaps.data.collection.AppendOnlyLog;
 import com.baremaps.data.collection.DataCollection;
 import com.baremaps.data.memory.Memory;
-import com.baremaps.data.memory.MemoryMappedDirectory;
-import com.baremaps.data.memory.OnHeapMemory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.foreign.MemorySegment;
 import java.lang.reflect.Type;
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.AbstractCollection;
 import java.util.Collection;
@@ -87,29 +87,29 @@ public class DataModifiableTable extends AbstractTable
 
   /** Creates an empty table held on the heap. */
   public static DataModifiableTable inMemory(String name, RelDataType rowType) {
-    return new DataModifiableTable(name, rowType, log(rowType, new OnHeapMemory()));
+    return new DataModifiableTable(name, rowType, log(rowType, Memory.offHeap()));
   }
 
   /** Creates an empty table in {@code directory}, which must be empty or absent. */
   public static DataModifiableTable create(Path directory, String name, RelDataType rowType) {
-    Memory<?> memory = new MemoryMappedDirectory(directory);
+    Memory memory = Memory.mappedDirectory(directory);
     writeSchema(memory.header(), rowType);
     return new DataModifiableTable(name, rowType, log(rowType, memory));
   }
 
   /** Opens the table previously created in {@code directory}; its name is the directory name. */
   public static DataModifiableTable open(Path directory, RelDataTypeFactory typeFactory) {
-    Memory<?> memory = new MemoryMappedDirectory(directory);
+    Memory memory = Memory.mappedDirectory(directory);
     RelDataType rowType = readSchema(memory.header(), typeFactory);
     String name = directory.getFileName().toString();
     return new DataModifiableTable(name, rowType, log(rowType, memory));
   }
 
-  private static DataCollection<Object[]> log(RelDataType rowType, Memory<?> memory) {
+  private static DataCollection<Object[]> log(RelDataType rowType, Memory memory) {
     return new AppendOnlyLog<>(new DataRowType(rowType), memory);
   }
 
-  private static void writeSchema(ByteBuffer header, RelDataType rowType) {
+  private static void writeSchema(MemorySegment header, RelDataType rowType) {
     ArrayNode columns = MAPPER.createArrayNode();
     for (RelDataTypeField field : rowType.getFieldList()) {
       columns.addObject()
@@ -119,17 +119,17 @@ public class DataModifiableTable extends AbstractTable
     }
     try {
       byte[] bytes = MAPPER.writeValueAsBytes(columns);
-      header.putInt(SCHEMA_OFFSET, bytes.length);
-      header.put(SCHEMA_OFFSET + Integer.BYTES, bytes);
+      header.set(JAVA_INT_UNALIGNED, SCHEMA_OFFSET, bytes.length);
+      MemorySegment.copy(bytes, 0, header, JAVA_BYTE, SCHEMA_OFFSET + Integer.BYTES, bytes.length);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
   }
 
-  private static RelDataType readSchema(ByteBuffer header, RelDataTypeFactory typeFactory) {
-    int length = header.getInt(SCHEMA_OFFSET);
+  private static RelDataType readSchema(MemorySegment header, RelDataTypeFactory typeFactory) {
+    int length = header.get(JAVA_INT_UNALIGNED, SCHEMA_OFFSET);
     byte[] bytes = new byte[length];
-    header.get(SCHEMA_OFFSET + Integer.BYTES, bytes);
+    MemorySegment.copy(header, JAVA_BYTE, SCHEMA_OFFSET + Integer.BYTES, bytes, 0, length);
     RelDataTypeFactory.Builder builder = typeFactory.builder();
     try {
       for (JsonNode column : MAPPER.readTree(bytes)) {

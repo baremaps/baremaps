@@ -14,7 +14,9 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_DOUBLE_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
@@ -34,20 +36,20 @@ public class PointDataType extends MemoryAlignedDataType<Point> {
   }
 
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Point value) {
+  public void write(final MemorySegment segment, final long position, final Point value) {
     if (value.isEmpty()) {
-      buffer.putDouble(position, Double.NaN);
-      buffer.putDouble(position + Double.BYTES, Double.NaN);
+      segment.set(JAVA_DOUBLE_UNALIGNED, position, Double.NaN);
+      segment.set(JAVA_DOUBLE_UNALIGNED, position + Double.BYTES, Double.NaN);
     } else {
-      buffer.putDouble(position, value.getX());
-      buffer.putDouble(position + Double.BYTES, value.getY());
+      segment.set(JAVA_DOUBLE_UNALIGNED, position, value.getX());
+      segment.set(JAVA_DOUBLE_UNALIGNED, position + Double.BYTES, value.getY());
     }
   }
 
   @Override
-  public Point read(final ByteBuffer buffer, final int position) {
-    double x = buffer.getDouble(position);
-    double y = buffer.getDouble(position + Double.BYTES);
+  public Point read(final MemorySegment segment, final long position) {
+    double x = segment.get(JAVA_DOUBLE_UNALIGNED, position);
+    double y = segment.get(JAVA_DOUBLE_UNALIGNED, position + Double.BYTES);
     if (Double.isNaN(x) || Double.isNaN(y)) {
       return geometryFactory.createPoint();
     }

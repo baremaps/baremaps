@@ -20,7 +20,8 @@ import com.baremaps.data.type.LonLatDataType;
 import com.baremaps.data.type.LongDataType;
 import com.baremaps.data.type.LongListDataType;
 import com.baremaps.data.type.StringDataType;
-import java.nio.ByteBuffer;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.locationtech.jts.geom.Coordinate;
@@ -53,7 +54,7 @@ public class DataTypeBenchmark {
 
   private Object value;
 
-  private ByteBuffer buffer;
+  private MemorySegment buffer;
 
   @Setup
   @SuppressWarnings("unchecked")
@@ -90,7 +91,7 @@ public class DataTypeBenchmark {
       }
       default -> throw new IllegalArgumentException(kind);
     }
-    buffer = ByteBuffer.allocate(1 << 10);
+    buffer = Arena.ofAuto().allocate(1 << 10);
     type.write(buffer, 0, value);
   }
 

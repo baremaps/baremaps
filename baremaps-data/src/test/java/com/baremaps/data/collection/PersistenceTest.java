@@ -17,8 +17,7 @@ package com.baremaps.data.collection;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import com.baremaps.data.memory.MemoryMappedDirectory;
-import com.baremaps.data.memory.MemoryMappedFile;
+import com.baremaps.data.memory.Memory;
 import com.baremaps.data.type.LongDataType;
 import com.baremaps.data.type.LongListDataType;
 import com.baremaps.data.type.StringDataType;
@@ -37,20 +36,20 @@ class PersistenceTest {
     Path file = dir.resolve("log");
     long[] positions = new long[300];
     try (var log = new AppendOnlyLog<>(new StringDataType(),
-        new MemoryMappedFile(file, SEGMENT_BYTES))) {
+        Memory.mappedFile(file, SEGMENT_BYTES))) {
       for (int i = 0; i < 200; i++) {
         positions[i] = log.addPositioned("value-" + i);
       }
     }
     try (var log = new AppendOnlyLog<>(new StringDataType(),
-        new MemoryMappedFile(file, SEGMENT_BYTES))) {
+        Memory.mappedFile(file, SEGMENT_BYTES))) {
       assertEquals(200, log.size());
       for (int i = 200; i < 300; i++) {
         positions[i] = log.addPositioned("value-" + i);
       }
     }
     try (var log = new AppendOnlyLog<>(new StringDataType(),
-        new MemoryMappedFile(file, SEGMENT_BYTES))) {
+        Memory.mappedFile(file, SEGMENT_BYTES))) {
       assertEquals(300, log.size());
       for (int i = 0; i < 300; i++) {
         assertEquals("value-" + i, log.getPositioned(positions[i]));
@@ -66,13 +65,13 @@ class PersistenceTest {
   @Test
   void memoryAlignedDataList(@TempDir Path dir) throws Exception {
     try (var list = new MemoryAlignedDataList<>(new LongDataType(),
-        new MemoryMappedDirectory(dir, SEGMENT_BYTES))) {
+        Memory.mappedDirectory(dir, SEGMENT_BYTES))) {
       for (long i = 0; i < 500; i++) {
         list.add(i);
       }
     }
     try (var list = new MemoryAlignedDataList<>(new LongDataType(),
-        new MemoryMappedDirectory(dir, SEGMENT_BYTES))) {
+        Memory.mappedDirectory(dir, SEGMENT_BYTES))) {
       assertEquals(500, list.size());
       assertEquals(499L, list.get(499));
       assertEquals(500, list.addIndexed(500L));
@@ -82,13 +81,13 @@ class PersistenceTest {
   @Test
   void fixedSizeDataList(@TempDir Path dir) throws Exception {
     try (var list = new FixedSizeDataList<>(new LongDataType(),
-        new MemoryMappedDirectory(dir, SEGMENT_BYTES))) {
+        Memory.mappedDirectory(dir, SEGMENT_BYTES))) {
       for (long i = 0; i < 500; i++) {
         list.add(i);
       }
     }
     try (var list = new FixedSizeDataList<>(new LongDataType(),
-        new MemoryMappedDirectory(dir, SEGMENT_BYTES))) {
+        Memory.mappedDirectory(dir, SEGMENT_BYTES))) {
       assertEquals(500, list.size());
       assertEquals(499L, list.get(499));
     }
@@ -113,13 +112,13 @@ class PersistenceTest {
   @Test
   void unflushedWritesAreNotVisibleAfterReopen(@TempDir Path dir) throws Exception {
     Path file = dir.resolve("log");
-    var log = new AppendOnlyLog<>(new StringDataType(), new MemoryMappedFile(file, SEGMENT_BYTES));
+    var log = new AppendOnlyLog<>(new StringDataType(), Memory.mappedFile(file, SEGMENT_BYTES));
     log.add("a");
     log.flush();
     log.add("b");
     // Simulate a crash: neither flush nor close.
     try (var reopened = new AppendOnlyLog<>(new StringDataType(),
-        new MemoryMappedFile(file, SEGMENT_BYTES))) {
+        Memory.mappedFile(file, SEGMENT_BYTES))) {
       assertEquals(1, reopened.size());
       assertEquals(List.of("a"), reopened.stream().toList());
       // Appending continues after the flushed end and does not clobber "a".
@@ -131,10 +130,10 @@ class PersistenceTest {
   @Test
   void neverClosedIsEmptyOnReopen(@TempDir Path dir) throws Exception {
     var list = new MemoryAlignedDataList<>(new LongDataType(),
-        new MemoryMappedDirectory(dir, SEGMENT_BYTES));
+        Memory.mappedDirectory(dir, SEGMENT_BYTES));
     list.add(1L);
     try (var reopened = new MemoryAlignedDataList<>(new LongDataType(),
-        new MemoryMappedDirectory(dir, SEGMENT_BYTES))) {
+        Memory.mappedDirectory(dir, SEGMENT_BYTES))) {
       assertEquals(0, reopened.size());
     }
   }
@@ -142,13 +141,13 @@ class PersistenceTest {
   private static MonotonicDataMap<List<Long>> open(Path dir) {
     return new MonotonicDataMap<>(
         new MemoryAlignedDataList<>(new LongDataType(),
-            new MemoryMappedDirectory(dir.resolve("offsets"), SEGMENT_BYTES)),
+            Memory.mappedDirectory(dir.resolve("offsets"), SEGMENT_BYTES)),
         new MemoryAlignedDataList<>(new LongDataType(),
-            new MemoryMappedDirectory(dir.resolve("keys"), SEGMENT_BYTES)),
+            Memory.mappedDirectory(dir.resolve("keys"), SEGMENT_BYTES)),
         new IndexedDataList<>(
             new MemoryAlignedDataList<>(new LongDataType(),
-                new MemoryMappedDirectory(dir.resolve("index"), SEGMENT_BYTES)),
+                Memory.mappedDirectory(dir.resolve("index"), SEGMENT_BYTES)),
             new AppendOnlyLog<>(new LongListDataType(),
-                new MemoryMappedDirectory(dir.resolve("values"), SEGMENT_BYTES))));
+                Memory.mappedDirectory(dir.resolve("values"), SEGMENT_BYTES))));
   }
 }

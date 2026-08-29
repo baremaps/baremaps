@@ -14,10 +14,12 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing small integer values in {@link ByteBuffer}s with a
+ * A {@link DataType} for reading and writing small integer values in {@link MemorySegment}s with a
  * customizable storage size.
  */
 public class SmallIntegerDataType extends FixedSizeDataType<Integer> {
@@ -44,22 +46,22 @@ public class SmallIntegerDataType extends FixedSizeDataType<Integer> {
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Integer value) {
+  public void write(final MemorySegment segment, final long position, final Integer value) {
     for (int i = 0; i < n; i++) {
-      buffer.put(position + i, (byte) (value >> (i << 3)));
+      segment.set(JAVA_BYTE, position + i, (byte) (value >> (i << 3)));
     }
   }
 
   /** {@inheritDoc} */
   @Override
-  public Integer read(final ByteBuffer buffer, final int position) {
-    byte s = (byte) (buffer.get(position + n - 1) >= 0 ? 0 : -1);
+  public Integer read(final MemorySegment segment, final long position) {
+    byte s = (byte) (segment.get(JAVA_BYTE, position + n - 1) >= 0 ? 0 : -1);
     int l = 0;
     for (int i = 3; i > n - 1; i--) {
       l |= (s & 0xff) << (i << 3);
     }
     for (int i = n - 1; i >= 0; i--) {
-      l |= (buffer.get(position + i) & 0xff) << (i << 3);
+      l |= (segment.get(JAVA_BYTE, position + i) & 0xff) << (i << 3);
     }
     return l;
   }

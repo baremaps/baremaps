@@ -14,10 +14,12 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing byte values in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing byte values in {@link MemorySegment}s.
  */
 public class ByteDataType extends MemoryAlignedDataType<Byte> {
 
@@ -30,13 +32,13 @@ public class ByteDataType extends MemoryAlignedDataType<Byte> {
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Byte value) {
-    buffer.put(position, value);
+  public void write(final MemorySegment segment, final long position, final Byte value) {
+    segment.set(JAVA_BYTE, position, value);
   }
 
   /** {@inheritDoc} */
   @Override
-  public Byte read(final ByteBuffer buffer, final int position) {
-    return buffer.get(position);
+  public Byte read(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_BYTE, position);
   }
 }

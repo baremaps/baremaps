@@ -14,8 +14,9 @@
 
 package com.baremaps.data.collection;
 
+import static java.lang.foreign.ValueLayout.JAVA_LONG_UNALIGNED;
+
 import com.baremaps.data.memory.Memory;
-import com.baremaps.data.memory.OffHeapMemory;
 import com.baremaps.data.type.FixedSizeDataType;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -32,17 +33,17 @@ public class MemoryAlignedDataList<E> implements DataList<E> {
 
   private final FixedSizeDataType<E> dataType;
 
-  private final Memory<?> memory;
+  private final Memory memory;
 
   private final int valueShift;
 
   private final AtomicLong size;
 
   public MemoryAlignedDataList(FixedSizeDataType<E> dataType) {
-    this(dataType, new OffHeapMemory());
+    this(dataType, Memory.offHeap());
   }
 
-  public MemoryAlignedDataList(FixedSizeDataType<E> dataType, Memory<?> memory) {
+  public MemoryAlignedDataList(FixedSizeDataType<E> dataType, Memory memory) {
     int valueSize = dataType.size();
     if (valueSize <= 0 || (valueSize & -valueSize) != valueSize) {
       throw new DataCollectionException("The data type size must be a power of 2");
@@ -53,7 +54,7 @@ public class MemoryAlignedDataList<E> implements DataList<E> {
     this.dataType = dataType;
     this.memory = memory;
     this.valueShift = Integer.numberOfTrailingZeros(valueSize);
-    this.size = new AtomicLong(memory.header().getLong(0));
+    this.size = new AtomicLong(memory.header().get(JAVA_LONG_UNALIGNED, 0));
   }
 
   @Override
@@ -101,11 +102,7 @@ public class MemoryAlignedDataList<E> implements DataList<E> {
     if (memory.isClosed()) {
       return;
     }
-    try {
-      memory.header().putLong(0, size.get());
-      memory.close();
-    } catch (IOException e) {
-      throw new DataCollectionException(e);
-    }
+    memory.header().set(JAVA_LONG_UNALIGNED, 0, size.get());
+    memory.close();
   }
 }

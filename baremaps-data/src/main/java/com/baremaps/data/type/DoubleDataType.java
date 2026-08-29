@@ -14,10 +14,12 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_DOUBLE_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing double values in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing double values in {@link MemorySegment}s.
  */
 public class DoubleDataType extends MemoryAlignedDataType<Double> {
 
@@ -30,13 +32,13 @@ public class DoubleDataType extends MemoryAlignedDataType<Double> {
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Double value) {
-    buffer.putDouble(position, value);
+  public void write(final MemorySegment segment, final long position, final Double value) {
+    segment.set(JAVA_DOUBLE_UNALIGNED, position, value);
   }
 
   /** {@inheritDoc} */
   @Override
-  public Double read(final ByteBuffer buffer, final int position) {
-    return buffer.getDouble(position);
+  public Double read(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_DOUBLE_UNALIGNED, position);
   }
 }

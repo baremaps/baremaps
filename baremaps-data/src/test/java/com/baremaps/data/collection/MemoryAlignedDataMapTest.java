@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.baremaps.data.memory.OnHeapMemory;
+import com.baremaps.data.memory.Memory;
 import com.baremaps.data.type.IntegerDataType;
 import java.util.Iterator;
 import java.util.Map;
@@ -34,7 +34,7 @@ class MemoryAlignedDataMapTest {
 
   @BeforeEach
   void setUp() {
-    map = new MemoryAlignedDataMap<>(new IntegerDataType(), new OnHeapMemory(1024));
+    map = new MemoryAlignedDataMap<>(new IntegerDataType(), Memory.offHeap(1024));
   }
 
   @AfterEach

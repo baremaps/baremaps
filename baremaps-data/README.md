@@ -15,15 +15,20 @@ com.baremaps.data.collection  DataList / DataMap built on a Memory and a DataTyp
 com.baremaps.data.algorithm   sort, search and union over those collections
 ```
 
-**`Memory`** hides the segment arithmetic. Segments are a power of two in size, so a position
-splits into a segment index and an offset with a shift and a mask. Segments are allocated
-lazily and are always zero-filled; the header is a small extra buffer where a collection persists
-its own metadata (size, end position, schema). Backings: `OnHeapMemory`, `OffHeapMemory`,
-`MemoryMappedFile`, `MemoryMappedDirectory` (one file per segment, the choice for large data).
+**`Memory`** hides the segment arithmetic. Segments are `MemorySegment`s (the FFM API) of a
+power-of-two size, so a position splits into a segment index and an offset with a shift and a
+mask; segments may exceed 2 GB. They are allocated lazily and are always zero-filled; the header is
+a small extra segment where a collection persists its own metadata (size, end position, schema).
+Backings: `Memory.offHeap()` (native memory), `Memory.mappedFile(path)`, and
+`Memory.mappedDirectory(path)` (one file per segment, the choice for large data). All segments of
+a memory live in one `Arena`: `close()` frees or unmaps them deterministically, later accesses
+throw `IllegalStateException`, and memory that is never closed is never reclaimed.
 
-**`DataType`** reads and writes a value at an absolute position. Values are never null, and an
-encoding is self-delimiting: `size(buffer, position)` recovers the size from the first bytes and
-is never 0 for a written value. That invariant is what lets a collection tell written space from
+**`DataType`** reads and writes a value at an absolute `long` offset of a `MemorySegment`, with the
+`ValueLayout.JAVA_*_UNALIGNED` layouts in native byte order: values are packed at arbitrary offsets,
+and files are not portable across endianness. Values are never null, and an encoding is
+self-delimiting: `size(segment, position)` recovers the size from the first bytes and is never 0
+for a written value. That invariant is what lets a collection tell written space from
 never-written space. `FixedSizeDataType` and `MemoryAlignedDataType` (a power-of-two size) are
 what the array-like collections need.
 
@@ -49,8 +54,9 @@ what the array-like collections need.
 - Collections persist what they need to be reopened (size, end position) in the memory header
   on `close()` / `flush()`. Reopen a memory-mapped collection with the same `DataType` and memory
   parameters. `AppendOnlyLog.HEADER_BYTES` is reserved; other users of the header write after it.
-- `close()` is idempotent and a closed `Memory` rejects further access rather than touching
-  unmapped buffers. `clear()` deletes the storage and leaves the collection reusable.
+- `close()` is idempotent; a closed `Memory` throws on further access rather than touching
+  unmapped memory. `clear()` deletes the storage and reopens the memory, so the collection stays
+  usable. Every collection is `AutoCloseable`; close it, or its native memory leaks.
 - Thread safety is per class and stated in its javadoc. Appends are generally safe to run
   concurrently; reads of a position are safe once the append that produced it has returned.
 - Every implementation passes the same contract tests (`DataListContractTest`,

@@ -14,12 +14,15 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_LONG_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 import org.locationtech.jts.geom.Coordinate;
 
 /**
- * A {@link DataType} for reading and writing longitude/latitude coordinates in {@link ByteBuffer}s.
- * An integer is used to compress the coordinates to the detriment of precision (centimeters).
+ * A {@link DataType} for reading and writing longitude/latitude coordinates in
+ * {@link MemorySegment}s. An integer is used to compress the coordinates to the detriment of
+ * precision (centimeters).
  */
 public class LonLatDataType extends MemoryAlignedDataType<Coordinate> {
 
@@ -75,14 +78,14 @@ public class LonLatDataType extends MemoryAlignedDataType<Coordinate> {
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Coordinate value) {
-    buffer.putLong(position, encodeLonLat(value.x, value.y));
+  public void write(final MemorySegment segment, final long position, final Coordinate value) {
+    segment.set(JAVA_LONG_UNALIGNED, position, encodeLonLat(value.x, value.y));
   }
 
   /** {@inheritDoc} */
   @Override
-  public Coordinate read(final ByteBuffer buffer, final int position) {
-    var value = buffer.getLong(position);
+  public Coordinate read(final MemorySegment segment, final long position) {
+    var value = segment.get(JAVA_LONG_UNALIGNED, position);
     return new Coordinate(decodeLon(value), decodeLat(value));
   }
 }

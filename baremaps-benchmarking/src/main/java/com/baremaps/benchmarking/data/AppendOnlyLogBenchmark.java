@@ -15,7 +15,7 @@
 package com.baremaps.benchmarking.data;
 
 import com.baremaps.data.collection.AppendOnlyLog;
-import com.baremaps.data.memory.OffHeapMemory;
+import com.baremaps.data.memory.Memory;
 import com.baremaps.data.type.DataType;
 import com.baremaps.data.type.LongDataType;
 import com.baremaps.data.type.LongListDataType;
@@ -91,12 +91,12 @@ public class AppendOnlyLogBenchmark {
       }
       default -> throw new IllegalArgumentException(kind);
     }
-    filled = new AppendOnlyLog<>(type, new OffHeapMemory());
+    filled = new AppendOnlyLog<>(type, Memory.offHeap());
     positions = new long[COUNT];
     for (int i = 0; i < COUNT; i++) {
       positions[i] = filled.addPositioned(values[i]);
     }
-    appending = new AppendOnlyLog<>(type, new OffHeapMemory());
+    appending = new AppendOnlyLog<>(type, Memory.offHeap());
   }
 
   @TearDown

@@ -16,72 +16,104 @@ package com.baremaps.data.memory;
 
 import com.baremaps.data.type.DataType;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.nio.file.Path;
 import java.util.Arrays;
 
 /**
- * A growable address space made of fixed-size segments, backed by heap, off-heap, or memory-mapped
- * buffers.
+ * A growable address space made of fixed-size segments, in native memory or in memory-mapped files.
  *
  * <p>
  * Collections address memory with a {@code long} position. A segment size that is a power of two
  * turns the position into a (segment, offset) pair with a shift and a mask; this class owns that
- * arithmetic so that collections never do it themselves. A value must fit inside a single segment,
- * which is what allows a segment to be a plain {@link ByteBuffer}.
+ * arithmetic so that collections never do it themselves. A value must fit inside a single segment.
  *
  * <p>
- * Segments are allocated lazily, on first access, and are zero-filled by every backing store. Some
- * collections rely on that zero fill to recognize space that has never been written.
+ * Segments are allocated lazily, on first access, and are zero-filled by every backing. Some
+ * collections rely on that zero fill to recognize space that has never been written. A separate
+ * header segment of {@link #HEADER_BYTES} lets collections persist their own metadata (sizes,
+ * offsets, schemas) alongside the data.
  *
  * <p>
- * A separate, small header segment is available for collections to persist their own metadata
- * (sizes, offsets, schemas) alongside the data.
+ * All segments belong to one {@link Arena}: {@link #close()} frees or unmaps them at once, and any
+ * later access fails with an {@link IllegalStateException}. Memory that is never closed is never
+ * reclaimed, so callers own the lifetime.
  *
  * <p>
- * Thread safety: segment lookup is lock-free, allocation is synchronized. Concurrent access to the
- * bytes of a segment is the responsibility of the collection.
+ * Thread safety: segment lookup is lock-free, allocation is synchronized, and the arena is shared,
+ * so any thread may read or write. Concurrent access to the bytes of a segment is the
+ * responsibility of the collection.
  */
-public abstract class Memory<T extends ByteBuffer> implements AutoCloseable {
+public final class Memory implements AutoCloseable {
 
-  private final int headerSize;
+  /** The size of the header, large enough for a serialized table schema. */
+  public static final int HEADER_BYTES = 1 << 14;
 
-  private final int segmentSize;
+  private final Backing backing;
+
+  private final long segmentSize;
 
   private final int segmentShift;
 
   private final long segmentMask;
 
-  // Lazily allocated; guarded by "this".
-  private T header;
+  // Replaced together by clear(); volatile for lock-free readers, guarded by "this" for writers.
+  private volatile Arena arena;
 
-  // Copy-on-grow so that readers can look segments up without locking; guarded by "this" for
-  // writes.
-  @SuppressWarnings("unchecked")
-  private volatile T[] segments = (T[]) new ByteBuffer[0];
+  private volatile MemorySegment header;
 
-  private volatile boolean closed = false;
+  private volatile MemorySegment[] segments;
 
-  /**
-   * @param headerSize the size of the header in bytes
-   * @param segmentSize the size of the segments in bytes, a power of two
-   */
-  protected Memory(int headerSize, int segmentSize) {
+  /** Creates a memory in native memory with 1 MB segments. */
+  public static Memory offHeap() {
+    return offHeap(1 << 20);
+  }
+
+  /** Creates a memory in native memory. */
+  public static Memory offHeap(long segmentSize) {
+    return new Memory(new Backing.Native(), segmentSize);
+  }
+
+  /** Creates or reopens a memory in a single file with 1 GB segments. */
+  public static Memory mappedFile(Path file) {
+    return mappedFile(file, 1L << 30);
+  }
+
+  /** Creates or reopens a memory in a single file. */
+  public static Memory mappedFile(Path file, long segmentSize) {
+    return new Memory(new Backing.MappedFile(file), segmentSize);
+  }
+
+  /** Creates or reopens a memory in a directory with 1 GB segments, one file each. */
+  public static Memory mappedDirectory(Path directory) {
+    return mappedDirectory(directory, 1L << 30);
+  }
+
+  /** Creates or reopens a memory in a directory, one file per segment. */
+  public static Memory mappedDirectory(Path directory, long segmentSize) {
+    return new Memory(new Backing.MappedDirectory(directory), segmentSize);
+  }
+
+  private Memory(Backing backing, long segmentSize) {
     if (segmentSize <= 0 || (segmentSize & -segmentSize) != segmentSize) {
       throw new IllegalArgumentException("The segment size must be a power of 2");
     }
-    this.headerSize = headerSize;
+    this.backing = backing;
     this.segmentSize = segmentSize;
-    this.segmentShift = Integer.numberOfTrailingZeros(segmentSize);
-    this.segmentMask = segmentSize - 1L;
+    this.segmentShift = Long.numberOfTrailingZeros(segmentSize);
+    this.segmentMask = segmentSize - 1;
+    open();
   }
 
-  /** Returns the size of the header in bytes. */
-  public int headerSize() {
-    return headerSize;
+  private void open() {
+    arena = Arena.ofShared();
+    header = backing.header(arena, HEADER_BYTES);
+    segments = new MemorySegment[0];
   }
 
   /** Returns the size of a segment in bytes. */
-  public int segmentSize() {
+  public long segmentSize() {
     return segmentSize;
   }
 
@@ -95,37 +127,29 @@ public abstract class Memory<T extends ByteBuffer> implements AutoCloseable {
     return (long) segments.length * segmentSize;
   }
 
-  /** Returns the header, allocating it on first access. */
-  public synchronized ByteBuffer header() {
-    checkNotClosed();
-    if (header == null) {
-      header = allocateHeader();
-    }
+  /** Returns the header. */
+  public MemorySegment header() {
     return header;
   }
 
   /** Returns the segment at the given index, allocating it and its predecessors if needed. */
-  public ByteBuffer segment(int index) {
-    T[] current = segments;
+  MemorySegment segment(int index) {
+    MemorySegment[] current = segments;
     if (index < current.length) {
       return current[index];
     }
     return allocate(index);
   }
 
-  private synchronized T allocate(int index) {
-    checkNotClosed();
+  private synchronized MemorySegment allocate(int index) {
     if (index >= segments.length) {
-      T[] grown = Arrays.copyOf(segments, index + 1);
+      MemorySegment[] grown = Arrays.copyOf(segments, index + 1);
       try {
         for (int i = segments.length; i <= index; i++) {
-          grown[i] = allocateSegment(i);
+          grown[i] = backing.segment(arena, i, segmentSize);
         }
       } catch (OutOfMemoryError e) {
-        throw new MemoryException(
-            "Failed to allocate memory segment of size " + segmentSize + " bytes", e);
-      } catch (RuntimeException e) {
-        throw new MemoryException("Failed to allocate memory segment", e);
+        throw new MemoryException("Failed to allocate a segment of " + segmentSize + " bytes", e);
       }
       segments = grown;
     }
@@ -138,9 +162,7 @@ public abstract class Memory<T extends ByteBuffer> implements AutoCloseable {
    * @throws IndexOutOfBoundsException if the position is negative or beyond the addressable range
    */
   public <E> E read(DataType<E> dataType, long position) {
-    int index = segmentIndex(position);
-    int offset = (int) (position & segmentMask);
-    return dataType.read(segment(index), offset);
+    return dataType.read(segment(segmentIndex(position)), position & segmentMask);
   }
 
   /**
@@ -150,14 +172,13 @@ public abstract class Memory<T extends ByteBuffer> implements AutoCloseable {
    *         if the value would cross a segment boundary
    */
   public <E> void write(DataType<E> dataType, long position, E value) {
-    int index = segmentIndex(position);
-    int offset = (int) (position & segmentMask);
+    long offset = position & segmentMask;
     int size = dataType.size(value);
     if (offset + size > segmentSize) {
       throw new IndexOutOfBoundsException(
           "Value of " + size + " bytes at position " + position + " crosses a segment boundary");
     }
-    dataType.write(segment(index), offset, value);
+    dataType.write(segment(segmentIndex(position)), offset, value);
   }
 
   /**
@@ -165,11 +186,10 @@ public abstract class Memory<T extends ByteBuffer> implements AutoCloseable {
    * because the rest of the segment is too small to hold one or has never been written.
    */
   public int sizeOf(DataType<?> dataType, long position) {
-    int index = segmentIndex(position);
-    int offset = (int) (position & segmentMask);
+    long offset = position & segmentMask;
     int size;
     try {
-      size = dataType.size(segment(index), offset);
+      size = dataType.size(segment(segmentIndex(position)), offset);
     } catch (IndexOutOfBoundsException e) {
       return 0;
     }
@@ -177,8 +197,8 @@ public abstract class Memory<T extends ByteBuffer> implements AutoCloseable {
   }
 
   /** Returns the number of bytes available in the segment holding the given position. */
-  public int remaining(long position) {
-    return segmentSize - (int) (position & segmentMask);
+  public long remaining(long position) {
+    return segmentSize - (position & segmentMask);
   }
 
   private int segmentIndex(long position) {
@@ -191,58 +211,21 @@ public abstract class Memory<T extends ByteBuffer> implements AutoCloseable {
 
   /** Returns whether the memory has been closed. */
   public boolean isClosed() {
-    return closed;
+    return !arena.scope().isAlive();
   }
 
-  protected void checkNotClosed() {
-    if (closed) {
-      throw new IllegalStateException("Memory has been closed");
-    }
-  }
-
-  /** Allocates the header buffer. */
-  protected abstract T allocateHeader();
-
-  /** Allocates the segment at the given index. Must return a zero-filled buffer. */
-  protected abstract T allocateSegment(int index);
-
-  /** Releases a buffer allocated by this memory; the default does nothing. */
-  protected void release(T buffer) throws IOException {}
-
-  /** Deletes the underlying storage, if any; the default does nothing. */
-  protected void delete() throws IOException {}
-
-  /**
-   * Releases the buffers. The memory can no longer be used afterwards, but {@link #clear()} may
-   * still be called to delete the storage.
-   */
+  /** Frees or unmaps every segment; any later access throws. Idempotent. */
   @Override
-  public final synchronized void close() throws IOException {
-    if (closed) {
-      return;
+  public synchronized void close() {
+    if (arena.scope().isAlive()) {
+      arena.close();
     }
-    closed = true;
-    releaseBuffers();
   }
 
-  /**
-   * Releases the buffers and deletes the storage. Unless the memory is closed, it can be used again
-   * and grows from scratch.
-   */
-  @SuppressWarnings("unchecked")
-  public final synchronized void clear() throws IOException {
-    releaseBuffers();
-    header = null;
-    segments = (T[]) new ByteBuffer[0];
-    delete();
-  }
-
-  private void releaseBuffers() throws IOException {
-    if (header != null) {
-      release(header);
-    }
-    for (T segment : segments) {
-      release(segment);
-    }
+  /** Releases the segments, deletes the storage, and starts again from scratch. */
+  public synchronized void clear() throws IOException {
+    close();
+    backing.delete();
+    open();
   }
 }

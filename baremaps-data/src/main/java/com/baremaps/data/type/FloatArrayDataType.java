@@ -14,10 +14,13 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_FLOAT_UNALIGNED;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing arrays of float values in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing arrays of float values in {@link MemorySegment}s.
  */
 public class FloatArrayDataType implements DataType<float[]> {
 
@@ -29,30 +32,25 @@ public class FloatArrayDataType implements DataType<float[]> {
 
   /** {@inheritDoc} */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
+  public int size(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_INT_UNALIGNED, position);
   }
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final float[] values) {
-    buffer.putInt(position, size(values));
-    var p = position + Integer.BYTES;
-    for (float value : values) {
-      buffer.putFloat(p, value);
-      p += Float.BYTES;
-    }
+  public void write(final MemorySegment segment, final long position, final float[] values) {
+    segment.set(JAVA_INT_UNALIGNED, position, size(values));
+    MemorySegment.copy(values, 0, segment, JAVA_FLOAT_UNALIGNED, position + Integer.BYTES,
+        values.length);
   }
 
   /** {@inheritDoc} */
   @Override
-  public float[] read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
+  public float[] read(final MemorySegment segment, final long position) {
+    int size = segment.get(JAVA_INT_UNALIGNED, position);
     int length = (size - Integer.BYTES) / Float.BYTES;
     float[] values = new float[length];
-    for (int index = 0; index < length; index++) {
-      values[index] = buffer.getFloat(position + Integer.BYTES + index * Float.BYTES);
-    }
+    MemorySegment.copy(segment, JAVA_FLOAT_UNALIGNED, position + Integer.BYTES, values, 0, length);
     return values;
   }
 }

@@ -14,6 +14,10 @@
 
 package com.baremaps.calcite.data;
 
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
+import static java.lang.foreign.ValueLayout.JAVA_LONG_UNALIGNED;
+
 import com.baremaps.data.type.BooleanDataType;
 import com.baremaps.data.type.ByteArrayDataType;
 import com.baremaps.data.type.ByteDataType;
@@ -26,7 +30,7 @@ import com.baremaps.data.type.LongDataType;
 import com.baremaps.data.type.MemoryAlignedDataType;
 import com.baremaps.data.type.ShortDataType;
 import com.baremaps.data.type.StringDataType;
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -46,7 +50,7 @@ import org.apache.calcite.sql.type.SqlTypeName;
  * Layout: an {@code int} holding the total row size, then one value per column. Each value is a
  * null marker byte followed, when the marker is set, by the column's encoding. The marker lives
  * here rather than in {@code NullableDataType} because the latter cannot compute the size of a null
- * variable-length value from the buffer.
+ * variable-length value from the segment.
  */
 public final class DataRowType implements DataType<Object[]> {
 
@@ -105,34 +109,34 @@ public final class DataRowType implements DataType<Object[]> {
   }
 
   @Override
-  public int size(ByteBuffer buffer, int position) {
-    return buffer.getInt(position);
+  public int size(MemorySegment segment, long position) {
+    return segment.get(JAVA_INT_UNALIGNED, position);
   }
 
   @Override
-  public void write(ByteBuffer buffer, int position, Object[] row) {
-    int p = position + Integer.BYTES;
+  public void write(MemorySegment segment, long position, Object[] row) {
+    long p = position + Integer.BYTES;
     for (int i = 0; i < columnTypes.size(); i++) {
       Object value = row[i];
-      buffer.put(p++, (byte) (value == null ? 0 : 1));
+      segment.set(JAVA_BYTE, p++, (byte) (value == null ? 0 : 1));
       if (value != null) {
         DataType<Object> type = columnTypes.get(i);
-        type.write(buffer, p, value);
-        p += type.size(buffer, p);
+        type.write(segment, p, value);
+        p += type.size(segment, p);
       }
     }
-    buffer.putInt(position, p - position);
+    segment.set(JAVA_INT_UNALIGNED, position, (int) (p - position));
   }
 
   @Override
-  public Object[] read(ByteBuffer buffer, int position) {
+  public Object[] read(MemorySegment segment, long position) {
     Object[] row = new Object[columnTypes.size()];
-    int p = position + Integer.BYTES;
+    long p = position + Integer.BYTES;
     for (int i = 0; i < columnTypes.size(); i++) {
-      if (buffer.get(p++) != 0) {
+      if (segment.get(JAVA_BYTE, p++) != 0) {
         DataType<Object> type = columnTypes.get(i);
-        row[i] = type.read(buffer, p);
-        p += type.size(buffer, p);
+        row[i] = type.read(segment, p);
+        p += type.size(segment, p);
       }
     }
     return row;
@@ -145,13 +149,13 @@ public final class DataRowType implements DataType<Object[]> {
     }
 
     @Override
-    public void write(ByteBuffer buffer, int position, LocalDate value) {
-      buffer.putLong(position, value.toEpochDay());
+    public void write(MemorySegment segment, long position, LocalDate value) {
+      segment.set(JAVA_LONG_UNALIGNED, position, value.toEpochDay());
     }
 
     @Override
-    public LocalDate read(ByteBuffer buffer, int position) {
-      return LocalDate.ofEpochDay(buffer.getLong(position));
+    public LocalDate read(MemorySegment segment, long position) {
+      return LocalDate.ofEpochDay(segment.get(JAVA_LONG_UNALIGNED, position));
     }
   }
 
@@ -162,13 +166,13 @@ public final class DataRowType implements DataType<Object[]> {
     }
 
     @Override
-    public void write(ByteBuffer buffer, int position, LocalTime value) {
-      buffer.putLong(position, value.toNanoOfDay());
+    public void write(MemorySegment segment, long position, LocalTime value) {
+      segment.set(JAVA_LONG_UNALIGNED, position, value.toNanoOfDay());
     }
 
     @Override
-    public LocalTime read(ByteBuffer buffer, int position) {
-      return LocalTime.ofNanoOfDay(buffer.getLong(position));
+    public LocalTime read(MemorySegment segment, long position) {
+      return LocalTime.ofNanoOfDay(segment.get(JAVA_LONG_UNALIGNED, position));
     }
   }
 
@@ -180,16 +184,16 @@ public final class DataRowType implements DataType<Object[]> {
     }
 
     @Override
-    public void write(ByteBuffer buffer, int position, LocalDateTime value) {
-      buffer.putLong(position, value.toLocalDate().toEpochDay());
-      buffer.putLong(position + Long.BYTES, value.toLocalTime().toNanoOfDay());
+    public void write(MemorySegment segment, long position, LocalDateTime value) {
+      segment.set(JAVA_LONG_UNALIGNED, position, value.toLocalDate().toEpochDay());
+      segment.set(JAVA_LONG_UNALIGNED, position + Long.BYTES, value.toLocalTime().toNanoOfDay());
     }
 
     @Override
-    public LocalDateTime read(ByteBuffer buffer, int position) {
+    public LocalDateTime read(MemorySegment segment, long position) {
       return LocalDateTime.of(
-          LocalDate.ofEpochDay(buffer.getLong(position)),
-          LocalTime.ofNanoOfDay(buffer.getLong(position + Long.BYTES)));
+          LocalDate.ofEpochDay(segment.get(JAVA_LONG_UNALIGNED, position)),
+          LocalTime.ofNanoOfDay(segment.get(JAVA_LONG_UNALIGNED, position + Long.BYTES)));
     }
   }
 }

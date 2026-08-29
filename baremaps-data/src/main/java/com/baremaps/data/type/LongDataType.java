@@ -14,10 +14,12 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_LONG_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing long values in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing long values in {@link MemorySegment}s.
  */
 public class LongDataType extends MemoryAlignedDataType<Long> {
 
@@ -30,13 +32,13 @@ public class LongDataType extends MemoryAlignedDataType<Long> {
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Long value) {
-    buffer.putLong(position, value);
+  public void write(final MemorySegment segment, final long position, final Long value) {
+    segment.set(JAVA_LONG_UNALIGNED, position, value);
   }
 
   /** {@inheritDoc} */
   @Override
-  public Long read(final ByteBuffer buffer, final int position) {
-    return buffer.getLong(position);
+  public Long read(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_LONG_UNALIGNED, position);
   }
 }

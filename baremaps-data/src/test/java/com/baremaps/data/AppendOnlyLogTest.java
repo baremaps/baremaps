@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.baremaps.data.collection.AppendOnlyLog;
 import com.baremaps.data.collection.DataCollectionException;
-import com.baremaps.data.memory.OffHeapMemory;
+import com.baremaps.data.memory.Memory;
 import com.baremaps.data.type.DataType;
 import com.baremaps.data.type.IntegerDataType;
 import com.baremaps.data.type.IntegerListDataType;
@@ -35,7 +35,7 @@ class AppendOnlyLogTest {
 
   @Test
   void addFixedSizeData() {
-    var collection = new AppendOnlyLog<>(new IntegerDataType(), new OffHeapMemory(1 << 10));
+    var collection = new AppendOnlyLog<>(new IntegerDataType(), Memory.offHeap(1 << 10));
     for (int i = 0; i < 1 << 20; i++) {
       assertEquals((i << 2), collection.addPositioned(i));
     }
@@ -46,7 +46,7 @@ class AppendOnlyLogTest {
 
   @Test
   void addVariableSizeValues() {
-    var collection = new AppendOnlyLog<>(new IntegerListDataType(), new OffHeapMemory(1 << 10));
+    var collection = new AppendOnlyLog<>(new IntegerListDataType(), Memory.offHeap(1 << 10));
     var random = new Random(0);
     var positions = new ArrayList<Long>();
     var values = new ArrayList<ArrayList<Integer>>();
@@ -67,7 +67,7 @@ class AppendOnlyLogTest {
 
   @Test
   void valueLargerThanSegment() {
-    var collection = new AppendOnlyLog<>(new IntegerListDataType(), new OffHeapMemory(1 << 4));
+    var collection = new AppendOnlyLog<>(new IntegerListDataType(), Memory.offHeap(1 << 4));
     assertThrows(DataCollectionException.class,
         () -> collection.add(new ArrayList<>(List.of(1, 2, 3, 4, 5))));
   }
@@ -76,7 +76,7 @@ class AppendOnlyLogTest {
   @MethodSource("com.baremaps.data.type.DataTypeProvider#dataTypes")
   void testAllDataTypes(DataType dataType, Object value) {
     var num = 1000;
-    var collection = new AppendOnlyLog<>(dataType, new OffHeapMemory(1 << 22));
+    var collection = new AppendOnlyLog<>(dataType, Memory.offHeap(1 << 22));
 
     // write values
     for (int i = 0; i < num; i++) {

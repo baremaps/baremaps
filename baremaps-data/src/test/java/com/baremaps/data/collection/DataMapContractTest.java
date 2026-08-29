@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.baremaps.data.memory.OffHeapMemory;
+import com.baremaps.data.memory.Memory;
 import com.baremaps.data.type.LongDataType;
 import com.baremaps.data.type.LongListDataType;
 import java.util.HashMap;
@@ -43,13 +43,13 @@ class DataMapContractTest {
   static Stream<Arguments> maps() {
     return Stream.of(
         Arguments.of(new IndexedDataMap<>(new HashMap<>(),
-            new AppendOnlyLog<>(new LongListDataType(), new OffHeapMemory(SEGMENT_BYTES)))),
+            new AppendOnlyLog<>(new LongListDataType(), Memory.offHeap(SEGMENT_BYTES)))),
         Arguments.of(new MonotonicDataMap<>(
-            new MemoryAlignedDataList<>(new LongDataType(), new OffHeapMemory(SEGMENT_BYTES)),
-            new MemoryAlignedDataList<>(new LongDataType(), new OffHeapMemory(SEGMENT_BYTES)),
+            new MemoryAlignedDataList<>(new LongDataType(), Memory.offHeap(SEGMENT_BYTES)),
+            new MemoryAlignedDataList<>(new LongDataType(), Memory.offHeap(SEGMENT_BYTES)),
             new IndexedDataList<>(
-                new MemoryAlignedDataList<>(new LongDataType(), new OffHeapMemory(SEGMENT_BYTES)),
-                new AppendOnlyLog<>(new LongListDataType(), new OffHeapMemory(SEGMENT_BYTES))))));
+                new MemoryAlignedDataList<>(new LongDataType(), Memory.offHeap(SEGMENT_BYTES)),
+                new AppendOnlyLog<>(new LongListDataType(), Memory.offHeap(SEGMENT_BYTES))))));
   }
 
   // Sparse, increasing keys with gaps larger than a chunk.

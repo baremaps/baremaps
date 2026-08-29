@@ -14,10 +14,13 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing arrays of boolean values in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing arrays of boolean values in {@link MemorySegment}s.
  */
 public class BooleanArrayDataType implements DataType<boolean[]> {
 
@@ -29,29 +32,29 @@ public class BooleanArrayDataType implements DataType<boolean[]> {
 
   /** {@inheritDoc} */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
+  public int size(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_INT_UNALIGNED, position);
   }
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final boolean[] values) {
-    buffer.putInt(position, size(values));
-    var p = position + Integer.BYTES;
+  public void write(final MemorySegment segment, final long position, final boolean[] values) {
+    segment.set(JAVA_INT_UNALIGNED, position, size(values));
+    long p = position + Integer.BYTES;
     for (boolean value : values) {
-      buffer.put(p, (byte) (value ? 1 : 0));
+      segment.set(JAVA_BYTE, p, (byte) (value ? 1 : 0));
       p += Byte.BYTES;
     }
   }
 
   /** {@inheritDoc} */
   @Override
-  public boolean[] read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
+  public boolean[] read(final MemorySegment segment, final long position) {
+    int size = segment.get(JAVA_INT_UNALIGNED, position);
     int length = (size - Integer.BYTES) / Byte.BYTES;
     boolean[] values = new boolean[length];
     for (int index = 0; index < length; index++) {
-      values[index] = buffer.get(position + Integer.BYTES + index * Byte.BYTES) == 1;
+      values[index] = segment.get(JAVA_BYTE, position + Integer.BYTES + index * Byte.BYTES) == 1;
     }
     return values;
   }

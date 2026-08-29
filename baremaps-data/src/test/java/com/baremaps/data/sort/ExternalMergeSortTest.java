@@ -23,7 +23,7 @@ import com.baremaps.data.collection.DataConversions;
 import com.baremaps.data.collection.DataList;
 import com.baremaps.data.collection.IndexedDataList;
 import com.baremaps.data.collection.MemoryAlignedDataList;
-import com.baremaps.data.memory.OnHeapMemory;
+import com.baremaps.data.memory.Memory;
 import com.baremaps.data.type.LongDataType;
 import com.baremaps.data.type.StringDataType;
 import java.io.IOException;
@@ -52,8 +52,8 @@ class ExternalMergeSortTest {
     stringsDsc = strings.stream().sorted(Comparator.reverseOrder()).toList();
     stringsDistinct = stringsAsc.stream().distinct().toList();
     supplier = () -> new IndexedDataList<>(
-        new MemoryAlignedDataList<>(new LongDataType(), new OnHeapMemory()),
-        new AppendOnlyLog<>(new StringDataType(), new OnHeapMemory()));
+        new MemoryAlignedDataList<>(new LongDataType(), Memory.offHeap()),
+        new AppendOnlyLog<>(new StringDataType(), Memory.offHeap()));
     input = supplier.get();
     output = supplier.get();
     for (var string : strings) {

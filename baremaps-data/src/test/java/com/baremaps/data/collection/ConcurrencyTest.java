@@ -16,7 +16,7 @@ package com.baremaps.data.collection;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.baremaps.data.memory.OffHeapMemory;
+import com.baremaps.data.memory.Memory;
 import com.baremaps.data.type.LongDataType;
 import com.baremaps.data.type.StringDataType;
 import java.util.ArrayList;
@@ -51,7 +51,7 @@ class ConcurrencyTest {
 
   @Test
   void appendOnlyLog() throws Exception {
-    var log = new AppendOnlyLog<>(new StringDataType(), new OffHeapMemory(SEGMENT));
+    var log = new AppendOnlyLog<>(new StringDataType(), Memory.offHeap(SEGMENT));
     var tasks = new ArrayList<Callable<long[]>>();
     for (int t = 0; t < THREADS; t++) {
       int thread = t;
@@ -75,7 +75,7 @@ class ConcurrencyTest {
 
   @Test
   void memoryAlignedDataList() throws Exception {
-    var list = new MemoryAlignedDataList<>(new LongDataType(), new OffHeapMemory(SEGMENT));
+    var list = new MemoryAlignedDataList<>(new LongDataType(), Memory.offHeap(SEGMENT));
     var tasks = new ArrayList<Callable<long[]>>();
     for (int t = 0; t < THREADS; t++) {
       long thread = t;
@@ -98,7 +98,7 @@ class ConcurrencyTest {
 
   @Test
   void concurrentReadersWhileAppending() throws Exception {
-    var list = new FixedSizeDataList<>(new LongDataType(), new OffHeapMemory(SEGMENT));
+    var list = new FixedSizeDataList<>(new LongDataType(), Memory.offHeap(SEGMENT));
     var tasks = new ArrayList<Callable<Boolean>>();
     tasks.add(() -> {
       for (long i = 0; i < THREADS * PER_THREAD; i++) {

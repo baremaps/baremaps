@@ -19,7 +19,7 @@ import com.baremaps.data.collection.DirectHashDataMap;
 import com.baremaps.data.collection.IndexedDataMap;
 import com.baremaps.data.collection.MemoryAlignedDataMap;
 import com.baremaps.data.collection.MonotonicDataMap;
-import com.baremaps.data.memory.OffHeapMemory;
+import com.baremaps.data.memory.Memory;
 import com.baremaps.data.type.LongDataType;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -58,7 +58,7 @@ public class DataMapBenchmark {
 
   private static DataMap<Long, Long> create(String kind) {
     return switch (kind) {
-      case "aligned" -> new MemoryAlignedDataMap<>(new LongDataType(), new OffHeapMemory());
+      case "aligned" -> new MemoryAlignedDataMap<>(new LongDataType(), Memory.offHeap());
       case "monotonic" -> new MonotonicDataMap<>(new LongDataType());
       case "directhash" -> new DirectHashDataMap<>(new LongDataType(), COUNT * 2L);
       case "indexed" -> new IndexedDataMap<>(new LongDataType());

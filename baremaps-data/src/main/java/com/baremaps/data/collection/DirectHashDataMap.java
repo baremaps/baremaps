@@ -15,10 +15,8 @@
 package com.baremaps.data.collection;
 
 import com.baremaps.data.memory.Memory;
-import com.baremaps.data.memory.OffHeapMemory;
 import com.baremaps.data.type.FixedSizeDataType;
 import com.baremaps.data.type.LongDataType;
-import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -42,9 +40,9 @@ public class DirectHashDataMap<V> implements DataMap<Long, V> {
 
   private final FixedSizeDataType<V> valueType;
 
-  private final Memory<?> keyMemory;
+  private final Memory keyMemory;
 
-  private final Memory<?> valueMemory;
+  private final Memory valueMemory;
 
   private final long capacity;
 
@@ -52,11 +50,11 @@ public class DirectHashDataMap<V> implements DataMap<Long, V> {
 
   /** Creates a map of the given capacity in off-heap memory. */
   public DirectHashDataMap(FixedSizeDataType<V> valueType, long capacity) {
-    this(valueType, capacity, new OffHeapMemory(), new OffHeapMemory());
+    this(valueType, capacity, Memory.offHeap(), Memory.offHeap());
   }
 
-  public DirectHashDataMap(FixedSizeDataType<V> valueType, long capacity, Memory<?> keyMemory,
-      Memory<?> valueMemory) {
+  public DirectHashDataMap(FixedSizeDataType<V> valueType, long capacity, Memory keyMemory,
+      Memory valueMemory) {
     if (capacity <= 0) {
       throw new IllegalArgumentException("Capacity must be greater than zero");
     }
@@ -203,11 +201,7 @@ public class DirectHashDataMap<V> implements DataMap<Long, V> {
 
   @Override
   public void close() {
-    try {
-      keyMemory.close();
-      valueMemory.close();
-    } catch (IOException e) {
-      throw new DataCollectionException(e);
-    }
+    keyMemory.close();
+    valueMemory.close();
   }
 }

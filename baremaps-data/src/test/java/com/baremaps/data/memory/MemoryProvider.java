@@ -26,11 +26,9 @@ public class MemoryProvider {
 
   public static Stream<Arguments> memories() throws IOException {
     return Stream.of(
-        Arguments.of(new OnHeapMemory(SEGMENT_BYTES)),
-        Arguments.of(new OffHeapMemory(SEGMENT_BYTES)),
-        Arguments.of(new MemoryMappedFile(Files.createTempFile("baremaps_", ".tmp"),
-            SEGMENT_BYTES)),
-        Arguments.of(new MemoryMappedDirectory(Files.createTempDirectory("baremaps_"),
-            SEGMENT_BYTES)));
+        Arguments.of(Memory.offHeap(SEGMENT_BYTES)),
+        Arguments.of(Memory.mappedFile(Files.createTempFile("baremaps_", ".tmp"), SEGMENT_BYTES)),
+        Arguments
+            .of(Memory.mappedDirectory(Files.createTempDirectory("baremaps_"), SEGMENT_BYTES)));
   }
 }

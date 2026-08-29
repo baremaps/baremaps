@@ -15,10 +15,6 @@
 package com.baremaps.benchmarking.data;
 
 import com.baremaps.data.memory.Memory;
-import com.baremaps.data.memory.MemoryMappedDirectory;
-import com.baremaps.data.memory.MemoryMappedFile;
-import com.baremaps.data.memory.OffHeapMemory;
-import com.baremaps.data.memory.OnHeapMemory;
 import com.baremaps.data.type.LongDataType;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -52,12 +48,12 @@ public class MemoryBenchmark {
 
   private static final int MASK = COUNT - 1;
 
-  @Param({"onheap", "offheap", "mmapfile", "mmapdir"})
+  @Param({"offheap", "mmapfile", "mmapdir"})
   public String backing;
 
   private final LongDataType type = new LongDataType();
 
-  private Memory<?> memory;
+  private Memory memory;
 
   private long[] randomPositions;
 
@@ -66,10 +62,9 @@ public class MemoryBenchmark {
   @Setup
   public void setup() throws IOException {
     memory = switch (backing) {
-      case "onheap" -> new OnHeapMemory(SEGMENT);
-      case "offheap" -> new OffHeapMemory(SEGMENT);
-      case "mmapfile" -> new MemoryMappedFile(Files.createTempFile("bench_", ".tmp"), SEGMENT);
-      case "mmapdir" -> new MemoryMappedDirectory(Files.createTempDirectory("bench_"), SEGMENT);
+      case "offheap" -> Memory.offHeap(SEGMENT);
+      case "mmapfile" -> Memory.mappedFile(Files.createTempFile("bench_", ".tmp"), SEGMENT);
+      case "mmapdir" -> Memory.mappedDirectory(Files.createTempDirectory("bench_"), SEGMENT);
       default -> throw new IllegalArgumentException(backing);
     };
     for (long i = 0; i < COUNT; i++) {
@@ -84,8 +79,8 @@ public class MemoryBenchmark {
 
   @TearDown
   public void tearDown() throws IOException {
-    memory.close();
     memory.clear();
+    memory.close();
   }
 
   @Benchmark

@@ -15,11 +15,12 @@
 package com.baremaps.data.type;
 
 import static java.lang.Boolean.TRUE;
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing boolean values in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing boolean values in {@link MemorySegment}s.
  */
 public class BooleanDataType extends MemoryAlignedDataType<Boolean> {
 
@@ -32,13 +33,13 @@ public class BooleanDataType extends MemoryAlignedDataType<Boolean> {
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Boolean value) {
-    buffer.put(position, TRUE.equals(value) ? (byte) 1 : (byte) 0);
+  public void write(final MemorySegment segment, final long position, final Boolean value) {
+    segment.set(JAVA_BYTE, position, TRUE.equals(value) ? (byte) 1 : (byte) 0);
   }
 
   /** {@inheritDoc} */
   @Override
-  public Boolean read(final ByteBuffer buffer, final int position) {
-    return buffer.get(position) == 1;
+  public Boolean read(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_BYTE, position) == 1;
   }
 }

@@ -14,11 +14,14 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 
 /**
- * A {@link DataType} for reading and writing string values in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing string values in {@link MemorySegment}s.
  */
 public class StringDataType implements DataType<String> {
 
@@ -30,24 +33,24 @@ public class StringDataType implements DataType<String> {
 
   /** {@inheritDoc} */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
+  public int size(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_INT_UNALIGNED, position);
   }
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final String value) {
+  public void write(final MemorySegment segment, final long position, final String value) {
     byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-    buffer.putInt(position, Integer.BYTES + bytes.length);
-    buffer.put(position + Integer.BYTES, bytes, 0, bytes.length);
+    segment.set(JAVA_INT_UNALIGNED, position, Integer.BYTES + bytes.length);
+    MemorySegment.copy(bytes, 0, segment, JAVA_BYTE, position + Integer.BYTES, bytes.length);
   }
 
   /** {@inheritDoc} */
   @Override
-  public String read(final ByteBuffer buffer, final int position) {
-    int size = size(buffer, position);
+  public String read(final MemorySegment segment, final long position) {
+    int size = size(segment, position);
     byte[] bytes = new byte[Math.max(size - Integer.BYTES, 0)];
-    buffer.get(position + Integer.BYTES, bytes);
+    MemorySegment.copy(segment, JAVA_BYTE, position + Integer.BYTES, bytes, 0, bytes.length);
     return new String(bytes, StandardCharsets.UTF_8);
   }
 }

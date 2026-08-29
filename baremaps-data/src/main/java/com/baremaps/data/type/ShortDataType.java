@@ -14,10 +14,12 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_SHORT_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing short values in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing short values in {@link MemorySegment}s.
  */
 public class ShortDataType extends MemoryAlignedDataType<Short> {
 
@@ -30,13 +32,13 @@ public class ShortDataType extends MemoryAlignedDataType<Short> {
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Short value) {
-    buffer.putShort(position, value);
+  public void write(final MemorySegment segment, final long position, final Short value) {
+    segment.set(JAVA_SHORT_UNALIGNED, position, value);
   }
 
   /** {@inheritDoc} */
   @Override
-  public Short read(final ByteBuffer buffer, final int position) {
-    return buffer.getShort(position);
+  public Short read(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_SHORT_UNALIGNED, position);
   }
 }

@@ -14,15 +14,15 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 
 /**
- * A data type for reading and writing values at absolute positions in {@link ByteBuffer}s.
+ * A data type for reading and writing values at absolute positions in {@link MemorySegment}s.
  *
  * <p>
- * Values are never null. An encoding is self-delimiting: {@link #size(ByteBuffer, int)} recovers
- * the size of a value from its first bytes and is never 0 for a written value, so that collections
- * can tell written space from zero-filled space.
+ * Values are never null. An encoding is self-delimiting: {@link #size(MemorySegment, long)}
+ * recovers the size of a value from its first bytes and is never 0 for a written value, so that
+ * collections can tell written space from zero-filled space.
  *
  * @param <T> the type of value being read or written
  */
@@ -37,30 +37,30 @@ public interface DataType<T> {
   int size(final T value);
 
   /**
-   * Returns the size of the value stored at the specified position in a {@link ByteBuffer}.
+   * Returns the size of the value stored at the specified position in a {@link MemorySegment}.
    *
-   * @param buffer the buffer containing the value
-   * @param position the absolute position of the value within the buffer
+   * @param segment the segment containing the value
+   * @param position the absolute position of the value within the segment
    * @return the size of the value in bytes
    */
-  int size(final ByteBuffer buffer, final int position);
+  int size(final MemorySegment segment, final long position);
 
   /**
-   * Writes a value to the specified position in a {@link ByteBuffer}.
+   * Writes a value to the specified position in a {@link MemorySegment}.
    *
-   * @param buffer the destination buffer
-   * @param position the absolute position within the buffer to write the value
+   * @param segment the destination segment
+   * @param position the absolute position within the segment to write the value
    * @param value the value to write
    */
-  void write(final ByteBuffer buffer, final int position, final T value);
+  void write(final MemorySegment segment, final long position, final T value);
 
   /**
-   * Reads a value from the specified position in a {@link ByteBuffer}.
+   * Reads a value from the specified position in a {@link MemorySegment}.
    *
-   * @param buffer the source buffer
-   * @param position the absolute position within the buffer to read the value
+   * @param segment the source segment
+   * @param position the absolute position within the segment to read the value
    * @return the read value
    */
-  T read(final ByteBuffer buffer, final int position);
+  T read(final MemorySegment segment, final long position);
 
 }

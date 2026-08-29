@@ -14,10 +14,14 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_DOUBLE_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 import org.locationtech.jts.geom.Coordinate;
 
-/** A {@link DataType} for reading and writing {@link Coordinate} values in {@link ByteBuffer}s. */
+/**
+ * A {@link DataType} for reading and writing {@link Coordinate} values in {@link MemorySegment}s.
+ */
 public class CoordinateDataType extends MemoryAlignedDataType<Coordinate> {
 
   /**
@@ -29,16 +33,16 @@ public class CoordinateDataType extends MemoryAlignedDataType<Coordinate> {
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Coordinate value) {
-    buffer.putDouble(position, value.x);
-    buffer.putDouble(position + Double.BYTES, value.y);
+  public void write(final MemorySegment segment, final long position, final Coordinate value) {
+    segment.set(JAVA_DOUBLE_UNALIGNED, position, value.x);
+    segment.set(JAVA_DOUBLE_UNALIGNED, position + Double.BYTES, value.y);
   }
 
   /** {@inheritDoc} */
   @Override
-  public Coordinate read(final ByteBuffer buffer, final int position) {
-    double x = buffer.getDouble(position);
-    double y = buffer.getDouble(position + Double.BYTES);
+  public Coordinate read(final MemorySegment segment, final long position) {
+    double x = segment.get(JAVA_DOUBLE_UNALIGNED, position);
+    double y = segment.get(JAVA_DOUBLE_UNALIGNED, position + Double.BYTES);
     return new Coordinate(x, y);
   }
 }

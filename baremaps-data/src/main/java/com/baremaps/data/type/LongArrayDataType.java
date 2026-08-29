@@ -14,10 +14,13 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
+import static java.lang.foreign.ValueLayout.JAVA_LONG_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing arrays of long values in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing arrays of long values in {@link MemorySegment}s.
  */
 public class LongArrayDataType implements DataType<long[]> {
 
@@ -29,30 +32,25 @@ public class LongArrayDataType implements DataType<long[]> {
 
   /** {@inheritDoc} */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
+  public int size(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_INT_UNALIGNED, position);
   }
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final long[] values) {
-    buffer.putInt(position, size(values));
-    var p = position + Integer.BYTES;
-    for (long value : values) {
-      buffer.putLong(p, value);
-      p += Long.BYTES;
-    }
+  public void write(final MemorySegment segment, final long position, final long[] values) {
+    segment.set(JAVA_INT_UNALIGNED, position, size(values));
+    MemorySegment.copy(values, 0, segment, JAVA_LONG_UNALIGNED, position + Integer.BYTES,
+        values.length);
   }
 
   /** {@inheritDoc} */
   @Override
-  public long[] read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
+  public long[] read(final MemorySegment segment, final long position) {
+    int size = segment.get(JAVA_INT_UNALIGNED, position);
     int length = (size - Integer.BYTES) / Long.BYTES;
     long[] values = new long[length];
-    for (int index = 0; index < length; index++) {
-      values[index] = buffer.getLong(position + Integer.BYTES + index * Long.BYTES);
-    }
+    MemorySegment.copy(segment, JAVA_LONG_UNALIGNED, position + Integer.BYTES, values, 0, length);
     return values;
   }
 }

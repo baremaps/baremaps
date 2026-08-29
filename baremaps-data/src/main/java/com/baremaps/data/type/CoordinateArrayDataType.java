@@ -14,12 +14,15 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_DOUBLE_UNALIGNED;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 import org.locationtech.jts.geom.Coordinate;
 
 /**
  * A {@link DataType} for reading and writing arrays of {@link Coordinate} values in
- * {@link ByteBuffer}s.
+ * {@link MemorySegment}s.
  */
 public class CoordinateArrayDataType implements DataType<Coordinate[]> {
 
@@ -35,40 +38,35 @@ public class CoordinateArrayDataType implements DataType<Coordinate[]> {
    * {@inheritDoc}
    */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
+  public int size(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_INT_UNALIGNED, position);
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Coordinate[] value) {
-    buffer.putInt(position, size(value));
-    int p = position + Integer.BYTES;
-    for (int i = 0; i < value.length; i++) {
-      Coordinate coordinate = value[i];
-      buffer.putDouble(p, coordinate.x);
-      p += Double.BYTES;
-      buffer.putDouble(p, coordinate.y);
-      p += Double.BYTES;
+  public void write(final MemorySegment segment, final long position, final Coordinate[] value) {
+    segment.set(JAVA_INT_UNALIGNED, position, size(value));
+    long p = position + Integer.BYTES;
+    for (Coordinate coordinate : value) {
+      segment.set(JAVA_DOUBLE_UNALIGNED, p, coordinate.x);
+      segment.set(JAVA_DOUBLE_UNALIGNED, p + Double.BYTES, coordinate.y);
+      p += 2 * Double.BYTES;
     }
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
-  public Coordinate[] read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
-    int numPoints = (size - Integer.BYTES) / (Double.BYTES * 2);
-    int p = position + Integer.BYTES;
-    Coordinate[] coordinates = new Coordinate[numPoints];
-    for (int i = 0; i < numPoints; i++) {
-      double x = buffer.getDouble(p);
-      double y = buffer.getDouble(p + Double.BYTES);
-      coordinates[i] = new Coordinate(x, y);
-      p += Double.BYTES * 2;
+  public Coordinate[] read(final MemorySegment segment, final long position) {
+    // Reading is one bulk copy instead of two checked accesses per coordinate; writing stays a
+    // loop, as a temporary array costs more than the checks there.
+    int size = segment.get(JAVA_INT_UNALIGNED, position);
+    double[] ordinates = new double[(size - Integer.BYTES) / Double.BYTES];
+    MemorySegment.copy(segment, JAVA_DOUBLE_UNALIGNED, position + Integer.BYTES, ordinates, 0,
+        ordinates.length);
+    Coordinate[] coordinates = new Coordinate[ordinates.length / 2];
+    for (int i = 0; i < coordinates.length; i++) {
+      coordinates[i] = new Coordinate(ordinates[2 * i], ordinates[2 * i + 1]);
     }
     return coordinates;
   }

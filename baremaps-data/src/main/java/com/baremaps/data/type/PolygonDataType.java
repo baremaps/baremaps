@@ -14,7 +14,9 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.LineString;
@@ -22,7 +24,7 @@ import org.locationtech.jts.geom.LinearRing;
 import org.locationtech.jts.geom.Polygon;
 
 /**
- * A {@link DataType} for reading and writing {@link Polygon} objects in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing {@link Polygon} objects in {@link MemorySegment}s.
  */
 public class PolygonDataType implements DataType<Polygon> {
 
@@ -71,27 +73,27 @@ public class PolygonDataType implements DataType<Polygon> {
    * {@inheritDoc}
    */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
+  public int size(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_INT_UNALIGNED, position);
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Polygon value) {
-    buffer.putInt(position, size(value));
-    var p = position + Integer.BYTES;
+  public void write(final MemorySegment segment, final long position, final Polygon value) {
+    segment.set(JAVA_INT_UNALIGNED, position, size(value));
+    long p = position + Integer.BYTES;
 
     // Write the exterior ring
     var exteriorRing = value.getExteriorRing();
-    coordinateArrayDataType.write(buffer, p, exteriorRing.getCoordinates());
+    coordinateArrayDataType.write(segment, p, exteriorRing.getCoordinates());
     p += coordinateArrayDataType.size(exteriorRing.getCoordinates());
 
     // Write the interior rings
     for (int i = 0; i < value.getNumInteriorRing(); i++) {
       var interiorRing = value.getInteriorRingN(i);
-      coordinateArrayDataType.write(buffer, p, interiorRing.getCoordinates());
+      coordinateArrayDataType.write(segment, p, interiorRing.getCoordinates());
       p += coordinateArrayDataType.size(interiorRing.getCoordinates());
     }
   }
@@ -100,24 +102,24 @@ public class PolygonDataType implements DataType<Polygon> {
    * {@inheritDoc}
    */
   @Override
-  public Polygon read(final ByteBuffer buffer, final int position) {
-    var size = size(buffer, position);
-    var limit = position + size;
-    var p = position + Integer.BYTES;
+  public Polygon read(final MemorySegment segment, final long position) {
+    var size = size(segment, position);
+    long limit = position + size;
+    long p = position + Integer.BYTES;
 
 
     // Read the exterior ring
-    var exteriorRingCoordinates = coordinateArrayDataType.read(buffer, p);
+    var exteriorRingCoordinates = coordinateArrayDataType.read(segment, p);
     var exteriorRing = geometryFactory.createLinearRing(exteriorRingCoordinates);
-    p += coordinateArrayDataType.size(buffer, p);
+    p += coordinateArrayDataType.size(segment, p);
 
     // Read the interior rings
     var interiorRings = new ArrayList<LineString>();
     while (p < limit) {
-      var interiorRingCoordinates = coordinateArrayDataType.read(buffer, p);
+      var interiorRingCoordinates = coordinateArrayDataType.read(segment, p);
       var interiorRing = geometryFactory.createLinearRing(interiorRingCoordinates);
       interiorRings.add(interiorRing);
-      p += coordinateArrayDataType.size(buffer, p);
+      p += coordinateArrayDataType.size(segment, p);
     }
 
     return geometryFactory.createPolygon(exteriorRing, interiorRings.toArray(LinearRing[]::new));

@@ -14,10 +14,10 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing values in {@link ByteBuffer}s whose size is memory
+ * A {@link DataType} for reading and writing values in {@link MemorySegment}s whose size is memory
  * aligned.
  *
  * @param <T> the type of value being read or written

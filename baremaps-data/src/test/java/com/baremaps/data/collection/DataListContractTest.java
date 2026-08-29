@@ -21,10 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.baremaps.data.memory.Memory;
-import com.baremaps.data.memory.MemoryMappedDirectory;
-import com.baremaps.data.memory.MemoryMappedFile;
-import com.baremaps.data.memory.OffHeapMemory;
-import com.baremaps.data.memory.OnHeapMemory;
 import com.baremaps.data.type.LongDataType;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -44,7 +40,7 @@ class DataListContractTest {
   private static final int N = 1000;
 
   static Stream<Arguments> lists() throws IOException {
-    List<Function<Supplier<Memory<?>>, DataList<Long>>> factories = List.of(
+    List<Function<Supplier<Memory>, DataList<Long>>> factories = List.of(
         m -> new FixedSizeDataList<>(new LongDataType(), m.get()),
         m -> new MemoryAlignedDataList<>(new LongDataType(), m.get()),
         m -> new IndexedDataList<>(
@@ -59,12 +55,11 @@ class DataListContractTest {
     return arguments.stream();
   }
 
-  private static List<Supplier<Memory<?>>> memories() {
+  private static List<Supplier<Memory>> memories() {
     return List.of(
-        () -> new OnHeapMemory(SEGMENT_BYTES),
-        () -> new OffHeapMemory(SEGMENT_BYTES),
-        () -> new MemoryMappedFile(tempFile(), SEGMENT_BYTES),
-        () -> new MemoryMappedDirectory(tempDirectory(), SEGMENT_BYTES));
+        () -> Memory.offHeap(SEGMENT_BYTES),
+        () -> Memory.mappedFile(tempFile(), SEGMENT_BYTES),
+        () -> Memory.mappedDirectory(tempDirectory(), SEGMENT_BYTES));
   }
 
   private static java.nio.file.Path tempFile() {

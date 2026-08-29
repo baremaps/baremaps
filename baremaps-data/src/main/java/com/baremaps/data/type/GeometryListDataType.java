@@ -14,7 +14,7 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.List;
 import org.locationtech.jts.geom.Geometry;
@@ -51,17 +51,17 @@ abstract class GeometryListDataType<G extends GeometryCollection, E extends Geom
   }
 
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return members.size(buffer, position);
+  public int size(final MemorySegment segment, final long position) {
+    return members.size(segment, position);
   }
 
   @Override
-  public void write(final ByteBuffer buffer, final int position, final G value) {
-    members.write(buffer, position, membersOf(value));
+  public void write(final MemorySegment segment, final long position, final G value) {
+    members.write(segment, position, membersOf(value));
   }
 
   @Override
-  public G read(final ByteBuffer buffer, final int position) {
-    return create(members.read(buffer, position));
+  public G read(final MemorySegment segment, final long position) {
+    return create(members.read(segment, position));
   }
 }

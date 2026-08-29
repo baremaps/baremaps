@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Geometry;
@@ -34,7 +34,7 @@ class GeometryDataTypeTest {
   private final GeometryDataType type = new GeometryDataType(factory);
 
   private Geometry roundTrip(Geometry geometry) {
-    var buffer = ByteBuffer.allocate(type.size(geometry) + 8);
+    var buffer = MemorySegment.ofArray(new byte[type.size(geometry) + 8]);
     type.write(buffer, 4, geometry);
     assertEquals(type.size(geometry), type.size(buffer, 4));
     return type.read(buffer, 4);
@@ -115,7 +115,7 @@ class GeometryDataTypeTest {
 
   @Test
   void zeroTagIsNotAGeometry() {
-    var zeros = ByteBuffer.allocate(64);
+    var zeros = MemorySegment.ofArray(new byte[64]);
     assertThrows(IllegalArgumentException.class, () -> type.read(zeros, 0));
   }
 }

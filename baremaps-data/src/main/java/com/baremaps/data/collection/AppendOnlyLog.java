@@ -14,11 +14,12 @@
 
 package com.baremaps.data.collection;
 
+import static java.lang.foreign.ValueLayout.JAVA_LONG_UNALIGNED;
+
 import com.baremaps.data.memory.Memory;
-import com.baremaps.data.memory.OffHeapMemory;
 import com.baremaps.data.type.DataType;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
@@ -28,7 +29,7 @@ import java.util.NoSuchElementException;
  * <p>
  * A value never crosses a segment boundary: when it does not fit in the remaining bytes of a
  * segment, it starts the next one. The skipped tail stays zero-filled, which is how the iterator
- * recognizes it (see {@link DataType#size(ByteBuffer, int)}).
+ * recognizes it (see {@link DataType#size(MemorySegment, long)}).
  *
  * <p>
  * The size and the end position are persisted in the first {@link #HEADER_BYTES} bytes of the
@@ -51,7 +52,7 @@ public class AppendOnlyLog<E> implements DataCollection<E> {
 
   private final DataType<E> dataType;
 
-  private final Memory<?> memory;
+  private final Memory memory;
 
   // The number of values and the position of the next write, guarded by "this".
   private long size;
@@ -60,16 +61,16 @@ public class AppendOnlyLog<E> implements DataCollection<E> {
 
   /** Creates a log in off-heap memory. */
   public AppendOnlyLog(DataType<E> dataType) {
-    this(dataType, new OffHeapMemory());
+    this(dataType, Memory.offHeap());
   }
 
   /** Creates a log in the given memory, reopening it if the memory holds a header. */
-  public AppendOnlyLog(DataType<E> dataType, Memory<?> memory) {
+  public AppendOnlyLog(DataType<E> dataType, Memory memory) {
     this.dataType = dataType;
     this.memory = memory;
-    ByteBuffer header = memory.header();
-    this.size = header.getLong(SIZE_OFFSET);
-    this.end = header.getLong(END_OFFSET);
+    MemorySegment header = memory.header();
+    this.size = header.get(JAVA_LONG_UNALIGNED, SIZE_OFFSET);
+    this.end = header.get(JAVA_LONG_UNALIGNED, END_OFFSET);
   }
 
   /**
@@ -113,9 +114,9 @@ public class AppendOnlyLog<E> implements DataCollection<E> {
 
   /** Persists the size and end position in the memory header. */
   public synchronized void flush() {
-    ByteBuffer header = memory.header();
-    header.putLong(SIZE_OFFSET, size);
-    header.putLong(END_OFFSET, end);
+    MemorySegment header = memory.header();
+    header.set(JAVA_LONG_UNALIGNED, SIZE_OFFSET, size);
+    header.set(JAVA_LONG_UNALIGNED, END_OFFSET, end);
   }
 
   @Override
@@ -134,12 +135,8 @@ public class AppendOnlyLog<E> implements DataCollection<E> {
     if (memory.isClosed()) {
       return;
     }
-    try {
-      flush();
-      memory.close();
-    } catch (IOException e) {
-      throw new DataCollectionException(e);
-    }
+    flush();
+    memory.close();
   }
 
   @Override

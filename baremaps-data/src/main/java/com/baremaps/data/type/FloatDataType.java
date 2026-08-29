@@ -14,10 +14,12 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_FLOAT_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing float values in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing float values in {@link MemorySegment}s.
  */
 public class FloatDataType extends MemoryAlignedDataType<Float> {
 
@@ -32,15 +34,15 @@ public class FloatDataType extends MemoryAlignedDataType<Float> {
    * {@inheritDoc}
    */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Float value) {
-    buffer.putFloat(position, value);
+  public void write(final MemorySegment segment, final long position, final Float value) {
+    segment.set(JAVA_FLOAT_UNALIGNED, position, value);
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
-  public Float read(final ByteBuffer buffer, final int position) {
-    return buffer.getFloat(position);
+  public Float read(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_FLOAT_UNALIGNED, position);
   }
 }

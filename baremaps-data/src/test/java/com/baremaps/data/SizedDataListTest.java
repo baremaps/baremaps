@@ -20,7 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.baremaps.data.collection.DataCollectionException;
 import com.baremaps.data.collection.FixedSizeDataList;
 import com.baremaps.data.memory.Memory;
-import com.baremaps.data.memory.OffHeapMemory;
 import com.baremaps.data.type.LongDataType;
 import java.io.IOException;
 import org.junit.jupiter.api.Test;
@@ -32,7 +31,7 @@ class SizedDataListTest {
   @Test
   void segmentsTooSmall() {
     var dataType = new LongDataType();
-    var memory = new OffHeapMemory(4);
+    var memory = Memory.offHeap(4);
     assertThrows(DataCollectionException.class, () -> new FixedSizeDataList<>(dataType, memory));
   }
 
@@ -46,7 +45,7 @@ class SizedDataListTest {
     for (int i = 0; i < 1 << 10; i++) {
       assertEquals(i, list.get(i));
     }
-    memory.close();
     memory.clear();
+    memory.close();
   }
 }

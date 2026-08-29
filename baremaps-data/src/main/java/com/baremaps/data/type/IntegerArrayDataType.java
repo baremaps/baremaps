@@ -14,10 +14,12 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
+
+import java.lang.foreign.MemorySegment;
 
 /**
- * A {@link DataType} for reading and writing arrays of integer values in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing arrays of integer values in {@link MemorySegment}s.
  */
 public class IntegerArrayDataType implements DataType<int[]> {
 
@@ -29,30 +31,25 @@ public class IntegerArrayDataType implements DataType<int[]> {
 
   /** {@inheritDoc} */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
+  public int size(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_INT_UNALIGNED, position);
   }
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final int[] values) {
-    buffer.putInt(position, size(values));
-    var p = position + Integer.BYTES;
-    for (int value : values) {
-      buffer.putInt(p, value);
-      p += Integer.BYTES;
-    }
+  public void write(final MemorySegment segment, final long position, final int[] values) {
+    segment.set(JAVA_INT_UNALIGNED, position, size(values));
+    MemorySegment.copy(values, 0, segment, JAVA_INT_UNALIGNED, position + Integer.BYTES,
+        values.length);
   }
 
   /** {@inheritDoc} */
   @Override
-  public int[] read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
+  public int[] read(final MemorySegment segment, final long position) {
+    int size = segment.get(JAVA_INT_UNALIGNED, position);
     int length = (size - Integer.BYTES) / Integer.BYTES;
     int[] values = new int[length];
-    for (int index = 0; index < length; index++) {
-      values[index] = buffer.getInt(position + Integer.BYTES + index * Integer.BYTES);
-    }
+    MemorySegment.copy(segment, JAVA_INT_UNALIGNED, position + Integer.BYTES, values, 0, length);
     return values;
   }
 }

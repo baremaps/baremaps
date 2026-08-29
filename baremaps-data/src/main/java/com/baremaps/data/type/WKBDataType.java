@@ -14,9 +14,11 @@
 
 package com.baremaps.data.type;
 
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
 import static org.locationtech.jts.io.WKBConstants.wkbNDR;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import java.util.Objects;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -26,7 +28,7 @@ import org.locationtech.jts.io.WKBWriter;
 
 /**
  * A {@link DataType} for reading and writing {@link Geometry} objects in Well-Known Binary (WKB)
- * format in {@link ByteBuffer}s.
+ * format in {@link MemorySegment}s.
  */
 public class WKBDataType implements DataType<Geometry> {
 
@@ -38,24 +40,24 @@ public class WKBDataType implements DataType<Geometry> {
 
   /** {@inheritDoc} */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
+  public int size(final MemorySegment segment, final long position) {
+    return segment.get(JAVA_INT_UNALIGNED, position);
   }
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Geometry value) {
+  public void write(final MemorySegment segment, final long position, final Geometry value) {
     byte[] bytes = serialize(value);
-    buffer.putInt(position, Integer.BYTES + bytes.length);
-    buffer.put(position + Integer.BYTES, bytes);
+    segment.set(JAVA_INT_UNALIGNED, position, Integer.BYTES + bytes.length);
+    MemorySegment.copy(bytes, 0, segment, JAVA_BYTE, position + Integer.BYTES, bytes.length);
   }
 
   /** {@inheritDoc} */
   @Override
-  public Geometry read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
+  public Geometry read(final MemorySegment segment, final long position) {
+    int size = segment.get(JAVA_INT_UNALIGNED, position);
     byte[] bytes = new byte[size - Integer.BYTES];
-    buffer.get(position + Integer.BYTES, bytes);
+    MemorySegment.copy(segment, JAVA_BYTE, position + Integer.BYTES, bytes, 0, bytes.length);
     return deserialize(bytes);
   }
 

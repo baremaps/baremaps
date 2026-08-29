@@ -14,12 +14,12 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.MultiPoint;
 
 /**
- * A {@link DataType} for reading and writing {@link MultiPoint} objects in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing {@link MultiPoint} objects in {@link MemorySegment}s.
  */
 public class MultiPointDataType implements DataType<MultiPoint> {
 
@@ -55,24 +55,24 @@ public class MultiPointDataType implements DataType<MultiPoint> {
    * {@inheritDoc}
    */
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return coordinateArrayDataType.size(buffer, position);
+  public int size(final MemorySegment segment, final long position) {
+    return coordinateArrayDataType.size(segment, position);
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final MultiPoint value) {
-    coordinateArrayDataType.write(buffer, position, value.getCoordinates());
+  public void write(final MemorySegment segment, final long position, final MultiPoint value) {
+    coordinateArrayDataType.write(segment, position, value.getCoordinates());
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
-  public MultiPoint read(final ByteBuffer buffer, final int position) {
-    var coordinates = coordinateArrayDataType.read(buffer, position);
+  public MultiPoint read(final MemorySegment segment, final long position) {
+    var coordinates = coordinateArrayDataType.read(segment, position);
     return geometryFactory.createMultiPoint(coordinates);
   }
 }

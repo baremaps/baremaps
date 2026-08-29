@@ -14,10 +14,11 @@
 
 package com.baremaps.data.type;
 
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -33,21 +34,19 @@ class DataTypeInvariantTest {
 
     // Write at an odd offset, surrounded by a sentinel, to catch writes outside the declared size.
     int offset = 13;
-    var buffer = ByteBuffer.allocate(offset + size + 16);
-    for (int i = 0; i < buffer.capacity(); i++) {
-      buffer.put(i, (byte) 0x7f);
-    }
+    var buffer = MemorySegment.ofArray(new byte[offset + size + 16]);
+    buffer.fill((byte) 0x7f);
     dataType.write(buffer, offset, value);
     assertEquals(size, dataType.size(buffer, offset), "size(buffer) must match size(value)");
     for (int i = 0; i < offset; i++) {
-      assertEquals((byte) 0x7f, buffer.get(i), "written before the position");
+      assertEquals((byte) 0x7f, buffer.get(JAVA_BYTE, i), "written before the position");
     }
-    for (int i = offset + size; i < buffer.capacity(); i++) {
-      assertEquals((byte) 0x7f, buffer.get(i), "written past the declared size");
+    for (int i = offset + size; i < buffer.byteSize(); i++) {
+      assertEquals((byte) 0x7f, buffer.get(JAVA_BYTE, i), "written past the declared size");
     }
 
     // Zero-filled memory must never look like a value of the declared size.
-    var zeros = ByteBuffer.allocate(size + 16);
+    var zeros = MemorySegment.ofArray(new byte[size + 16]);
     if (!(dataType instanceof FixedSizeDataType)) {
       assertEquals(0, dataType.size(zeros, 0), "zero-filled memory must have size 0");
     }

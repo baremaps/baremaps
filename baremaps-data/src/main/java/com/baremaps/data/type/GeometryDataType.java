@@ -14,7 +14,9 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+
+import java.lang.foreign.MemorySegment;
 import java.util.Objects;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryCollection;
@@ -88,24 +90,24 @@ public class GeometryDataType implements DataType<Geometry> {
   }
 
   @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    int tag = buffer.get(position);
+  public int size(final MemorySegment segment, final long position) {
+    int tag = segment.get(JAVA_BYTE, position);
     if (tag == 0) {
       // Zero-filled memory holds no geometry; collections rely on a size of 0 to tell.
       return 0;
     }
-    return Byte.BYTES + typeOf(tag).size(buffer, position + Byte.BYTES);
+    return Byte.BYTES + typeOf(tag).size(segment, position + Byte.BYTES);
   }
 
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Geometry value) {
+  public void write(final MemorySegment segment, final long position, final Geometry value) {
     int tag = tagOf(value);
-    buffer.put(position, (byte) tag);
-    typeOf(tag).write(buffer, position + Byte.BYTES, value);
+    segment.set(JAVA_BYTE, position, (byte) tag);
+    typeOf(tag).write(segment, position + Byte.BYTES, value);
   }
 
   @Override
-  public Geometry read(final ByteBuffer buffer, final int position) {
-    return typeOf(buffer.get(position)).read(buffer, position + Byte.BYTES);
+  public Geometry read(final MemorySegment segment, final long position) {
+    return typeOf(segment.get(JAVA_BYTE, position)).read(segment, position + Byte.BYTES);
   }
 }

@@ -15,11 +15,11 @@
 package com.baremaps.data.type;
 
 import com.baremaps.data.type.PairDataType.Pair;
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import java.util.Objects;
 
 /**
- * A {@link DataType} for reading and writing pairs of values in {@link ByteBuffer}s.
+ * A {@link DataType} for reading and writing pairs of values in {@link MemorySegment}s.
  *
  * @param <L> the type of the left value in the pair
  * @param <R> the type of the right value in the pair
@@ -43,17 +43,17 @@ public class PairDataType<L, R> extends FixedSizeDataType<Pair<L, R>> {
 
   /** {@inheritDoc} */
   @Override
-  public void write(final ByteBuffer buffer, final int position, final Pair<L, R> value) {
-    left.write(buffer, position, value.left());
-    right.write(buffer, position + left.size(), value.right());
+  public void write(final MemorySegment segment, final long position, final Pair<L, R> value) {
+    left.write(segment, position, value.left());
+    right.write(segment, position + left.size(), value.right());
   }
 
   /** {@inheritDoc} */
   @Override
-  public Pair<L, R> read(final ByteBuffer buffer, final int position) {
+  public Pair<L, R> read(final MemorySegment segment, final long position) {
     return new Pair<>(
-        left.read(buffer, position),
-        right.read(buffer, position + left.size()));
+        left.read(segment, position),
+        right.read(segment, position + left.size()));
   }
 
   /**

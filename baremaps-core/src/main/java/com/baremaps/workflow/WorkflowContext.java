@@ -20,7 +20,7 @@ import com.baremaps.data.collection.DataConversions;
 import com.baremaps.data.collection.IndexedDataList;
 import com.baremaps.data.collection.MemoryAlignedDataList;
 import com.baremaps.data.collection.MonotonicDataMap;
-import com.baremaps.data.memory.MemoryMappedDirectory;
+import com.baremaps.data.memory.Memory;
 import com.baremaps.data.type.LonLatDataType;
 import com.baremaps.data.type.LongDataType;
 import com.baremaps.data.type.LongListDataType;
@@ -73,11 +73,11 @@ public class WorkflowContext {
     Path dir = cacheDir.resolve("coordinates");
     return DataConversions.asMap(new MonotonicDataMap<>(
         new MemoryAlignedDataList<>(new LongDataType(),
-            new MemoryMappedDirectory(dir.resolve("offsets"))),
+            Memory.mappedDirectory(dir.resolve("offsets"))),
         new MemoryAlignedDataList<>(new LongDataType(),
-            new MemoryMappedDirectory(dir.resolve("keys"))),
+            Memory.mappedDirectory(dir.resolve("keys"))),
         new MemoryAlignedDataList<>(new LonLatDataType(),
-            new MemoryMappedDirectory(dir.resolve("values")))));
+            Memory.mappedDirectory(dir.resolve("values")))));
   }
 
   /** Returns a map from way ids to their node ids, backed by the cache directory. */
@@ -85,14 +85,14 @@ public class WorkflowContext {
     Path dir = cacheDir.resolve("references");
     return DataConversions.asMap(new MonotonicDataMap<>(
         new MemoryAlignedDataList<>(new LongDataType(),
-            new MemoryMappedDirectory(dir.resolve("offsets"))),
+            Memory.mappedDirectory(dir.resolve("offsets"))),
         new MemoryAlignedDataList<>(new LongDataType(),
-            new MemoryMappedDirectory(dir.resolve("keys"))),
+            Memory.mappedDirectory(dir.resolve("keys"))),
         new IndexedDataList<>(
             new MemoryAlignedDataList<>(new LongDataType(),
-                new MemoryMappedDirectory(dir.resolve("index"))),
+                Memory.mappedDirectory(dir.resolve("index"))),
             new AppendOnlyLog<>(new LongListDataType(),
-                new MemoryMappedDirectory(dir.resolve("values"))))));
+                Memory.mappedDirectory(dir.resolve("values"))))));
   }
 
   public void cleanCache() throws IOException {
