@@ -59,16 +59,17 @@ public class SmallFileBenchmark {
   @Benchmark
   public void read() {
     var path = new org.apache.hadoop.fs.Path("baremaps-benchmarking/data/small/*.parquet");
-    GeoParquetReader reader = new GeoParquetReader(path);
-    reader.read().count();
+    try (var groups = new GeoParquetReader(path).read()) {
+      groups.count();
+    }
   }
 
   @SuppressWarnings({"squid:S1481", "squid:S2201"})
   @Benchmark
   public void readParallel() {
     var path = new org.apache.hadoop.fs.Path("baremaps-benchmarking/data/small/*.parquet");
-    GeoParquetReader reader =
-        new GeoParquetReader(path);
-    reader.readParallel().count();
+    try (var groups = new GeoParquetReader(path).readParallel()) {
+      groups.count();
+    }
   }
 }

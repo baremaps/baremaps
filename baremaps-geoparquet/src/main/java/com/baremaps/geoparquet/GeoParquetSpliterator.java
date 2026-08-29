@@ -14,266 +14,120 @@
 
 package com.baremaps.geoparquet;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import java.util.Spliterator;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.parquet.column.page.PageReadStore;
-import org.apache.parquet.filter2.compat.FilterCompat;
-import org.apache.parquet.filter2.compat.FilterCompat.Filter;
-import org.apache.parquet.filter2.predicate.FilterApi;
-import org.apache.parquet.filter2.predicate.FilterPredicate;
-import org.apache.parquet.hadoop.ParquetFileReader;
-import org.apache.parquet.hadoop.metadata.FileMetaData;
-import org.apache.parquet.hadoop.util.HadoopInputFile;
-import org.apache.parquet.io.ColumnIOFactory;
-import org.apache.parquet.io.InputFile;
-import org.apache.parquet.io.MessageColumnIO;
-import org.apache.parquet.io.RecordReader;
-import org.apache.parquet.schema.GroupType;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
-import org.apache.parquet.schema.Type;
 import org.locationtech.jts.geom.Envelope;
 
 /**
- * A {@link Spliterator} for {@link GeoParquetGroup}s stored in Parquet files. The envelope is used
- * to filter the records based on their bounding box.
+ * A {@link Spliterator} that walks a list of Parquet files, reading one at a time with a
+ * {@link GeoParquetFileReader}. Splitting hands the files that have not been opened yet to another
+ * spliterator, which is what makes a parallel read possible.
+ * <p>
+ * Readers are registered with the set the stream was created with, and removed from it once
+ * exhausted, so that closing a stream that was only partly consumed still releases the file it had
+ * open.
  */
 class GeoParquetSpliterator implements Spliterator<GeoParquetGroup> {
 
   private final List<FileStatus> files;
   private final Configuration configuration;
   private final Envelope envelope;
+  private final Set<GeoParquetFileReader> openReaders;
 
-  private ParquetFileReader fileReader;
-  private int fileStartIndex;
-  private int fileEndIndex;
-  private MessageType schema;
-  private GeoParquetMetadata metadata;
-  private MessageColumnIO columnIO;
-  private RecordReader<GeoParquetGroup> recordReader;
-  private int currentRowGroup;
-  private long rowsReadInGroup;
-  private long rowsInCurrentGroup;
+  private int index;
+  private int endIndex;
+  private GeoParquetFileReader reader;
 
   /**
-   * Constructs a new {@code GeoParquetSpliterator} with the specified files, envelope,
-   * configuration, file start index and file end index.
-   * 
+   * Constructs a new {@code GeoParquetSpliterator} over a range of files. No file is opened until
+   * the first record is requested, so that splitting stays cheap and free of side effects.
+   *
    * @param files the files
-   * @param envelope the envelope
+   * @param envelope the envelope to filter the records, which may be null
    * @param configuration the configuration
-   * @param fileStartIndex the file start index
-   * @param fileEndIndex the file end index
+   * @param index the index of the first file of the range
+   * @param endIndex the index after the last file of the range
+   * @param openReaders the readers the enclosing stream has open
    */
   GeoParquetSpliterator(
       List<FileStatus> files,
       Envelope envelope,
       Configuration configuration,
-      int fileStartIndex,
-      int fileEndIndex) {
+      int index,
+      int endIndex,
+      Set<GeoParquetFileReader> openReaders) {
     this.files = files;
-    this.configuration = configuration;
     this.envelope = envelope;
-    this.fileStartIndex = fileStartIndex;
-    this.fileEndIndex = fileEndIndex;
-    setupReaderForNextFile();
-  }
-
-  private void setupReaderForNextFile() {
-    closeCurrentReader();
-
-    while (fileStartIndex < fileEndIndex) {
-      FileStatus fileStatus = files.get(fileStartIndex++);
-      try {
-        InputFile inputFile = HadoopInputFile.fromPath(fileStatus.getPath(), configuration);
-        fileReader = ParquetFileReader.open(inputFile);
-
-        FileMetaData fileMetaData = fileReader.getFooter().getFileMetaData();
-
-        schema = fileMetaData.getSchema();
-        metadata = new ObjectMapper()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .readValue(fileMetaData.getKeyValueMetaData().get("geo"), GeoParquetMetadata.class);
-
-        // Check if file's bbox overlaps with the envelope
-        if (envelope != null && metadata != null && metadata.bbox() != null) {
-          List<Double> fileBBox = metadata.bbox();
-          if (fileBBox.size() == 4) {
-            Envelope fileEnvelope = new Envelope(
-                fileBBox.get(0), fileBBox.get(2), fileBBox.get(1), fileBBox.get(3));
-            if (!fileEnvelope.intersects(envelope)) {
-              // Skip this file and continue to the next one
-              fileReader.close();
-              fileReader = null;
-              continue;
-            }
-          }
-        }
-
-        columnIO = new ColumnIOFactory().getColumnIO(schema);
-        currentRowGroup = 0;
-        rowsReadInGroup = 0;
-        rowsInCurrentGroup = 0;
-        advanceToNextRowGroup();
-        return;
-      } catch (IOException e) {
-        throw new GeoParquetException("Failed to create reader for " + fileStatus, e);
-      }
-    }
-
-    // No more files to process
-    fileReader = null;
-  }
-
-  private void advanceToNextRowGroup() throws IOException {
-    if (currentRowGroup >= fileReader.getRowGroups().size()) {
-      setupReaderForNextFile();
-      return;
-    }
-
-    PageReadStore pages = fileReader.readNextFilteredRowGroup();
-    if (pages == null) {
-      setupReaderForNextFile();
-      return;
-    }
-
-    rowsInCurrentGroup = pages.getRowCount();
-    rowsReadInGroup = 0;
-
-    GeoParquetGroupRecordMaterializer materializer =
-        new GeoParquetGroupRecordMaterializer(schema, metadata);
-
-    FilterPredicate envelopeFilter = createEnvelopeFilter(schema, envelope);
-    Filter filter = envelopeFilter == null ? FilterCompat.NOOP : FilterCompat.get(envelopeFilter);
-
-    recordReader = columnIO.getRecordReader(pages, materializer, filter);
-    currentRowGroup++;
-  }
-
-  private FilterPredicate createEnvelopeFilter(MessageType schema, Envelope envelope) {
-    // Check whether the envelope is null or the world
-    if (envelope == null
-        || envelope.isNull()
-        || envelope.equals(new Envelope(-180, 180, -90, 90))) {
-      return null;
-    }
-
-    // Check whether the schema has a bbox field
-    Type type = schema.getType("bbox");
-    if (type == null) {
-      return null;
-    }
-
-    // Check whether the bbox has the xmin, ymin, xmax, ymax fields
-    GroupType bbox = type.asGroupType();
-    if (bbox.getFieldCount() != 4
-        || !bbox.containsField("xmin")
-        || !bbox.containsField("ymin")
-        || !bbox.containsField("xmax")
-        || !bbox.containsField("ymax")) {
-      return null;
-    }
-
-    // Check whether all fields are primitive types
-    List<Type> types = bbox.getFields();
-    if (types.stream().anyMatch(t -> !t.isPrimitive())) {
-      return null;
-    }
-
-    // Check whether all fields are of the same type
-    List<PrimitiveTypeName> typeNames = types.stream()
-        .map(t -> t.asPrimitiveType().getPrimitiveTypeName())
-        .toList();
-    PrimitiveTypeName typeName = typeNames.get(0);
-    if (!typeNames.stream().allMatch(typeName::equals)) {
-      return null;
-    }
-
-    // Check whether the type is a float or a double
-    if (typeName != PrimitiveTypeName.DOUBLE && typeName != PrimitiveTypeName.FLOAT) {
-      return null;
-    }
-
-    // Initialize the filter predicate creator for the given type
-    BiFunction<String, Number, FilterPredicate> filterPredicateCreator =
-        (column, value) -> switch (typeName) {
-        case DOUBLE -> FilterApi.gtEq(FilterApi.doubleColumn(column), value.doubleValue());
-        case FLOAT -> FilterApi.gtEq(FilterApi.floatColumn(column), value.floatValue());
-        default -> throw new IllegalStateException("Unexpected value: " + typeName);
-        };
-
-    // Create the filter predicate
-    return FilterApi.and(
-        FilterApi.and(
-            filterPredicateCreator.apply("bbox.xmin", envelope.getMinX()),
-            filterPredicateCreator.apply("bbox.xmax", envelope.getMaxX())),
-        FilterApi.and(
-            filterPredicateCreator.apply("bbox.ymin", envelope.getMinY()),
-            filterPredicateCreator.apply("bbox.ymax", envelope.getMaxY())));
+    this.configuration = configuration;
+    this.index = index;
+    this.endIndex = endIndex;
+    this.openReaders = openReaders;
   }
 
   @Override
   public boolean tryAdvance(Consumer<? super GeoParquetGroup> action) {
     try {
-      while (true) {
-        if (fileReader == null) {
-          return false;
-        }
-
-        if (rowsReadInGroup >= rowsInCurrentGroup) {
-          advanceToNextRowGroup();
-          continue;
-        }
-
-        GeoParquetGroup group = recordReader.read();
-        rowsReadInGroup++;
+      while (reader != null || openNextFile()) {
+        GeoParquetGroup group = reader.read();
         if (group != null) {
           action.accept(group);
+          return true;
         }
-
-        return true;
+        closeReader();
       }
+      return false;
     } catch (IOException e) {
-      closeCurrentReader();
-      throw new GeoParquetException("IOException caught while trying to read the next record.", e);
+      closeReader();
+      throw new GeoParquetException("Failed to read the next record.", e);
     }
   }
 
-  private void closeCurrentReader() {
-    if (fileReader != null) {
+  private boolean openNextFile() throws IOException {
+    while (index < endIndex) {
+      reader = GeoParquetFileReader.open(files.get(index++), configuration, envelope);
+      if (reader != null) {
+        openReaders.add(reader);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private void closeReader() {
+    if (reader != null) {
+      openReaders.remove(reader);
       try {
-        fileReader.close();
+        reader.close();
       } catch (IOException e) {
-        throw new GeoParquetException("Failed to close ParquetFileReader.", e);
+        throw new GeoParquetException("Failed to close a Parquet file reader.", e);
       } finally {
-        fileReader = null;
+        reader = null;
       }
     }
   }
 
   @Override
   public Spliterator<GeoParquetGroup> trySplit() {
-    int remainingFiles = fileEndIndex - fileStartIndex;
+    int remainingFiles = endIndex - index;
     if (remainingFiles <= 1) {
       return null;
     }
-    int mid = fileStartIndex + remainingFiles / 2;
+    int mid = index + remainingFiles / 2;
     GeoParquetSpliterator split =
-        new GeoParquetSpliterator(files, envelope, configuration, mid, fileEndIndex);
-    this.fileEndIndex = mid;
+        new GeoParquetSpliterator(files, envelope, configuration, mid, endIndex, openReaders);
+    this.endIndex = mid;
     return split;
   }
 
   @Override
   public long estimateSize() {
-    // Return Long.MAX_VALUE as the actual number of elements is unknown
+    // The records of a file are only counted as they are read, and the envelope rejects an unknown
+    // number of them, so the size is genuinely unknown.
     return Long.MAX_VALUE;
   }
 
@@ -281,5 +135,4 @@ class GeoParquetSpliterator implements Spliterator<GeoParquetGroup> {
   public int characteristics() {
     return NONNULL | IMMUTABLE;
   }
-
 }

@@ -15,15 +15,15 @@
 package com.baremaps.geoparquet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.baremaps.geoparquet.GeoParquetMetadata.Column;
 import com.baremaps.testing.TestFiles;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -39,113 +39,188 @@ import org.locationtech.jts.geom.Point;
 
 class GeoParquetWriterTest {
 
+  private static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory();
+
   @Test
   @Tag("integration")
-  void testWriteAndReadGeoParquet() throws IOException {
-    // Create the output file
-    Configuration conf = new Configuration();
-    Path outputPath = new Path("target/test-output/geoparquet-test.parquet");
+  void writeAndReadValues() throws IOException {
+    MessageType schema = Types.buildMessage()
+        .required(PrimitiveTypeName.BINARY).as(LogicalTypeAnnotation.stringType()).named("name")
+        .required(PrimitiveTypeName.BINARY).as(LogicalTypeAnnotation.stringType()).named("city")
+        .optional(PrimitiveTypeName.BINARY).named("geometry")
+        .named("GeoParquetSchema");
+    GeoParquetMetadata metadata = metadata(Map.of("geometry",
+        new Column("WKB", List.of("Point"), null, null, null, null)));
+    Point point = GEOMETRY_FACTORY.createPoint(new Coordinate(1.0, 2.0));
 
+    Path path = path("geoparquet-values.parquet");
     try {
-      // Define the Parquet schema
-      MessageType type = Types.buildMessage()
-          .required(PrimitiveTypeName.BINARY).as(LogicalTypeAnnotation.stringType()).named("name")
-          .required(PrimitiveTypeName.BINARY).as(LogicalTypeAnnotation.stringType()).named("city")
-          .optional(PrimitiveTypeName.BINARY).named("geometry")
-          .named("GeoParquetSchema");
-
-      // Create GeoParquet metadata
-      Map<String, Column> columns = new HashMap<>();
-      columns.put("geometry", new GeoParquetMetadata.Column(
-          "WKB",
-          List.of("Point"),
-          null,
-          null,
-          null,
-          null));
-
-      GeoParquetMetadata metadata = new GeoParquetMetadata(
-          "1.0",
-          "geometry",
-          columns,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null);
-
-      // Create a Point geometry
-      GeometryFactory geometryFactory = new GeometryFactory();
-      Point point = geometryFactory.createPoint(new Coordinate(1.0, 2.0));
-
-      // Create the GeoParquetWriter
-      try (ParquetWriter<GeoParquetGroup> writer = GeoParquetWriter.builder(outputPath)
-          .withType(type)
-          .withGeoParquetMetadata(metadata)
-          .build()) {
-
-        // Create a GeoParquetGroup and write it
-        GeoParquetSchema geoParquetSchema =
-            GeoParquetGroupFactory.createGeoParquetSchema(type, metadata);
-        GeoParquetGroup group =
-            new GeoParquetGroup(type.asGroupType(), metadata, geoParquetSchema);
+      write(path, schema, metadata, group -> {
         group.add("name", "Test Point");
         group.add("city", "Test City");
         group.add("geometry", point);
+      });
 
-        // Write the group
-        writer.write(group);
-      }
-
-      // Now read back the file using GeoParquetReader
-      GeoParquetReader reader = new GeoParquetReader(outputPath, null, conf);
-      GeoParquetGroup readGroup = reader.read().findFirst().orElse(null);
-
-      assertNotNull(readGroup, "Read group should not be null");
-
-      // Verify the data
-      assertEquals("Test Point", readGroup.getStringValue("name"));
-      assertEquals("Test City", readGroup.getStringValue("city"));
-
-      Point readPoint = (Point) readGroup.getGeometryValue("geometry");
-      assertEquals(point.getX(), readPoint.getX(), 0.0001);
-      assertEquals(point.getY(), readPoint.getY(), 0.0001);
+      GeoParquetGroup group = readFirst(path);
+      assertEquals("Test Point", group.getValue("name"));
+      assertEquals("Test City", group.getValue("city"));
+      assertTrue(point.equalsExact((Point) group.getValue("geometry")));
     } finally {
-      outputPath.getFileSystem(conf).delete(outputPath, false);
+      delete(path);
+    }
+  }
+
+  /**
+   * A repeated field must survive the round trip: the record consumer records the repetition levels
+   * from the way the values are announced, not from their number.
+   */
+  @Test
+  @Tag("integration")
+  void writeAndReadRepeatedValues() throws IOException {
+    MessageType schema = Types.buildMessage()
+        .required(PrimitiveTypeName.BINARY).as(LogicalTypeAnnotation.stringType()).named("name")
+        .repeated(PrimitiveTypeName.INT32).named("codes")
+        .named("GeoParquetSchema");
+
+    Path path = path("geoparquet-repeated.parquet");
+    try {
+      write(path, schema, metadata(Map.of()), group -> {
+        group.add("name", "first");
+        group.add("codes", 1);
+        group.add("codes", 2);
+        group.add("codes", 3);
+      });
+
+      GeoParquetGroup group = readFirst(path);
+      assertEquals("first", group.getValue("name"));
+      assertEquals(List.of(1, 2, 3), group.getValues("codes"));
+    } finally {
+      delete(path);
+    }
+  }
+
+  /** A repeated group is the shape real GeoParquet data uses for a list of structs. */
+  @Test
+  @Tag("integration")
+  void writeAndReadRepeatedGroups() throws IOException {
+    MessageType schema = Types.buildMessage()
+        .required(PrimitiveTypeName.BINARY).as(LogicalTypeAnnotation.stringType()).named("name")
+        .repeatedGroup()
+        .required(PrimitiveTypeName.INT32).named("code")
+        .named("codes")
+        .named("GeoParquetSchema");
+
+    Path path = path("geoparquet-repeated-groups.parquet");
+    try {
+      write(path, schema, metadata(Map.of()), group -> {
+        group.add("name", "first");
+        group.addGroup("codes").add("code", 1);
+        group.addGroup("codes").add("code", 2);
+        group.addGroup("codes").add("code", 3);
+      });
+
+      GeoParquetGroup group = readFirst(path);
+      assertEquals(
+          List.of(1, 2, 3),
+          group.getValues("codes").stream()
+              .map(code -> ((GeoParquetGroup) code).getValue("code"))
+              .toList());
+    } finally {
+      delete(path);
+    }
+  }
+
+  /** An absent optional field reads back as a null value and as an empty list of values. */
+  @Test
+  @Tag("integration")
+  void writeAndReadNestedAndAbsentValues() throws IOException {
+    MessageType schema = Types.buildMessage()
+        .required(PrimitiveTypeName.BINARY).as(LogicalTypeAnnotation.stringType()).named("name")
+        .optional(PrimitiveTypeName.BINARY).as(LogicalTypeAnnotation.stringType()).named("comment")
+        .optionalGroup()
+        .required(PrimitiveTypeName.DOUBLE).named("x")
+        .optional(PrimitiveTypeName.DOUBLE).named("y")
+        .named("location")
+        .named("GeoParquetSchema");
+
+    Path path = path("geoparquet-nested.parquet");
+    try {
+      write(path, schema, metadata(Map.of()), group -> {
+        group.add("name", "first");
+        group.addGroup("location").add("x", 1.5);
+      });
+
+      GeoParquetGroup group = readFirst(path);
+      assertNull(group.getValue("comment"));
+      assertEquals(List.of(), group.getValues("comment"));
+
+      GeoParquetGroup location = (GeoParquetGroup) group.getValue("location");
+      assertEquals(1.5, location.getValue("x"));
+      assertNull(location.getValue("y"));
+    } finally {
+      delete(path);
     }
   }
 
   @Test
   @Tag("integration")
   void copyGeoParquetData() throws IOException {
-    Path geoParquet = new Path(TestFiles.GEOPARQUET.toUri());
+    Path source = new Path(TestFiles.GEOPARQUET.toUri());
+    GeoParquetReader reader = new GeoParquetReader(source);
 
-    Configuration conf = new Configuration();
-    Path outputPath = new Path("target/test-output/geoparquet-copy.parquet");
-
+    Path path = path("geoparquet-copy.parquet");
     try {
-      // Write the GeoParquet file
-      GeoParquetReader reader = new GeoParquetReader(geoParquet, null, conf);
-      GeoParquetWriter.Builder builder = GeoParquetWriter.builder(outputPath);
-      ParquetWriter<GeoParquetGroup> writer = builder.withType(reader.getParquetSchema())
-          .withGeoParquetMetadata(reader.getGeoParquetMetadata()).build();
-      Iterator<GeoParquetGroup> iterator = reader.read().iterator();
-      while (iterator.hasNext()) {
-        writer.write(iterator.next());
+      try (ParquetWriter<GeoParquetGroup> writer = GeoParquetWriter.builder(path)
+          .withType(reader.getParquetSchema())
+          .withGeoParquetMetadata(reader.getGeoParquetMetadata())
+          .build();
+          Stream<GeoParquetGroup> groups = reader.read()) {
+        for (GeoParquetGroup group : (Iterable<GeoParquetGroup>) groups::iterator) {
+          writer.write(group);
+        }
       }
-      writer.close();
 
-      // Read the copied file
-      GeoParquetReader copiedReader = new GeoParquetReader(outputPath, null, conf);
-      assertEquals(5, copiedReader.read().count());
+      GeoParquetReader copy = new GeoParquetReader(path);
+      assertEquals(5, copy.size());
+      assertEquals(reader.getGeoParquetSchema(), copy.getGeoParquetSchema());
+      assertEquals("Fiji", readFirst(path).getValue("name"));
     } finally {
-      outputPath.getFileSystem(conf).delete(outputPath, false);
+      delete(path);
     }
-
-
-
   }
 
+  private static GeoParquetMetadata metadata(Map<String, Column> columns) {
+    return new GeoParquetMetadata(
+        "1.0.0", "geometry", columns, null, null, null, null, null, null, null);
+  }
+
+  private static Path path(String name) {
+    return new Path("target/test-output/" + name);
+  }
+
+  private static void write(
+      Path path,
+      MessageType schema,
+      GeoParquetMetadata metadata,
+      java.util.function.Consumer<GeoParquetGroup> fill) throws IOException {
+    try (ParquetWriter<GeoParquetGroup> writer = GeoParquetWriter.builder(path)
+        .withType(schema)
+        .withGeoParquetMetadata(metadata)
+        .build()) {
+      GeoParquetGroup group =
+          new GeoParquetGroup(schema, GeoParquetSchema.of(schema, metadata));
+      fill.accept(group);
+      writer.write(group);
+    }
+  }
+
+  private static GeoParquetGroup readFirst(Path path) {
+    try (Stream<GeoParquetGroup> groups = new GeoParquetReader(path).read()) {
+      return groups.findFirst().orElseThrow();
+    }
+  }
+
+  private static void delete(Path path) throws IOException {
+    path.getFileSystem(new Configuration()).delete(path, false);
+  }
 }

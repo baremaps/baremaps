@@ -14,13 +14,13 @@
 
 package com.baremaps.geoparquet;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.Closeable;
 import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.Spliterator;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.apache.hadoop.conf.Configuration;
@@ -35,22 +35,30 @@ import org.apache.parquet.schema.MessageType;
 import org.locationtech.jts.geom.Envelope;
 
 /**
- * This reader enables reading of GeoParquet files from a specified URI with the stream API. The
- * schema of the Parquet files and the corresponding geoparquet schema and metadata are
- * automatically inferred from the files. The reader can be used to read the records in a sequential
- * or parallel manner. It is also capable of filtering records based on an envelope.
+ * Reads the GeoParquet files matching a path with the stream API. The path may be a glob, in which
+ * case the files are read one after the other, or in parallel. The Parquet schema and the
+ * GeoParquet metadata are inferred from the files themselves, and records may be filtered by
+ * envelope.
+ * <p>
+ * The reader holds no file open; the streams it returns do. A stream that is not consumed to the
+ * end must therefore be closed, which is what a try-with-resources block around it does.
  */
-public class GeoParquetReader implements Closeable {
+public class GeoParquetReader {
 
-  protected final Configuration configuration;
-  protected final List<FileStatus> files;
-  private final AtomicLong groupCount = new AtomicLong(-1);
+  private final Configuration configuration;
+  private final List<FileStatus> files;
   private final Envelope envelope;
+
+  /** The footer of the first file, read at most once as it is what the schema accessors return. */
+  private FileInfo firstFile;
+
+  /** The number of records of all the files, summed at most once. */
+  private Long recordCount;
 
   /**
    * Constructs a new {@code GeoParquetReader}.
    *
-   * @param path the path to read from
+   * @param path the path to read from, which may be a glob
    */
   public GeoParquetReader(Path path) {
     this(path, null, new Configuration());
@@ -59,8 +67,8 @@ public class GeoParquetReader implements Closeable {
   /**
    * Constructs a new {@code GeoParquetReader}.
    *
-   * @param path the path to read from
-   * @param envelope the envelope to filter records
+   * @param path the path to read from, which may be a glob
+   * @param envelope the envelope to filter the records, which may be null
    */
   public GeoParquetReader(Path path, Envelope envelope) {
     this(path, envelope, new Configuration());
@@ -69,142 +77,152 @@ public class GeoParquetReader implements Closeable {
   /**
    * Constructs a new {@code GeoParquetReader}.
    *
-   * @param path the path to read from
-   * @param configuration the configuration
+   * @param path the path to read from, which may be a glob
+   * @param envelope the envelope to filter the records, which may be null
+   * @param configuration the configuration of the file system to read from
    */
   public GeoParquetReader(Path path, Envelope envelope, Configuration configuration) {
     this.configuration = configuration;
-    this.files = initializeFiles(path, configuration);
+    this.files = listFiles(path, configuration);
     this.envelope = envelope;
   }
 
+  /**
+   * Returns the Parquet schema of the first file.
+   *
+   * @return the Parquet schema
+   */
   public MessageType getParquetSchema() {
-    return files.stream()
-        .findFirst()
-        .map(this::getFileInfo)
-        .orElseThrow(
-            () -> new GeoParquetException("No files available to read schema.")).messageType;
+    return firstFile().schema();
   }
 
-
-
+  /**
+   * Returns the GeoParquet metadata of the first file.
+   *
+   * @return the metadata, or null when the file declares none
+   */
   public GeoParquetMetadata getGeoParquetMetadata() {
-    return files.stream()
-        .findFirst()
-        .map(this::getFileInfo)
-        .orElseThrow(this::noParquetFilesAvailable)
-        .metadata();
+    return firstFile().metadata();
   }
 
+  /**
+   * Returns the GeoParquet schema of the first file.
+   *
+   * @return the GeoParquet schema
+   */
   public GeoParquetSchema getGeoParquetSchema() {
-    return files.stream()
-        .findFirst()
-        .map(this::getFileInfo)
-        .orElseThrow(this::noParquetFilesAvailable)
-        .geoParquetSchema();
+    return firstFile().geoParquetSchema();
   }
 
-  public GeoParquetException noParquetFilesAvailable() {
-    return new GeoParquetException("No parquet files available.");
-  }
-
+  /**
+   * Tells whether all the files share one and the same Parquet schema. Reading a glob whose files
+   * disagree yields records that cannot be read the same way, which the schema accessors, which
+   * only look at the first file, would not reveal.
+   *
+   * @return true if all the files have the same schema
+   */
   public boolean validateSchemasAreIdentical() {
-    // Verify that all files have the same schema
-    Set<MessageType> schemas = files.parallelStream()
-        .map(this::getFileInfo)
-        .map(fileInfo -> fileInfo.messageType)
-        .collect(Collectors.toSet());
-    return schemas.size() == 1;
+    return files.parallelStream().map(this::readFileInfo).map(FileInfo::schema).distinct()
+        .count() == 1;
   }
 
-  public long size() {
-    if (groupCount.get() == -1) {
-      long totalCount = files.parallelStream()
-          .map(this::getFileInfo)
-          .mapToLong(fileInfo -> fileInfo.recordCount)
+  /**
+   * Returns the number of records of all the files, read from their footers rather than by reading
+   * the records themselves. The envelope is not taken into account.
+   *
+   * @return the number of records
+   */
+  public synchronized long size() {
+    if (recordCount == null) {
+      recordCount = files.parallelStream()
+          .map(this::readFileInfo)
+          .mapToLong(FileInfo::recordCount)
           .sum();
-      groupCount.set(totalCount);
     }
-    return groupCount.get();
+    return recordCount;
   }
 
-  private FileInfo getFileInfo(FileStatus fileStatus) {
+  /**
+   * Returns a stream over the records of all the files. The stream holds the file it is reading
+   * open, and must be closed unless it is consumed to the end.
+   *
+   * @return a stream of groups
+   */
+  public Stream<GeoParquetGroup> read() {
+    return stream(false);
+  }
+
+  /**
+   * Returns a parallel stream over the records of all the files, which are split file by file. The
+   * stream holds the files it is reading open, and must be closed unless it is consumed to the end.
+   *
+   * @return a parallel stream of groups
+   */
+  public Stream<GeoParquetGroup> readParallel() {
+    return stream(true);
+  }
+
+  private Stream<GeoParquetGroup> stream(boolean parallel) {
+    Set<GeoParquetFileReader> openReaders = ConcurrentHashMap.newKeySet();
+    Spliterator<GeoParquetGroup> spliterator =
+        new GeoParquetSpliterator(files, envelope, configuration, 0, files.size(), openReaders);
+    return StreamSupport.stream(spliterator, parallel).onClose(() -> closeAll(openReaders));
+  }
+
+  private static void closeAll(Set<GeoParquetFileReader> openReaders) {
+    for (GeoParquetFileReader reader : openReaders) {
+      try {
+        reader.close();
+      } catch (IOException e) {
+        throw new GeoParquetException("Failed to close a Parquet file reader.", e);
+      }
+    }
+    openReaders.clear();
+  }
+
+  private synchronized FileInfo firstFile() {
+    if (firstFile == null) {
+      firstFile = files.stream()
+          .findFirst()
+          .map(this::readFileInfo)
+          .orElseThrow(() -> new GeoParquetException("No Parquet file found at the given path."));
+    }
+    return firstFile;
+  }
+
+  private FileInfo readFileInfo(FileStatus file) {
     try {
       ParquetMetadata parquetMetadata =
-          ParquetFileReader.readFooter(configuration, fileStatus.getPath());
-
+          ParquetFileReader.readFooter(configuration, file.getPath());
+      FileMetaData fileMetaData = parquetMetadata.getFileMetaData();
+      MessageType schema = fileMetaData.getSchema();
+      GeoParquetMetadata metadata = GeoParquetMetadata.read(fileMetaData.getKeyValueMetaData());
       long recordCount = parquetMetadata.getBlocks().stream()
           .mapToLong(BlockMetaData::getRowCount)
           .sum();
-
-      FileMetaData fileMetaData = parquetMetadata.getFileMetaData();
-      Map<String, String> keyValueMetadata = fileMetaData.getKeyValueMetaData();
-      MessageType messageType = fileMetaData.getSchema();
-
-      GeoParquetMetadata geoParquetMetadata = null;
-      GeoParquetSchema geoParquetSchema = null;
-      if (keyValueMetadata.containsKey("geo")) {
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        geoParquetMetadata =
-            objectMapper.readValue(keyValueMetadata.get("geo"), GeoParquetMetadata.class);
-        geoParquetSchema =
-            GeoParquetGroupFactory.createGeoParquetSchema(messageType, geoParquetMetadata);
-      }
-
-      return new FileInfo(
-          fileStatus,
-          recordCount,
-          keyValueMetadata,
-          messageType,
-          geoParquetMetadata,
-          geoParquetSchema);
-
+      return new FileInfo(recordCount, schema, metadata, GeoParquetSchema.of(schema, metadata));
     } catch (IOException e) {
-      throw new GeoParquetException("Failed to build FileInfo for file: " + fileStatus, e);
+      throw new GeoParquetException("Failed to read the footer of " + file.getPath(), e);
     }
   }
 
-  private static List<FileStatus> initializeFiles(Path path, Configuration configuration) {
+  private static List<FileStatus> listFiles(Path path, Configuration configuration) {
     try {
       FileSystem fileSystem = FileSystem.get(path.toUri(), configuration);
-      FileStatus[] fileStatuses = fileSystem.globStatus(path);
-      if (fileStatuses == null) {
-        throw new GeoParquetException("No files found at the specified URI.");
+      FileStatus[] files = fileSystem.globStatus(path);
+      if (files == null) {
+        throw new GeoParquetException("No file found at " + path);
       }
-      return Collections.unmodifiableList(Arrays.asList(fileStatuses));
+      return Collections.unmodifiableList(Arrays.asList(files));
     } catch (IOException e) {
-      throw new GeoParquetException("IOException while attempting to list files.", e);
+      throw new GeoParquetException("Failed to list the files at " + path, e);
     }
-  }
-
-  private Stream<GeoParquetGroup> streamGeoParquetGroups(boolean inParallel) {
-    Spliterator<GeoParquetGroup> spliterator =
-        new GeoParquetSpliterator(files, envelope, configuration, 0, files.size());
-    return StreamSupport.stream(spliterator, inParallel);
-  }
-
-  public Stream<GeoParquetGroup> read() {
-    return streamGeoParquetGroups(false);
-  }
-
-  public Stream<GeoParquetGroup> readParallel() {
-    return streamGeoParquetGroups(true);
-  }
-
-  @Override
-  public void close() throws IOException {
-    // TODO: Implement close
   }
 
   private record FileInfo(
-      FileStatus file,
       long recordCount,
-      Map<String, String> keyValueMetadata,
-      MessageType messageType,
+      MessageType schema,
       GeoParquetMetadata metadata,
       GeoParquetSchema geoParquetSchema) {
-
   }
-
 }

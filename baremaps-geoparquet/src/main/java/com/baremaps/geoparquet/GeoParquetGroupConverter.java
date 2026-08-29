@@ -14,44 +14,41 @@
 
 package com.baremaps.geoparquet;
 
+import java.util.function.Supplier;
 import org.apache.parquet.io.api.Converter;
 import org.apache.parquet.io.api.GroupConverter;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.Type;
 
 /**
- * A {@link GroupConverter} for {@link GeoParquetGroup}s.
+ * A {@link GroupConverter} that assembles a {@link GeoParquetGroup}.
+ * <p>
+ * Where a group comes from differs between the root, which starts a fresh record, and a nested
+ * group, which is appended to its parent. The difference is expressed as the supplier the converter
+ * is built with, so that the conversion itself has no root to special case.
  */
 class GeoParquetGroupConverter extends GroupConverter {
 
-  private final GeoParquetGroupConverter parent;
-  private final int index;
-  protected GeoParquetGroup current;
+  private final Supplier<GeoParquetGroup> groupSupplier;
   private final Converter[] converters;
 
+  private GeoParquetGroup current;
+
   /**
-   * Constructs a new {@code GeoParquetGroupConverter} with the specified parent, index and schema.
+   * Constructs a new {@code GeoParquetGroupConverter}.
    *
-   * @param parent the parent
-   * @param index the index
-   * @param schema the schema
+   * @param groupSupplier supplies the group the fields are written to, once per occurrence
+   * @param schema the Parquet type of the group
    */
-  GeoParquetGroupConverter(
-      GeoParquetGroupConverter parent,
-      int index,
-      GroupType schema) {
-    this.parent = parent;
-    this.index = index;
-
-    converters = new Converter[schema.getFieldCount()];
-
+  GeoParquetGroupConverter(Supplier<GeoParquetGroup> groupSupplier, GroupType schema) {
+    this.groupSupplier = groupSupplier;
+    this.converters = new Converter[schema.getFieldCount()];
     for (int i = 0; i < converters.length; i++) {
-      final Type type = schema.getType(i);
-      if (type.isPrimitive()) {
-        converters[i] = new GeoParquetPrimitiveConverter(this, i);
-      } else {
-        converters[i] = new GeoParquetGroupConverter(this, i, type.asGroupType());
-      }
+      Type type = schema.getType(i);
+      int fieldIndex = i;
+      converters[i] = type.isPrimitive()
+          ? new GeoParquetPrimitiveConverter(this, fieldIndex)
+          : new GeoParquetGroupConverter(() -> current.addGroup(fieldIndex), type.asGroupType());
     }
   }
 
@@ -60,7 +57,7 @@ class GeoParquetGroupConverter extends GroupConverter {
    */
   @Override
   public void start() {
-    current = parent.getCurrentRecord().addGroup(index);
+    current = groupSupplier.get();
   }
 
   /**
@@ -76,15 +73,16 @@ class GeoParquetGroupConverter extends GroupConverter {
    */
   @Override
   public void end() {
-    current = null;
+    // The group is kept until the next occurrence starts, so that the record materializer can read
+    // the record the root converter just assembled.
   }
 
   /**
-   * Returns the current record.
+   * Returns the group being assembled.
    *
-   * @return the current record
+   * @return the current group
    */
-  public GeoParquetGroup getCurrentRecord() {
+  GeoParquetGroup getCurrentRecord() {
     return current;
   }
 }

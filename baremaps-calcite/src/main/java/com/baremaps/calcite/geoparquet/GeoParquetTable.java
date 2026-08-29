@@ -18,8 +18,8 @@ import com.baremaps.geoparquet.GeoParquetGroup;
 import com.baremaps.geoparquet.GeoParquetReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.Iterator;
+import java.util.stream.Stream;
 import org.apache.calcite.DataContext;
 import org.apache.calcite.linq4j.AbstractEnumerable;
 import org.apache.calcite.linq4j.Enumerable;
@@ -38,10 +38,8 @@ public class GeoParquetTable extends AbstractTable implements ScannableTable {
 
   public GeoParquetTable(File file, RelDataTypeFactory typeFactory) throws IOException {
     this.path = new Path(file.toURI());
-    try (GeoParquetReader reader = new GeoParquetReader(path)) {
-      this.rowType = GeoParquetTypeConversion.toRelDataType(typeFactory,
-          reader.getGeoParquetSchema());
-    }
+    this.rowType = GeoParquetTypeConversion.toRelDataType(typeFactory,
+        new GeoParquetReader(path).getGeoParquetSchema());
   }
 
   @Override
@@ -62,7 +60,7 @@ public class GeoParquetTable extends AbstractTable implements ScannableTable {
   private static class GeoParquetEnumerator implements Enumerator<Object[]> {
 
     private final Path path;
-    private GeoParquetReader reader;
+    private Stream<GeoParquetGroup> stream;
     private Iterator<GeoParquetGroup> groups;
     private GeoParquetGroup current;
 
@@ -72,8 +70,9 @@ public class GeoParquetTable extends AbstractTable implements ScannableTable {
     }
 
     private void open() {
-      reader = new GeoParquetReader(path);
-      groups = reader.read().iterator();
+      // The stream keeps the Parquet file open, and is what close() releases.
+      stream = new GeoParquetReader(path).read();
+      groups = stream.iterator();
     }
 
     @Override
@@ -99,11 +98,7 @@ public class GeoParquetTable extends AbstractTable implements ScannableTable {
 
     @Override
     public void close() {
-      try {
-        reader.close();
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
+      stream.close();
     }
   }
 }

@@ -30,9 +30,11 @@ class OvertureMapsTest {
     Path geoParquet =
         new Path("s3a://overturemaps-us-west-2/release/2024-09-18.0/theme=addresses/**/*.parquet");
     Envelope switzerland = new Envelope(6.02260949059, 10.4427014502, 45.7769477403, 47.8308275417);
-    GeoParquetReader geoParquetReader =
-        new GeoParquetReader(geoParquet, switzerland, OvertureMaps.configuration());
-    assertEquals(10397434, geoParquetReader.readParallel().count());
+    try (var groups =
+        new GeoParquetReader(geoParquet, switzerland, OvertureMaps.configuration())
+            .readParallel()) {
+      assertEquals(10397434, groups.count());
+    }
   }
 
   @Disabled("Requires access to the Internet")

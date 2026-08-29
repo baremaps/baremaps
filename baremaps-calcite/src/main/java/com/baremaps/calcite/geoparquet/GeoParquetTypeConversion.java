@@ -28,7 +28,6 @@ import java.util.Map;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
-import org.apache.parquet.io.api.Binary;
 import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.GeometryFactory;
 
@@ -50,10 +49,11 @@ final class GeoParquetTypeConversion {
 
   private static RelDataType toRelDataType(RelDataTypeFactory typeFactory, Field field) {
     return switch (field.type()) {
-      case BINARY -> typeFactory.createSqlType(SqlTypeName.VARBINARY);
+      // INT96 is a deprecated timestamp encoding that GeoParquet hands over as raw bytes.
+      case BINARY, INT96 -> typeFactory.createSqlType(SqlTypeName.VARBINARY);
       case BOOLEAN -> typeFactory.createSqlType(SqlTypeName.BOOLEAN);
       case INTEGER -> typeFactory.createSqlType(SqlTypeName.INTEGER);
-      case LONG, INT96 -> typeFactory.createSqlType(SqlTypeName.BIGINT);
+      case LONG -> typeFactory.createSqlType(SqlTypeName.BIGINT);
       case FLOAT -> typeFactory.createSqlType(SqlTypeName.FLOAT);
       case DOUBLE -> typeFactory.createSqlType(SqlTypeName.DOUBLE);
       case STRING -> typeFactory.createSqlType(SqlTypeName.VARCHAR);
@@ -88,37 +88,23 @@ final class GeoParquetTypeConversion {
 
   private static Object value(Field field, GeoParquetGroup group, int index) {
     if (field.cardinality() == Cardinality.REPEATED) {
-      return switch (field.type()) {
-        case BINARY -> group.getBinaryValues(index).stream().map(Binary::getBytes).toList();
-        case BOOLEAN -> group.getBooleanValues(index);
-        case INTEGER -> group.getIntegerValues(index);
-        case LONG, INT96 -> group.getLongValues(index);
-        case FLOAT -> group.getFloatValues(index);
-        case DOUBLE -> group.getDoubleValues(index);
-        case STRING -> group.getStringValues(index);
-        case GEOMETRY -> group.getGeometryValues(index);
-        case ENVELOPE -> group.getEnvelopeValues(index).stream()
-            .map(GeoParquetTypeConversion::toGeometry).toList();
-        case GROUP -> group.getGroupValues(index).stream()
-            .map(GeoParquetTypeConversion::toMap).toList();
-      };
+      return group.getValues(index).stream().map(GeoParquetTypeConversion::toCalciteValue).toList();
     }
-    return switch (field.type()) {
-      case BINARY -> group.getBinaryValue(index).getBytes();
-      case BOOLEAN -> group.getBooleanValue(index);
-      case INTEGER -> group.getIntegerValue(index);
-      case LONG, INT96 -> group.getLongValue(index);
-      case FLOAT -> group.getFloatValue(index);
-      case DOUBLE -> group.getDoubleValue(index);
-      case STRING -> group.getStringValue(index);
-      case GEOMETRY -> group.getGeometryValue(index);
-      case ENVELOPE -> toGeometry(group.getEnvelopeValue(index));
-      case GROUP -> toMap(group.getGroupValue(index));
-    };
+    return toCalciteValue(group.getValue(index));
   }
 
-  private static Object toGeometry(Envelope envelope) {
-    return envelope == null ? null : GEOMETRY_FACTORY.toGeometry(envelope);
+  /**
+   * The group already decodes values according to its schema; only the two that have no Calcite
+   * counterpart, envelopes and nested groups, are converted further.
+   */
+  private static Object toCalciteValue(Object value) {
+    if (value instanceof Envelope envelope) {
+      return GEOMETRY_FACTORY.toGeometry(envelope);
+    }
+    if (value instanceof GeoParquetGroup group) {
+      return toMap(group);
+    }
+    return value;
   }
 
   private static Map<String, Object> toMap(GeoParquetGroup group) {
