@@ -14,47 +14,10 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+/** A {@link ListDataType} of {@link Short} values. */
+public class ShortListDataType extends ListDataType<Short> {
 
-/**
- * A {@link DataType} for reading and writing lists of short values in {@link ByteBuffer}s.
- */
-public class ShortListDataType implements DataType<List<Short>> {
-
-  /** {@inheritDoc} */
-  @Override
-  public int size(final List<Short> values) {
-    return Integer.BYTES + values.size() * Short.BYTES;
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public void write(final ByteBuffer buffer, final int position, final List<Short> values) {
-    buffer.putInt(position, size(values));
-    int p = position + Integer.BYTES;
-    for (short value : values) {
-      buffer.putShort(p, value);
-      p += Short.BYTES;
-    }
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public List<Short> read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
-    int length = (size - Integer.BYTES) / Short.BYTES;
-    var values = new ArrayList<Short>(length);
-    for (int index = 0; index < length; index++) {
-      values.add(buffer.getShort(position + Integer.BYTES + index * Short.BYTES));
-    }
-    return values;
+  public ShortListDataType() {
+    super(new ShortDataType());
   }
 }

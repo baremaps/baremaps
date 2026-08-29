@@ -14,8 +14,6 @@
 
 package com.baremaps.data.type;
 
-
-
 import java.nio.ByteBuffer;
 import org.locationtech.jts.geom.Coordinate;
 
@@ -25,6 +23,8 @@ import org.locationtech.jts.geom.Coordinate;
  */
 public class LonLatDataType extends MemoryAlignedDataType<Coordinate> {
 
+  // Each axis gets a 32-bit lane; scaling by 2^31 rather than 2^32 keeps the inclusive upper
+  // bounds (180 and 90) from overflowing the lane, at the price of one bit of precision.
   private static final double BITS = Math.pow(2, 31);
   private static final long SHIFT = 32;
   private static final long MASK = (1L << 32) - 1L;

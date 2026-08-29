@@ -14,11 +14,21 @@
 
 package com.baremaps.data.collection;
 
-import java.util.*;
+import java.util.AbstractCollection;
+import java.util.AbstractList;
+import java.util.AbstractMap;
+import java.util.AbstractSet;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /**
- * Utility class for converting between standard Java collections and data collections.
+ * Views between the data collections and the {@code java.util} collections. The views are live and
+ * unwrapping a view returns the original; sizes above {@link Integer#MAX_VALUE} are truncated by
+ * the {@code java.util} views.
  */
 public class DataConversions {
 
@@ -26,111 +36,79 @@ public class DataConversions {
     // Utility class
   }
 
-  /**
-   * Converts a DataCollection to a Collection.
-   * 
-   * @param dataCollection the data collection to convert
-   * @return a Collection view of the data collection
-   * @param <E> the type of elements
-   */
   public static <E> Collection<E> asCollection(DataCollection<E> dataCollection) {
     if (dataCollection instanceof DataCollectionAdapter<E>adapter) {
       return adapter.collection;
-    } else {
-      return new CollectionAdapter<>(dataCollection);
     }
+    return new CollectionAdapter<>(dataCollection);
   }
 
-  /**
-   * Converts a Collection to a DataCollection.
-   *
-   * @param collection the collection to convert
-   * @return a DataCollection view of the collection
-   * @param <E> the type of elements
-   */
   public static <E> DataCollection<E> asDataCollection(Collection<E> collection) {
     if (collection instanceof CollectionAdapter<E>adapter) {
       return adapter.collection;
-    } else {
-      return new DataCollectionAdapter<>(collection);
     }
+    return new DataCollectionAdapter<>(collection);
   }
 
-  /**
-   * Converts a DataList to a List.
-   *
-   * @param dataList the data list to convert
-   * @return a List view of the data list
-   * @param <E> the type of elements
-   */
   public static <E> List<E> asList(DataList<E> dataList) {
     if (dataList instanceof DataListAdapter<E>adapter) {
       return adapter.list;
-    } else {
-      return new ListAdapter<>(dataList);
     }
+    return new ListAdapter<>(dataList);
   }
 
-  /**
-   * Converts a List to a DataList.
-   *
-   * @param list the list to convert
-   * @return a DataList view of the list
-   * @param <E> the type of elements
-   */
   public static <E> DataList<E> asDataList(List<E> list) {
     if (list instanceof ListAdapter<E>adapter) {
       return adapter.list;
-    } else {
-      return new DataListAdapter<>(list);
     }
+    return new DataListAdapter<>(list);
   }
 
-  /**
-   * Converts a DataMap to a Map.
-   *
-   * @param dataMap the data map to convert
-   * @return a Map view of the data map
-   * @param <K> the type of keys
-   * @param <V> the type of values
-   */
   public static <K, V> Map<K, V> asMap(DataMap<K, V> dataMap) {
     if (dataMap instanceof DataMapAdapter<K, V>adapter) {
       return adapter.map;
-    } else {
-      return new MapAdapter<>(dataMap);
     }
+    return new MapAdapter<>(dataMap);
   }
 
-  /**
-   * Converts a Map to a DataMap.
-   *
-   * @param map the map to convert
-   * @return a DataMap view of the map
-   * @param <K> the type of keys
-   * @param <V> the type of values
-   */
   public static <K, V> DataMap<K, V> asDataMap(Map<K, V> map) {
     if (map instanceof MapAdapter<K, V>adapter) {
       return adapter.map;
-    } else {
-      return new DataMapAdapter<>(map);
+    }
+    return new DataMapAdapter<>(map);
+  }
+
+  private static int truncate(long size) {
+    return (int) Math.min(size, Integer.MAX_VALUE);
+  }
+
+  private static void closeIfCloseable(Object object) throws Exception {
+    if (object instanceof AutoCloseable closeable) {
+      closeable.close();
     }
   }
 
   private static class CollectionAdapter<E> extends AbstractCollection<E> {
 
     private final DataCollection<E> collection;
-    private final int size;
 
-    public CollectionAdapter(DataCollection<E> dataCollection) {
-      this.collection = dataCollection;
-      this.size = (int) dataCollection.size();
+    CollectionAdapter(DataCollection<E> collection) {
+      this.collection = collection;
     }
 
     @Override
     public int size() {
-      return size;
+      return truncate(collection.size());
+    }
+
+    @Override
+    public boolean add(E value) {
+      return collection.add(value);
+    }
+
+    @Override
+    public void clear() {
+      collection.clear();
     }
 
     @Override
@@ -143,7 +121,7 @@ public class DataConversions {
 
     private final Collection<E> collection;
 
-    public DataCollectionAdapter(Collection<E> collection) {
+    DataCollectionAdapter(Collection<E> collection) {
       this.collection = collection;
     }
 
@@ -169,20 +147,16 @@ public class DataConversions {
 
     @Override
     public void close() throws Exception {
-      if (collection instanceof AutoCloseable) {
-        ((AutoCloseable) collection).close();
-      }
+      closeIfCloseable(collection);
     }
   }
 
   private static class ListAdapter<E> extends AbstractList<E> {
 
     private final DataList<E> list;
-    private final int size;
 
-    public ListAdapter(DataList<E> dataList) {
-      this.list = dataList;
-      this.size = (int) dataList.size();
+    ListAdapter(DataList<E> list) {
+      this.list = list;
     }
 
     @Override
@@ -204,17 +178,12 @@ public class DataConversions {
 
     @Override
     public int size() {
-      return size;
+      return truncate(list.size());
     }
 
     @Override
-    public boolean equals(Object object) {
-      return list.equals(object);
-    }
-
-    @Override
-    public int hashCode() {
-      return list.hashCode();
+    public void clear() {
+      list.clear();
     }
   }
 
@@ -222,7 +191,7 @@ public class DataConversions {
 
     private final List<E> list;
 
-    public DataListAdapter(List<E> list) {
+    DataListAdapter(List<E> list) {
       this.list = list;
     }
 
@@ -244,40 +213,26 @@ public class DataConversions {
 
     @Override
     public void set(long index, E value) {
-      list.set((int) index, value);
+      list.set(Math.toIntExact(index), value);
     }
 
     @Override
     public E get(long index) {
-      return list.get((int) index);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return list.equals(object);
-    }
-
-    @Override
-    public int hashCode() {
-      return list.hashCode();
+      return list.get(Math.toIntExact(index));
     }
 
     @Override
     public void close() throws Exception {
-      if (list instanceof AutoCloseable) {
-        ((AutoCloseable) list).close();
-      }
+      closeIfCloseable(list);
     }
   }
 
   private static class MapAdapter<K, V> extends AbstractMap<K, V> {
 
     private final DataMap<K, V> map;
-    private final int size;
 
-    public MapAdapter(DataMap<K, V> dataMap) {
-      this.map = dataMap;
-      this.size = (int) dataMap.size();
+    MapAdapter(DataMap<K, V> map) {
+      this.map = map;
     }
 
     @Override
@@ -291,6 +246,16 @@ public class DataConversions {
     }
 
     @Override
+    public boolean containsKey(Object key) {
+      return map.containsKey(key);
+    }
+
+    @Override
+    public void clear() {
+      map.clear();
+    }
+
+    @Override
     public Set<Entry<K, V>> entrySet() {
       return new AbstractSet<>() {
         @Override
@@ -300,19 +265,9 @@ public class DataConversions {
 
         @Override
         public int size() {
-          return size;
+          return truncate(map.size());
         }
       };
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return map.equals(object);
-    }
-
-    @Override
-    public int hashCode() {
-      return map.hashCode();
     }
   }
 
@@ -320,7 +275,7 @@ public class DataConversions {
 
     private final Map<K, V> map;
 
-    public DataMapAdapter(Map<K, V> map) {
+    DataMapAdapter(Map<K, V> map) {
       this.map = map;
     }
 
@@ -345,7 +300,7 @@ public class DataConversions {
     }
 
     @Override
-    public boolean containsValue(V value) {
+    public boolean containsValue(Object value) {
       return map.containsValue(value);
     }
 
@@ -370,21 +325,8 @@ public class DataConversions {
     }
 
     @Override
-    public boolean equals(Object object) {
-      return map.equals(object);
-    }
-
-    @Override
-    public int hashCode() {
-      return map.hashCode();
-    }
-
-    @Override
     public void close() throws Exception {
-      if (map instanceof AutoCloseable) {
-        ((AutoCloseable) map).close();
-      }
+      closeIfCloseable(map);
     }
   }
-
 }

@@ -15,8 +15,10 @@
 package com.baremaps.data.collection;
 
 import com.baremaps.data.memory.Memory;
+import com.baremaps.data.memory.OffHeapMemory;
 import com.baremaps.data.type.FixedSizeDataType;
-import java.nio.ByteBuffer;
+import com.baremaps.data.type.LongDataType;
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -24,439 +26,162 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 
 /**
- * A map that uses direct hashing with open addressing and linear probing. Provides O(1) access time
- * for both get and put operations with a fixed capacity.
- * 
- * @param <V> the type of values in the map
+ * An open-addressing hash map of fixed capacity from {@code long} keys to fixed-size values, for
+ * keys that are neither dense nor sorted. Keys and values live in two parallel tables; collisions
+ * are resolved by linear probing, which keeps probes within a few cache lines.
+ *
+ * <p>
+ * Two key values are reserved as markers for empty slots and would be rejected by
+ * {@link #put(Long, Object)}. The map does not support removal, so it has no tombstones.
  */
 public class DirectHashDataMap<V> implements DataMap<Long, V> {
 
   private static final long EMPTY_KEY = Long.MIN_VALUE;
-  private static final long TOMBSTONE = Long.MIN_VALUE + 1;
 
-  private final FixedSizeDataType<V> dataType;
-  private final FixedSizeDataType<Long> keyType;
+  private static final LongDataType KEY_TYPE = new LongDataType();
+
+  private final FixedSizeDataType<V> valueType;
+
   private final Memory<?> keyMemory;
+
   private final Memory<?> valueMemory;
 
   private final long capacity;
-  private final int valueSize;
-  private final int keySize;
 
   private long size;
 
-  /**
-   * Creates a new builder for a DirectHashDataMap.
-   *
-   * @param <V> the type of values
-   * @return a new builder
-   */
-  public static <V> Builder<V> builder() {
-    return new Builder<>();
+  /** Creates a map of the given capacity in off-heap memory. */
+  public DirectHashDataMap(FixedSizeDataType<V> valueType, long capacity) {
+    this(valueType, capacity, new OffHeapMemory(), new OffHeapMemory());
   }
 
-  /**
-   * Builder for DirectHashDataMap.
-   *
-   * @param <V> the type of values
-   */
-  public static class Builder<V> {
-    private FixedSizeDataType<Long> keyType;
-    private FixedSizeDataType<V> dataType;
-    private Memory<?> keyMemory;
-    private Memory<?> valueMemory;
-    private long capacity;
-
-    /**
-     * Sets the key type for the map.
-     *
-     * @param keyType the data type for keys
-     * @return this builder
-     */
-    public Builder<V> keyType(FixedSizeDataType<Long> keyType) {
-      this.keyType = keyType;
-      return this;
+  public DirectHashDataMap(FixedSizeDataType<V> valueType, long capacity, Memory<?> keyMemory,
+      Memory<?> valueMemory) {
+    if (capacity <= 0) {
+      throw new IllegalArgumentException("Capacity must be greater than zero");
     }
-
-    /**
-     * Sets the data type for the map.
-     *
-     * @param dataType the data type for values
-     * @return this builder
-     */
-    public Builder<V> dataType(FixedSizeDataType<V> dataType) {
-      this.dataType = dataType;
-      return this;
+    if (keyMemory.segmentSize() % KEY_TYPE.size() != 0
+        || valueMemory.segmentSize() % valueType.size() != 0) {
+      throw new DataCollectionException("The segment sizes must be multiples of the value sizes");
     }
-
-    /**
-     * Sets the key memory for the map.
-     *
-     * @param keyMemory the memory for keys
-     * @return this builder
-     */
-    public Builder<V> keyMemory(Memory<?> keyMemory) {
-      this.keyMemory = keyMemory;
-      return this;
-    }
-
-    /**
-     * Sets the value memory for the map.
-     *
-     * @param valueMemory the memory for values
-     * @return this builder
-     */
-    public Builder<V> valueMemory(Memory<?> valueMemory) {
-      this.valueMemory = valueMemory;
-      return this;
-    }
-
-    /**
-     * Sets the capacity for the map.
-     *
-     * @param capacity the fixed capacity of the map
-     * @return this builder
-     */
-    public Builder<V> capacity(long capacity) {
-      this.capacity = capacity;
-      return this;
-    }
-
-    /**
-     * Builds a new DirectHashDataMap.
-     *
-     * @return a new DirectHashDataMap
-     * @throws IllegalStateException if any required parameter is missing
-     */
-    public DirectHashDataMap<V> build() {
-      if (keyType == null) {
-        throw new IllegalStateException("Key type must be specified");
-      }
-      if (dataType == null) {
-        throw new IllegalStateException("Data type must be specified");
-      }
-      if (keyMemory == null) {
-        throw new IllegalStateException("Key memory must be specified");
-      }
-      if (valueMemory == null) {
-        throw new IllegalStateException("Value memory must be specified");
-      }
-      if (capacity <= 0) {
-        throw new IllegalStateException("Capacity must be greater than zero");
-      }
-
-      return new DirectHashDataMap<>(keyType, dataType, keyMemory, valueMemory, capacity);
-    }
-  }
-
-  /**
-   * Constructs a DirectHashDataMap with the specified capacity.
-   *
-   * @param keyType the data type for keys
-   * @param dataType the data type for values
-   * @param keyMemory the memory for keys
-   * @param valueMemory the memory for values
-   * @param capacity the fixed capacity of the map
-   */
-  private DirectHashDataMap(
-      FixedSizeDataType<Long> keyType,
-      FixedSizeDataType<V> dataType,
-      Memory<?> keyMemory,
-      Memory<?> valueMemory,
-      long capacity) {
-    this.keyType = keyType;
-    this.dataType = dataType;
+    this.valueType = valueType;
     this.keyMemory = keyMemory;
     this.valueMemory = valueMemory;
     this.capacity = capacity;
-    this.keySize = keyType.size();
-    this.valueSize = dataType.size();
     this.size = 0;
-
-    // Initialize all keys to EMPTY_KEY
-    for (long i = 0; i < capacity; i++) {
-      storeKey(i, EMPTY_KEY);
+    for (long slot = 0; slot < capacity; slot++) {
+      storeKey(slot, EMPTY_KEY);
     }
   }
 
-  /**
-   * Computes the hash value for a key.
-   * 
-   * @param key the key to hash
-   * @return the hash value
-   */
   private long hash(long key) {
-    // Using a variant of the Knuth multiplicative method
-    // with the golden ratio
-    final long GOLDEN_RATIO = 0x9E3779B97F4A7C15L;
-    return ((key * GOLDEN_RATIO) >>> 16) % capacity;
+    // Fibonacci hashing spreads consecutive keys, which are common, over the table.
+    return Long.remainderUnsigned((key * 0x9E3779B97F4A7C15L) >>> 16, capacity);
   }
 
-  /**
-   * Finds the slot for a key, either for retrieval or insertion.
-   * 
-   * @param key the key to find
-   * @param forInsertion whether we're finding for insertion or retrieval
-   * @return the slot index or -1 if not found and not for insertion
-   */
-  private long findSlot(long key, boolean forInsertion) {
-    long index = hash(key);
-    long tombstoneSlot = -1;
-
-    // Linear probing to handle collisions
+  /** Returns the slot holding the key, or the empty slot where it would go, or -1 if full. */
+  private long findSlot(long key) {
+    long slot = hash(key);
     for (long i = 0; i < capacity; i++) {
-      long currentIndex = (index + i) % capacity;
-      long currentKey = readKey(currentIndex);
-
-      if (currentKey == EMPTY_KEY) {
-        // Found empty slot
-        return forInsertion ? (tombstoneSlot != -1 ? tombstoneSlot : currentIndex) : -1;
-      } else if (currentKey == TOMBSTONE) {
-        // Mark first tombstone for possible reuse
-        if (tombstoneSlot == -1) {
-          tombstoneSlot = currentIndex;
-        }
-      } else if (currentKey == key) {
-        // Found the key
-        return currentIndex;
+      long current = readKey(slot);
+      if (current == EMPTY_KEY || current == key) {
+        return slot;
       }
+      slot = slot + 1 == capacity ? 0 : slot + 1;
     }
-
-    // If we're inserting and found a tombstone earlier, use that
-    if (forInsertion && tombstoneSlot != -1) {
-      return tombstoneSlot;
-    }
-
-    // Map is full or key not found
     return -1;
   }
 
-  /**
-   * Reads a key from the specified slot.
-   * 
-   * @param slot the slot index
-   * @return the key at the slot
-   */
   private long readKey(long slot) {
-    long position = slot * keySize;
-    int segmentIndex = (int) (position >>> keyMemory.segmentShift());
-    int segmentOffset = (int) (position & keyMemory.segmentMask());
-    ByteBuffer segment = keyMemory.segment(segmentIndex);
-    return keyType.read(segment, segmentOffset);
+    return keyMemory.read(KEY_TYPE, slot * KEY_TYPE.size());
   }
 
-  /**
-   * Stores a key at the specified slot.
-   * 
-   * @param slot the slot index
-   * @param key the key to store
-   */
   private void storeKey(long slot, long key) {
-    long position = slot * keySize;
-    int segmentIndex = (int) (position >>> keyMemory.segmentShift());
-    int segmentOffset = (int) (position & keyMemory.segmentMask());
-    ByteBuffer segment = keyMemory.segment(segmentIndex);
-    keyType.write(segment, segmentOffset, key);
+    keyMemory.write(KEY_TYPE, slot * KEY_TYPE.size(), key);
   }
 
-  /**
-   * Reads a value from the specified slot.
-   * 
-   * @param slot the slot index
-   * @return the value at the slot
-   */
   private V readValue(long slot) {
-    long position = slot * valueSize;
-    int segmentIndex = (int) (position >>> valueMemory.segmentShift());
-    int segmentOffset = (int) (position & valueMemory.segmentMask());
-    ByteBuffer segment = valueMemory.segment(segmentIndex);
-    return dataType.read(segment, segmentOffset);
+    return valueMemory.read(valueType, slot * valueType.size());
   }
 
-  /**
-   * Stores a value at the specified slot.
-   * 
-   * @param slot the slot index
-   * @param value the value to store
-   */
   private void storeValue(long slot, V value) {
-    long position = slot * valueSize;
-    int segmentIndex = (int) (position >>> valueMemory.segmentShift());
-    int segmentOffset = (int) (position & valueMemory.segmentMask());
-    ByteBuffer segment = valueMemory.segment(segmentIndex);
-    dataType.write(segment, segmentOffset, value);
+    valueMemory.write(valueType, slot * valueType.size(), value);
   }
 
-  /** {@inheritDoc} */
   @Override
   public V put(Long key, V value) {
     Objects.requireNonNull(key, "Key cannot be null");
     Objects.requireNonNull(value, "Value cannot be null");
-
-    if (key == EMPTY_KEY || key == TOMBSTONE) {
+    if (key == EMPTY_KEY) {
       throw new IllegalArgumentException("Reserved key value: " + key);
     }
-
-    long slot = findSlot(key, true);
+    long slot = findSlot(key);
     if (slot == -1) {
       throw new IllegalStateException("Map is full");
     }
-
-    long existingKey = readKey(slot);
-    V previousValue = null;
-
-    if (existingKey != EMPTY_KEY && existingKey != TOMBSTONE) {
-      // Slot contains an existing key
-      previousValue = readValue(slot);
+    V previous = null;
+    if (readKey(slot) == key) {
+      previous = readValue(slot);
     } else {
-      // New entry
+      storeKey(slot, key);
       size++;
     }
-
-    storeKey(slot, key);
     storeValue(slot, value);
-
-    return previousValue;
+    return previous;
   }
 
-  /** {@inheritDoc} */
+  private long slotOf(Object keyObject) {
+    if (!(keyObject instanceof Long key) || key == EMPTY_KEY) {
+      return -1;
+    }
+    long slot = findSlot(key);
+    return slot >= 0 && readKey(slot) == key ? slot : -1;
+  }
+
   @Override
-  public V get(Object keyObj) {
-    if (!(keyObj instanceof Long key)) {
-      return null;
-    }
-
-    if (key == EMPTY_KEY || key == TOMBSTONE) {
-      return null;
-    }
-
-    long slot = findSlot(key, false);
-    if (slot == -1) {
-      return null;
-    }
-
-    return readValue(slot);
+  public V get(Object key) {
+    long slot = slotOf(key);
+    return slot < 0 ? null : readValue(slot);
   }
 
-  /** {@inheritDoc} */
   @Override
-  public boolean containsKey(Object keyObj) {
-    if (!(keyObj instanceof Long key)) {
-      return false;
-    }
-
-    if (key == EMPTY_KEY || key == TOMBSTONE) {
-      return false;
-    }
-
-    return findSlot(key, false) != -1;
+  public boolean containsKey(Object key) {
+    return slotOf(key) >= 0;
   }
 
-  /** {@inheritDoc} */
   @Override
   public boolean containsValue(Object value) {
-    if (value == null) {
-      return false;
-    }
-
     Iterator<V> iterator = valueIterator();
     while (iterator.hasNext()) {
-      if (value.equals(iterator.next())) {
+      if (iterator.next().equals(value)) {
         return true;
       }
     }
-
     return false;
   }
 
-  /** {@inheritDoc} */
   @Override
   public long size() {
     return size;
   }
 
-  /** {@inheritDoc} */
   @Override
   public void clear() {
-    for (long i = 0; i < capacity; i++) {
-      storeKey(i, EMPTY_KEY);
+    for (long slot = 0; slot < capacity; slot++) {
+      storeKey(slot, EMPTY_KEY);
     }
     size = 0;
   }
 
-  /** {@inheritDoc} */
-  @Override
-  public Iterator<Long> keyIterator() {
-    return new Iterator<>() {
-      private long currentIndex = 0;
-      private long returnedCount = 0;
-
-      @Override
-      public boolean hasNext() {
-        return returnedCount < size;
-      }
-
-      @Override
-      public Long next() {
-        if (!hasNext()) {
-          throw new NoSuchElementException();
-        }
-
-        while (currentIndex < capacity) {
-          long key = readKey(currentIndex++);
-          if (key != EMPTY_KEY && key != TOMBSTONE) {
-            returnedCount++;
-            return key;
-          }
-        }
-
-        throw new NoSuchElementException();
-      }
-    };
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public Iterator<V> valueIterator() {
-    return new Iterator<>() {
-      private long currentIndex = 0;
-      private long returnedCount = 0;
-
-      @Override
-      public boolean hasNext() {
-        return returnedCount < size;
-      }
-
-      @Override
-      public V next() {
-        if (!hasNext()) {
-          throw new NoSuchElementException();
-        }
-
-        while (currentIndex < capacity) {
-          long key = readKey(currentIndex);
-          if (key != EMPTY_KEY && key != TOMBSTONE) {
-            returnedCount++;
-            return readValue(currentIndex++);
-          }
-          currentIndex++;
-        }
-
-        throw new NoSuchElementException();
-      }
-    };
-  }
-
-  /** {@inheritDoc} */
   @Override
   public Iterator<Entry<Long, V>> entryIterator() {
     return new Iterator<>() {
-      private long currentIndex = 0;
-      private long returnedCount = 0;
+      private long slot = 0;
+      private long returned = 0;
 
       @Override
       public boolean hasNext() {
-        return returnedCount < size;
+        return returned < size;
       }
 
       @Override
@@ -464,29 +189,24 @@ public class DirectHashDataMap<V> implements DataMap<Long, V> {
         if (!hasNext()) {
           throw new NoSuchElementException();
         }
-
-        while (currentIndex < capacity) {
-          long key = readKey(currentIndex);
-          if (key != EMPTY_KEY && key != TOMBSTONE) {
-            V value = readValue(currentIndex);
-            currentIndex++;
-            returnedCount++;
-            return Map.entry(key, value);
-          }
-          currentIndex++;
+        while (readKey(slot) == EMPTY_KEY) {
+          slot++;
         }
-
-        throw new NoSuchElementException();
+        long key = readKey(slot);
+        V value = readValue(slot);
+        slot++;
+        returned++;
+        return Map.entry(key, value);
       }
     };
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() {
     try {
       keyMemory.close();
       valueMemory.close();
-    } catch (Exception e) {
+    } catch (IOException e) {
       throw new DataCollectionException(e);
     }
   }

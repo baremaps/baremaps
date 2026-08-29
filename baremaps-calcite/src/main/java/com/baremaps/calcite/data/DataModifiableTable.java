@@ -64,13 +64,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *
  * <p>
  * A memory-mapped table is self-describing: its row type is stored as JSON in the header of the
- * memory, after the {@code long} that {@link AppendOnlyLog} reserves for its size, so that
+ * memory, after the bytes that {@link AppendOnlyLog} reserves for itself, so that
  * {@link #open(Path, RelDataTypeFactory)} can reopen it without any side file.
  */
 public class DataModifiableTable extends AbstractTable
     implements ModifiableTable, Wrapper, AutoCloseable {
 
-  private static final int SCHEMA_OFFSET = Long.BYTES;
+  private static final int SCHEMA_OFFSET = AppendOnlyLog.HEADER_BYTES;
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -106,10 +106,7 @@ public class DataModifiableTable extends AbstractTable
   }
 
   private static DataCollection<Object[]> log(RelDataType rowType, Memory<?> memory) {
-    return AppendOnlyLog.<Object[]>builder()
-        .dataType(new DataRowType(rowType))
-        .memory(memory)
-        .build();
+    return new AppendOnlyLog<>(new DataRowType(rowType), memory);
   }
 
   private static void writeSchema(ByteBuffer header, RelDataType rowType) {

@@ -17,9 +17,7 @@ package com.baremaps.data;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.baremaps.data.collection.*;
-import com.baremaps.data.memory.OffHeapMemory;
 import com.baremaps.data.type.LongDataType;
-import com.baremaps.data.type.PairDataType;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.stream.Stream;
@@ -161,40 +159,9 @@ class DataMapTest {
   static Stream<Arguments> mapProvider() {
     return Stream
         .of(
-            Arguments.of(
-                IndexedDataMap.<Long>builder()
-                    .values(AppendOnlyLog.<Long>builder()
-                        .dataType(new LongDataType())
-                        .memory(new OffHeapMemory())
-                        .build())
-                    .build()),
-            Arguments.of(MonotonicFixedSizeDataMap.<Long>builder()
-                .values(MemoryAlignedDataList.<Long>builder()
-                    .dataType(new LongDataType())
-                    .memory(new OffHeapMemory())
-                    .build())
-                .build()),
-            Arguments.of(MonotonicDataMap.<Long>builder()
-                .keys(MemoryAlignedDataList.<PairDataType.Pair<Long, Long>>builder()
-                    .dataType(new PairDataType<>(new LongDataType(), new LongDataType()))
-                    .memory(new OffHeapMemory())
-                    .build())
-                .values(AppendOnlyLog.<Long>builder()
-                    .dataType(new LongDataType())
-                    .memory(new OffHeapMemory())
-                    .build())
-                .build()),
-            Arguments.of(MonotonicPairedDataMap.<Long>builder()
-                .values(MemoryAlignedDataList.<PairDataType.Pair<Long, Long>>builder()
-                    .dataType(new PairDataType<>(new LongDataType(), new LongDataType()))
-                    .build())
-                .build()),
-            Arguments.of(DirectHashDataMap.<Long>builder()
-                .keyType(new LongDataType())
-                .dataType(new LongDataType())
-                .keyMemory(new OffHeapMemory())
-                .valueMemory(new OffHeapMemory())
-                .capacity(1000)
-                .build()));
+            Arguments.of(new IndexedDataMap<>(new LongDataType())),
+            Arguments.of(new MonotonicDataMap<>(new LongDataType())),
+            Arguments.of(new MonotonicDataMap<>(new IndexedDataList<>(new LongDataType()))),
+            Arguments.of(new DirectHashDataMap<>(new LongDataType(), 1000)));
   }
 }

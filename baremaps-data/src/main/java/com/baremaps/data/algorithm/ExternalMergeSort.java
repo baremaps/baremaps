@@ -14,19 +14,18 @@
 
 package com.baremaps.data.algorithm;
 
-
-
 import com.baremaps.data.collection.DataList;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.PriorityQueue;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
- * An external merge sort algorithm adapted from
- * <a href="https://github.com/lemire/externalsortinginjava">externalsortinginjava</a> (public
- * domain).
+ * Sorts a {@link DataList} too large for the heap: the input is sorted in batches that fit in
+ * memory, each batch is written to a temporary list, and the batches are merged into the output.
  */
-@SuppressWarnings({"squid:S2095", "squid:S3776"})
 public class ExternalMergeSort {
 
   private ExternalMergeSort() {
@@ -34,213 +33,107 @@ public class ExternalMergeSort {
   }
 
   /**
-   * Sorts an input list to an output list.
+   * Sorts the input into the output.
    *
-   * @param <T> The type of the list
-   * @param input The input list to sort
-   * @param output The output list
-   * @param comparator The comparator that tells how to sort the lines
-   * @param tempLists The supplier of temporary lists
-   * @param batchSize The batch size
-   * @param distinct The flag indicating if duplicates should be discarded
-   * @param parallel The flag indicating if parallelism should be used
+   * @param tempLists supplies the temporary lists holding the sorted batches; they are cleared once
+   *        merged
+   * @param batchSize the number of elements sorted in memory at a time
+   * @param distinct whether to drop the duplicates, as defined by the comparator
+   * @param parallel whether to sort the batches with a parallel stream
    */
   public static <T> void sort(
       DataList<T> input,
       DataList<T> output,
-      final Comparator<T> comparator,
+      Comparator<T> comparator,
       Supplier<DataList<T>> tempLists,
       long batchSize,
       boolean distinct,
       boolean parallel) {
-    mergeSortedBatches(sortInBatch(input, comparator, tempLists, batchSize, distinct, parallel),
-        output, comparator, distinct);
+    List<DataList<T>> batches = new ArrayList<>();
+    List<T> batch = new ArrayList<>();
+    for (T element : input) {
+      batch.add(element);
+      if (batch.size() >= batchSize) {
+        batches.add(sortBatch(batch, comparator, tempLists, distinct, parallel));
+        batch.clear();
+      }
+    }
+    if (!batch.isEmpty()) {
+      batches.add(sortBatch(batch, comparator, tempLists, distinct, parallel));
+    }
+    merge(batches, output, comparator, distinct);
   }
 
-  /**
-   * Merges several batches to an output list.
-   *
-   * @param <T> The type of the list
-   * @param batches The input batches to merge
-   * @param output The output list
-   * @param comparator The comparator that tells how to sort the lines
-   * @param distinct The flag indicating if duplicates should be discarded
-   * @return the number of data sorted
-   */
-  private static <T> long mergeSortedBatches(
+  private static <T> DataList<T> sortBatch(
+      List<T> batch,
+      Comparator<T> comparator,
+      Supplier<DataList<T>> tempLists,
+      boolean distinct,
+      boolean parallel) {
+    DataList<T> output = tempLists.get();
+    Stream<T> stream = parallel ? batch.parallelStream() : batch.stream();
+    stream = stream.sorted(comparator);
+    if (distinct) {
+      stream = stream.distinct();
+    }
+    stream.forEachOrdered(output::addIndexed);
+    return output;
+  }
+
+  private static <T> void merge(
       List<DataList<T>> batches,
       DataList<T> output,
       Comparator<T> comparator,
       boolean distinct) {
-
-    PriorityQueue<DataStack<T>> queue =
-        new PriorityQueue<>(batches.size(), (i, j) -> comparator.compare(i.peek(), j.peek()));
-
-    for (DataList<T> input : batches) {
-      if (input.isEmpty()) {
-        continue;
-      }
-      DataStack<T> stack = new DataStack<>(input);
-      if (!stack.empty()) {
-        queue.add(stack);
+    PriorityQueue<Cursor<T>> queue =
+        new PriorityQueue<>(Math.max(1, batches.size()),
+            (a, b) -> comparator.compare(a.head, b.head));
+    for (DataList<T> batch : batches) {
+      if (!batch.isEmpty()) {
+        queue.add(new Cursor<>(batch));
       }
     }
-
-    long counter = 0;
-    if (!distinct) {
-      while (!queue.isEmpty()) {
-        DataStack<T> stack = queue.poll();
-        T value = stack.pop();
+    T last = null;
+    while (!queue.isEmpty()) {
+      Cursor<T> cursor = queue.poll();
+      T value = cursor.head;
+      if (!distinct || last == null || comparator.compare(value, last) != 0) {
         output.addIndexed(value);
-        ++counter;
-        if (stack.empty()) {
-          stack.close();
-        } else {
-          queue.add(stack); // add it back
-        }
+        last = value;
       }
-    } else {
-      T last = null;
-      if (!queue.isEmpty()) {
-        DataStack<T> stack = queue.poll();
-        last = stack.pop();
-        output.addIndexed(last);
-        ++counter;
-        if (stack.empty()) {
-          stack.close();
-        } else {
-          queue.add(stack);
-        }
-      }
-      while (!queue.isEmpty()) {
-        DataStack<T> stack = queue.poll();
-        T value = stack.pop();
-        // Skip duplicate lines
-        if (comparator.compare(value, last) != 0) {
-          output.addIndexed(value);
-          last = value;
-        }
-        ++counter;
-        if (stack.empty()) {
-          stack.close();
-        } else {
-          queue.add(stack); // add it back
-        }
+      if (cursor.advance()) {
+        queue.add(cursor);
       }
     }
-
     for (DataList<T> batch : batches) {
       batch.clear();
     }
-
-    return counter;
   }
 
-  /**
-   * Sorts a list in several batches that fit in memory.
-   *
-   * @param input The input list to sort
-   * @param comparator The comparator that tells how to sort the lines
-   * @param supplier The supplier that creates temporary lists
-   * @param batchSize The batch size
-   * @param distinct The flag indicating if duplicates should be discarded
-   * @param parallel The flag indicating if parallelism should be used
-   * @param <T>
-   * @return the sorted batches
-   */
-  public static <T> List<DataList<T>> sortInBatch(
-      final DataList<T> input,
-      final Comparator<T> comparator,
-      Supplier<DataList<T>> supplier,
-      long batchSize,
-      final boolean distinct,
-      final boolean parallel) {
-    List<DataList<T>> batches = new ArrayList<>();
-    List<T> batch = new ArrayList<>();
-
-    var iterator = input.iterator();
-    while (iterator.hasNext()) {
-      var element = iterator.next();
-      batch.add(element);
-      if (batch.size() >= batchSize || !iterator.hasNext()) {
-        var sortedBatch = sortBatch(batch, comparator, supplier, distinct, parallel);
-        batches.add(sortedBatch);
-        batch.clear();
-      }
-    }
-
-    return batches;
-  }
-
-  /**
-   * Sorts a batch.
-   *
-   * @param batch The batch to sort
-   * @param comparator The comparator that tells how to sort the lines
-   * @param supplier The supplier that creates temporary lists
-   * @param distinct The flag indicating if duplicates should be discarded
-   * @param parallel The flag indicating if parallelism should be used
-   * @param <T>
-   * @return the sorted batch
-   */
-  public static <T> DataList<T> sortBatch(
-      List<T> batch,
-      Comparator<T> comparator,
-      Supplier<DataList<T>> supplier,
-      boolean distinct,
-      boolean parallel) {
-    DataList<T> output = supplier.get();
-    Stream<T> tmpStream = batch.stream().sorted(comparator);
-    if (parallel) {
-      tmpStream = tmpStream.parallel();
-    }
-    if (distinct) {
-      tmpStream = tmpStream.distinct();
-    }
-    tmpStream.forEachOrdered(output::addIndexed);
-    return output;
-  }
-
-  /**
-   * A wrapper on top of a {@link DataList} which keeps the last data record in memory.
-   *
-   * @param <T>
-   */
-  static final class DataStack<T> implements AutoCloseable {
+  /** The next unread element of a batch. */
+  private static final class Cursor<T> {
 
     private final DataList<T> list;
 
-    private Long index = 0l;
+    private long index;
 
-    private T cache;
+    private T head;
 
-    public DataStack(DataList<T> list) {
+    Cursor(DataList<T> list) {
       this.list = list;
-      reload();
+      this.index = 0;
+      this.head = list.get(0);
     }
 
-    public boolean empty() {
-      return this.index > list.size();
-    }
-
-    public T peek() {
-      return this.cache;
-    }
-
-    public T pop() {
-      T answer = peek(); // make a copy
-      reload();
-      return answer;
-    }
-
-    private void reload() {
-      this.cache = this.list.get(index);
+    /** Moves to the next element and returns whether there is one. */
+    boolean advance() {
       index++;
-    }
-
-    @Override
-    public void close() {
-      this.list.clear();
+      if (index >= list.size()) {
+        head = null;
+        return false;
+      }
+      head = list.get(index);
+      return true;
     }
   }
 }

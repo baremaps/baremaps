@@ -15,13 +15,18 @@
 package com.baremaps.workflow;
 
 
-import com.baremaps.data.collection.*;
+import com.baremaps.data.collection.AppendOnlyLog;
+import com.baremaps.data.collection.DataConversions;
+import com.baremaps.data.collection.IndexedDataList;
+import com.baremaps.data.collection.MemoryAlignedDataList;
+import com.baremaps.data.collection.MonotonicDataMap;
 import com.baremaps.data.memory.MemoryMappedDirectory;
-import com.baremaps.data.type.*;
+import com.baremaps.data.type.LonLatDataType;
+import com.baremaps.data.type.LongDataType;
+import com.baremaps.data.type.LongListDataType;
 import com.baremaps.data.util.FileUtils;
 import com.baremaps.postgres.utils.PostgresUtils;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -60,53 +65,34 @@ public class WorkflowContext {
     return dataSources.computeIfAbsent(database, PostgresUtils::createDataSourceFromObject);
   }
 
+  /**
+   * Returns a map from node ids to coordinates, backed by the cache directory. Coordinates are
+   * quantized to 8 bytes, which keeps a planet's worth of nodes within a few tens of gigabytes.
+   */
   public Map<Long, Coordinate> getCoordinateMap() throws IOException {
-    return DataConversions.asMap(getMonotonicPairedDataMap("coordinates", new LonLatDataType()));
+    Path dir = cacheDir.resolve("coordinates");
+    return DataConversions.asMap(new MonotonicDataMap<>(
+        new MemoryAlignedDataList<>(new LongDataType(),
+            new MemoryMappedDirectory(dir.resolve("offsets"))),
+        new MemoryAlignedDataList<>(new LongDataType(),
+            new MemoryMappedDirectory(dir.resolve("keys"))),
+        new MemoryAlignedDataList<>(new LonLatDataType(),
+            new MemoryMappedDirectory(dir.resolve("values")))));
   }
 
+  /** Returns a map from way ids to their node ids, backed by the cache directory. */
   public Map<Long, List<Long>> getReferenceMap() throws IOException {
-    return DataConversions.asMap(getMonotonicDataMap("references", new LongListDataType()));
-  }
-
-  private <T> DataMap<Long, T> getMemoryAlignedDataMap(String name, FixedSizeDataType<T> dataType)
-      throws IOException {
-    Path coordinateDir = Files.createDirectories(cacheDir.resolve(name));
-    return MemoryAlignedDataMap.<T>builder()
-        .dataType(dataType)
-        .memory(new MemoryMappedDirectory(coordinateDir))
-        .build();
-  }
-
-  private <T> DataMap<Long, T> getMonotonicDataMap(String name, DataType<T> dataType)
-      throws IOException {
-    Path mapDir = Files.createDirectories(cacheDir.resolve(name));
-    Path keysDir = Files.createDirectories(mapDir.resolve("keys"));
-    Path valuesDir = Files.createDirectories(mapDir.resolve("values"));
-    MemoryAlignedDataList<PairDataType.Pair<Long, Long>> keys =
-        MemoryAlignedDataList.<PairDataType.Pair<Long, Long>>builder()
-            .dataType(new PairDataType<>(new LongDataType(), new LongDataType()))
-            .memory(new MemoryMappedDirectory(keysDir))
-            .build();
-    AppendOnlyLog<T> values = AppendOnlyLog.<T>builder()
-        .dataType(dataType)
-        .values(new MemoryMappedDirectory(valuesDir))
-        .build();
-    return MonotonicDataMap.<T>builder()
-        .keys(keys)
-        .values(values)
-        .build();
-  }
-
-  private DataMap<Long, Coordinate> getMonotonicPairedDataMap(String name,
-      DataType<Coordinate> dataType)
-      throws IOException {
-    Path mapDir = Files.createDirectories(cacheDir.resolve(name));
-    return MonotonicPairedDataMap.<Coordinate>builder()
-        .values(MemoryAlignedDataList.<PairDataType.Pair<Long, Coordinate>>builder()
-            .dataType(new PairDataType<>(new LongDataType(), new LonLatDataType()))
-            .memory(new MemoryMappedDirectory(Files.createDirectories(mapDir)))
-            .build())
-        .build();
+    Path dir = cacheDir.resolve("references");
+    return DataConversions.asMap(new MonotonicDataMap<>(
+        new MemoryAlignedDataList<>(new LongDataType(),
+            new MemoryMappedDirectory(dir.resolve("offsets"))),
+        new MemoryAlignedDataList<>(new LongDataType(),
+            new MemoryMappedDirectory(dir.resolve("keys"))),
+        new IndexedDataList<>(
+            new MemoryAlignedDataList<>(new LongDataType(),
+                new MemoryMappedDirectory(dir.resolve("index"))),
+            new AppendOnlyLog<>(new LongListDataType(),
+                new MemoryMappedDirectory(dir.resolve("values"))))));
   }
 
   public void cleanCache() throws IOException {

@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.baremaps.data.algorithm.ExternalMergeSort;
 import com.baremaps.data.collection.AppendOnlyLog;
+import com.baremaps.data.collection.DataConversions;
 import com.baremaps.data.collection.DataList;
 import com.baremaps.data.collection.IndexedDataList;
 import com.baremaps.data.collection.MemoryAlignedDataList;
@@ -50,16 +51,9 @@ class ExternalMergeSortTest {
     stringsAsc = strings.stream().sorted(Comparator.naturalOrder()).toList();
     stringsDsc = strings.stream().sorted(Comparator.reverseOrder()).toList();
     stringsDistinct = stringsAsc.stream().distinct().toList();
-    supplier = () -> IndexedDataList.<String>builder()
-        .index(MemoryAlignedDataList.<Long>builder()
-            .dataType(new LongDataType())
-            .memory(new OnHeapMemory())
-            .build())
-        .values(AppendOnlyLog.<String>builder()
-            .dataType(new StringDataType())
-            .memory(new OnHeapMemory())
-            .build())
-        .build();
+    supplier = () -> new IndexedDataList<>(
+        new MemoryAlignedDataList<>(new LongDataType(), new OnHeapMemory()),
+        new AppendOnlyLog<>(new StringDataType(), new OnHeapMemory()));
     input = supplier.get();
     output = supplier.get();
     for (var string : strings) {
@@ -102,6 +96,18 @@ class ExternalMergeSortTest {
   @Test
   void sortStringsDistinct() throws IOException {
     ExternalMergeSort.sort(input, output, Comparator.naturalOrder(), supplier, 4, true, true);
+    assertEquals(stringsDistinct, stringList(output));
+  }
+
+  @Test
+  void sortWithHeapBackedBatches() throws IOException {
+    // Heap lists throw on out-of-range reads, unlike memory-backed ones.
+    Supplier<DataList<String>> heapLists = () -> DataConversions.asDataList(new ArrayList<>());
+    var heapOutput = heapLists.get();
+    ExternalMergeSort.sort(input, heapOutput, Comparator.naturalOrder(), heapLists, 1, false,
+        false);
+    assertEquals(stringsAsc, stringList(heapOutput));
+    ExternalMergeSort.sort(input, output, Comparator.naturalOrder(), heapLists, 1, true, false);
     assertEquals(stringsDistinct, stringList(output));
   }
 

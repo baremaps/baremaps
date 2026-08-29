@@ -14,178 +14,98 @@
 
 package com.baremaps.data.collection;
 
-
-
 import com.baremaps.data.memory.Memory;
-import com.baremaps.data.memory.MemoryException;
 import com.baremaps.data.memory.OffHeapMemory;
 import com.baremaps.data.type.FixedSizeDataType;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * A list that stores fixed-size memory-aligned elements. Optimized for performance with bit-shift
- * operations for memory addressing.
+ * A list of fixed-size values whose size is a power of two. Such values never straddle a segment
+ * and the position of an index is a shift rather than a multiplication, which matters when the list
+ * is used as an index that is probed billions of times.
  *
- * @param <E> The type of elements in the list
+ * <p>
+ * The size is persisted in the memory header by {@link #close()}. Appends may be concurrent.
  */
 public class MemoryAlignedDataList<E> implements DataList<E> {
 
   private final FixedSizeDataType<E> dataType;
+
   private final Memory<?> memory;
+
   private final int valueShift;
-  private final long segmentShift;
-  private final long segmentMask;
-  private AtomicLong size;
 
-  /**
-   * Creates a new builder for a MemoryAlignedDataList.
-   *
-   * @param <E> the type of elements
-   * @return a new builder
-   */
-  public static <E> Builder<E> builder() {
-    return new Builder<>();
+  private final AtomicLong size;
+
+  public MemoryAlignedDataList(FixedSizeDataType<E> dataType) {
+    this(dataType, new OffHeapMemory());
   }
 
-  /**
-   * Builder for MemoryAlignedDataList.
-   *
-   * @param <E> the type of elements
-   */
-  public static class Builder<E> {
-    private FixedSizeDataType<E> dataType;
-    private Memory<?> memory;
-
-    /**
-     * Sets the data type for the list.
-     *
-     * @param dataType the data type
-     * @return this builder
-     */
-    public Builder<E> dataType(FixedSizeDataType<E> dataType) {
-      this.dataType = dataType;
-      return this;
+  public MemoryAlignedDataList(FixedSizeDataType<E> dataType, Memory<?> memory) {
+    int valueSize = dataType.size();
+    if (valueSize <= 0 || (valueSize & -valueSize) != valueSize) {
+      throw new DataCollectionException("The data type size must be a power of 2");
     }
-
-    /**
-     * Sets the memory for the list.
-     *
-     * @param memory the memory
-     * @return this builder
-     */
-    public Builder<E> memory(Memory<?> memory) {
-      this.memory = memory;
-      return this;
-    }
-
-    /**
-     * Builds a new MemoryAlignedDataList.
-     *
-     * @return a new MemoryAlignedDataList
-     * @throws IllegalStateException if the data type is missing
-     */
-    public MemoryAlignedDataList<E> build() {
-      if (dataType == null) {
-        throw new IllegalStateException("Data type must be specified");
-      }
-
-      if (memory == null) {
-        memory = new OffHeapMemory();
-      }
-
-      return new MemoryAlignedDataList<>(dataType, memory);
-    }
-  }
-
-  /**
-   * Constructs a MemoryAlignedDataList.
-   *
-   * @param dataType the data type
-   * @param memory the memory
-   * @throws DataCollectionException if memory and data type size requirements are not met
-   * @throws IllegalArgumentException if data type size is not a power of 2
-   */
-  private MemoryAlignedDataList(FixedSizeDataType<E> dataType, Memory<?> memory) {
-    if (dataType.size() > memory.segmentSize()) {
+    if (valueSize > memory.segmentSize()) {
       throw new DataCollectionException("The segment size is too small for the data type");
-    }
-    if ((dataType.size() & -dataType.size()) != dataType.size()) {
-      throw new IllegalArgumentException("The data type size must be a fixed power of 2");
-    }
-    if (memory.segmentSize() % dataType.size() != 0) {
-      throw new DataCollectionException("The segment size and data type size must be aligned");
     }
     this.dataType = dataType;
     this.memory = memory;
-    this.valueShift = (int) (Math.log(dataType.size()) / Math.log(2));
-    this.segmentShift = memory.segmentShift();
-    this.segmentMask = memory.segmentMask();
-    this.size = new AtomicLong(0);
+    this.valueShift = Integer.numberOfTrailingZeros(valueSize);
+    this.size = new AtomicLong(memory.header().getLong(0));
   }
 
-  /**
-   * Writes an element at the specified index.
-   *
-   * @param index the index
-   * @param value the element to write
-   */
-  private void write(long index, E value) {
-    long position = index << valueShift;
-    int segmentIndex = (int) (position >>> segmentShift);
-    int segmentOffset = (int) (position & segmentMask);
-    ByteBuffer segment = memory.segment(segmentIndex);
-    dataType.write(segment, segmentOffset, value);
-  }
-
-  /** {@inheritDoc} */
+  @Override
   public long addIndexed(E value) {
     long index = size.getAndIncrement();
-    write(index, value);
+    memory.write(dataType, index << valueShift, value);
     return index;
   }
 
-  /** {@inheritDoc} */
+  @Override
   public void set(long index, E value) {
-    if (index >= size.get()) {
-      size.set(index + 1);
-    }
-    write(index, value);
+    checkIndex(index);
+    memory.write(dataType, index << valueShift, value);
   }
 
-  /** {@inheritDoc} */
+  @Override
   public E get(long index) {
-    long position = index << valueShift;
-    int segmentIndex = (int) (position >> segmentShift);
-    int segmentOffset = (int) (position & segmentMask);
-    ByteBuffer segment = memory.segment(segmentIndex);
-    return dataType.read(segment, segmentOffset);
+    checkIndex(index);
+    return memory.read(dataType, index << valueShift);
   }
 
-  /** {@inheritDoc} */
+  private void checkIndex(long index) {
+    if (index < 0 || index >= size.get()) {
+      throw new IndexOutOfBoundsException("Index " + index + " out of bounds for size " + size);
+    }
+  }
+
   @Override
   public long size() {
     return size.get();
   }
 
-  /** {@inheritDoc} */
   @Override
   public void clear() {
-    size.set(0);
     try {
+      size.set(0);
       memory.clear();
     } catch (IOException e) {
-      throw new MemoryException(e);
+      throw new DataCollectionException(e);
     }
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() {
+    if (memory.isClosed()) {
+      return;
+    }
     try {
+      memory.header().putLong(0, size.get());
       memory.close();
     } catch (IOException e) {
-      throw new MemoryException(e);
+      throw new DataCollectionException(e);
     }
   }
 }

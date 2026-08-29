@@ -14,8 +14,6 @@
 
 package com.baremaps.data.type;
 
-
-
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
@@ -40,7 +38,7 @@ public class StringDataType implements DataType<String> {
   @Override
   public void write(final ByteBuffer buffer, final int position, final String value) {
     byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-    buffer.putInt(position, size(value));
+    buffer.putInt(position, Integer.BYTES + bytes.length);
     buffer.put(position + Integer.BYTES, bytes, 0, bytes.length);
   }
 

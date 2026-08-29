@@ -14,57 +14,29 @@
 
 package com.baremaps.data.memory;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
-/** Memory implementation that uses off-heap (direct) byte buffers for storage. */
+/**
+ * A memory backed by direct buffers, which keeps large data sets out of the garbage collector's
+ * way. The buffers are reclaimed by the garbage collector once unreferenced.
+ */
 public class OffHeapMemory extends Memory<ByteBuffer> {
 
-  /** Constructs an OffHeapMemory with a 1MB default segment size. */
   public OffHeapMemory() {
     this(1 << 20);
   }
 
-  /**
-   * Constructs an OffHeapMemory with the specified segment size.
-   *
-   * @param segmentSize the size of each segment in bytes
-   */
   public OffHeapMemory(int segmentSize) {
     super(1024, segmentSize);
   }
 
-  /** {@inheritDoc} */
   @Override
   protected ByteBuffer allocateHeader() {
     return ByteBuffer.allocateDirect(headerSize());
   }
 
-  /** {@inheritDoc} */
   @Override
   protected ByteBuffer allocateSegment(int index) {
     return ByteBuffer.allocateDirect(segmentSize());
-  }
-
-  /**
-   * Direct buffers are managed by GC and can't be explicitly freed in Java 8.
-   * 
-   * {@inheritDoc}
-   */
-  @Override
-  public synchronized void close() throws IOException {
-    // Direct ByteBuffers are managed by GC - we can't explicitly free them in Java 8
-    // In Java 9+, we could use Cleaner or Unsafe API if needed
-  }
-
-  /**
-   * Clears all segments to allow garbage collection.
-   * 
-   * {@inheritDoc}
-   */
-  @Override
-  public synchronized void clear() throws IOException {
-    // Clear the segment list to allow GC to reclaim the memory
-    segments.clear();
   }
 }

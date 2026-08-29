@@ -14,83 +14,27 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import org.locationtech.jts.geom.*;
+import java.util.List;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.MultiPolygon;
+import org.locationtech.jts.geom.Polygon;
 
-/**
- * A {@link DataType} for reading and writing {@link MultiPolygon} objects in {@link ByteBuffer}s.
- */
-public class MultiPolygonDataType implements DataType<MultiPolygon> {
+/** A {@link DataType} for {@link MultiPolygon}s. */
+public class MultiPolygonDataType extends GeometryListDataType<MultiPolygon, Polygon> {
 
   private final GeometryFactory geometryFactory;
 
-  private final PolygonDataType polygonDataType;
-
-  /**
-   * Constructs a {@link MultiPolygonDataType} with a default {@link GeometryFactory}.
-   */
   public MultiPolygonDataType() {
     this(new GeometryFactory());
   }
 
-  /**
-   * Constructs a {@link MultiPolygonDataType} with a specified {@link GeometryFactory}.
-   *
-   * @param geometryFactory the geometry factory
-   */
   public MultiPolygonDataType(GeometryFactory geometryFactory) {
+    super(new PolygonDataType(geometryFactory));
     this.geometryFactory = geometryFactory;
-    this.polygonDataType = new PolygonDataType(geometryFactory);
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
-  public int size(final MultiPolygon value) {
-    int size = Integer.BYTES;
-    for (int i = 0; i < value.getNumGeometries(); i++) {
-      size += polygonDataType.size((Polygon) value.getGeometryN(i));
-    }
-    return size;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public void write(final ByteBuffer buffer, final int position, final MultiPolygon value) {
-    buffer.putInt(position, size(value));
-    var p = position + Integer.BYTES;
-    for (int i = 0; i < value.getNumGeometries(); i++) {
-      polygonDataType.write(buffer, p, (Polygon) value.getGeometryN(i));
-      p += buffer.getInt(p);
-    }
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public MultiPolygon read(final ByteBuffer buffer, final int position) {
-    var size = size(buffer, position);
-    var limit = position + size;
-    var p = position + Integer.BYTES;
-    var polygons = new ArrayList<Polygon>();
-    while (p < limit) {
-      var polygon = polygonDataType.read(buffer, p);
-      polygons.add(polygon);
-      p += polygonDataType.size(buffer, p);
-    }
-    return geometryFactory.createMultiPolygon(polygons.toArray(Polygon[]::new));
+  protected MultiPolygon create(List<Polygon> members) {
+    return geometryFactory.createMultiPolygon(members.toArray(Polygon[]::new));
   }
 }

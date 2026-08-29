@@ -14,47 +14,10 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+/** A {@link ListDataType} of {@link Long} values. */
+public class LongListDataType extends ListDataType<Long> {
 
-/**
- * A {@link DataType} for reading and writing lists of long values in {@link ByteBuffer}s.
- */
-public class LongListDataType implements DataType<List<Long>> {
-
-  /** {@inheritDoc} */
-  @Override
-  public int size(final List<Long> values) {
-    return Integer.BYTES + values.size() * Long.BYTES;
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public void write(final ByteBuffer buffer, final int position, final List<Long> values) {
-    buffer.putInt(position, size(values));
-    var p = position + Integer.BYTES;
-    for (long value : values) {
-      buffer.putLong(p, value);
-      p += Long.BYTES;
-    }
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public List<Long> read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
-    int length = (size - Integer.BYTES) / Long.BYTES;
-    var values = new ArrayList<Long>(length);
-    for (int index = 0; index < length; index++) {
-      values.add(buffer.getLong(position + Integer.BYTES + index * Long.BYTES));
-    }
-    return values;
+  public LongListDataType() {
+    super(new LongDataType());
   }
 }

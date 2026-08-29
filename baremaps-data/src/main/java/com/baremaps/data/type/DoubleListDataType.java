@@ -14,47 +14,10 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+/** A {@link ListDataType} of {@link Double} values. */
+public class DoubleListDataType extends ListDataType<Double> {
 
-/**
- * A {@link DataType} for reading and writing lists of double values in {@link ByteBuffer}s.
- */
-public class DoubleListDataType implements DataType<List<Double>> {
-
-  /** {@inheritDoc} */
-  @Override
-  public int size(final List<Double> values) {
-    return Integer.BYTES + values.size() * Double.BYTES;
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public void write(final ByteBuffer buffer, final int position, final List<Double> values) {
-    buffer.putInt(position, size(values));
-    int p = position + Integer.BYTES;
-    for (double value : values) {
-      buffer.putDouble(p, value);
-      p += Double.BYTES;
-    }
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public List<Double> read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
-    int length = (size - Integer.BYTES) / Double.BYTES;
-    var values = new ArrayList<Double>(length);
-    for (int index = 0; index < length; index++) {
-      values.add(buffer.getDouble(position + Integer.BYTES + index * Double.BYTES));
-    }
-    return values;
+  public DoubleListDataType() {
+    super(new DoubleDataType());
   }
 }

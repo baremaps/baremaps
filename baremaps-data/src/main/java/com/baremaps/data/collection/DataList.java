@@ -14,28 +14,15 @@
 
 package com.baremaps.data.collection;
 
-
-
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
-/**
- * A sequence of elements that can be accessed by index. Similar to {@link java.util.List} but
- * supports up to {@link Long#MAX_VALUE} elements.
- *
- * @param <E> The type of elements in the list
- */
+/** A collection whose elements are addressed by a {@code long} index. */
 public interface DataList<E> extends DataCollection<E> {
 
-  /**
-   * Adds an element to this list and returns its index.
-   *
-   * @param value the element to add
-   * @return the index of the added element
-   */
+  /** Appends a value and returns its index. */
   long addIndexed(E value);
 
-  /** {@inheritDoc} */
   @Override
   default boolean add(E value) {
     addIndexed(value);
@@ -43,28 +30,23 @@ public interface DataList<E> extends DataCollection<E> {
   }
 
   /**
-   * Sets the element at the specified index.
+   * Replaces the value at the given index.
    *
-   * @param index the index
-   * @param value the element to set
+   * @throws IndexOutOfBoundsException if the index is out of range
    */
   void set(long index, E value);
 
   /**
-   * Returns the element at the specified index.
+   * Returns the value at the given index.
    *
-   * @param index the index
-   * @return the element at the specified index
+   * @throws IndexOutOfBoundsException if the index is out of range
    */
   E get(long index);
 
-  /** {@inheritDoc} */
   @Override
   default Iterator<E> iterator() {
     return new Iterator<>() {
-
       private final long size = size();
-
       private long index = 0;
 
       @Override

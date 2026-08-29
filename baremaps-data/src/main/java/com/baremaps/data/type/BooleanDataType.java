@@ -14,8 +14,6 @@
 
 package com.baremaps.data.type;
 
-
-
 import static java.lang.Boolean.TRUE;
 
 import java.nio.ByteBuffer;

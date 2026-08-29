@@ -24,34 +24,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
-
-/** Memory implementation that uses memory-mapped files in a directory for storage. */
+/**
+ * A memory backed by a directory holding one file per segment ({@code 0.part}, {@code 1.part}, ...)
+ * and a {@code header} file. One file per segment keeps each mapping small and lets a data set span
+ * more than a single file system can address in one file.
+ */
 public class MemoryMappedDirectory extends Memory<MappedByteBuffer> {
 
   private final Path directory;
 
-  /**
-   * Constructs a MemoryMappedDirectory with the specified directory and 1GB segment size.
-   *
-   * @param directory the directory to store segments in
-   */
   public MemoryMappedDirectory(Path directory) {
     this(directory, 1 << 30);
-    if (!Files.exists(directory)) {
-      try {
-        Files.createDirectories(directory);
-      } catch (IOException e) {
-        throw new MemoryException(e);
-      }
-    }
   }
 
-  /**
-   * Constructs a MemoryMappedDirectory with the specified directory and segment size.
-   *
-   * @param directory the directory to store segments in
-   * @param segmentSize the size of each segment in bytes
-   */
   public MemoryMappedDirectory(Path directory, int segmentSize) {
     super(1 << 14, segmentSize);
     this.directory = directory;
@@ -59,61 +44,33 @@ public class MemoryMappedDirectory extends Memory<MappedByteBuffer> {
 
   @Override
   protected MappedByteBuffer allocateHeader() {
-    try {
-      Path file = directory.resolve("header");
-      try (FileChannel channel = FileChannel.open(file, StandardOpenOption.CREATE,
-          StandardOpenOption.READ, StandardOpenOption.WRITE)) {
-        return channel.map(MapMode.READ_WRITE, 0, headerSize());
-      }
-    } catch (IOException e) {
-      throw new MemoryException(e);
-    }
+    return map(directory.resolve("header"), headerSize());
   }
 
-  /** {@inheritDoc} */
   @Override
   protected MappedByteBuffer allocateSegment(int index) {
+    return map(directory.resolve(index + ".part"), segmentSize());
+  }
+
+  private MappedByteBuffer map(Path file, int size) {
     try {
-      Path file = directory.resolve(String.format("%s.part", index));
+      Files.createDirectories(directory);
       try (FileChannel channel = FileChannel.open(file, StandardOpenOption.CREATE,
           StandardOpenOption.READ, StandardOpenOption.WRITE)) {
-        return channel.map(MapMode.READ_WRITE, 0, segmentSize());
+        return channel.map(MapMode.READ_WRITE, 0, size);
       }
     } catch (IOException e) {
       throw new MemoryException(e);
     }
   }
 
-  /**
-   * Releases all mapped buffers but keeps the files intact.
-   * 
-   * {@inheritDoc}
-   */
   @Override
-  public synchronized void close() throws IOException {
-    MappedByteBufferUtils.unmap(header);
-    for (MappedByteBuffer buffer : segments) {
-      if (buffer != null) {
-        MappedByteBufferUtils.unmap(buffer);
-      }
-    }
+  protected void release(MappedByteBuffer buffer) {
+    MappedByteBufferUtils.unmap(buffer);
   }
 
-  /**
-   * Unmaps all buffers and deletes the directory with all its files.
-   * 
-   * {@inheritDoc}
-   */
   @Override
-  public synchronized void clear() throws IOException {
-    // Release resources first
-    close();
-
-    // Clear the header and segment list
-    header.clear();
-    segments.clear();
-
-    // Delete the directory and all files in it if it exists
+  protected void delete() throws IOException {
     if (Files.exists(directory)) {
       FileUtils.deleteRecursively(directory);
     }

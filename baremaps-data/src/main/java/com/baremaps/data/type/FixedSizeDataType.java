@@ -14,8 +14,6 @@
 
 package com.baremaps.data.type;
 
-
-
 import java.nio.ByteBuffer;
 
 /**

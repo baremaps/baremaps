@@ -14,86 +14,27 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
+import java.util.List;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.jts.geom.MultiLineString;
 
-/**
- * A {@link DataType} for reading and writing {@link MultiLineString} objects in
- * {@link ByteBuffer}s.
- */
-public class MultiLineStringDataType implements DataType<MultiLineString> {
-
-  private final LineStringDataType lineStringDataType;
+/** A {@link DataType} for {@link MultiLineString}s. */
+public class MultiLineStringDataType extends GeometryListDataType<MultiLineString, LineString> {
 
   private final GeometryFactory geometryFactory;
 
-  /**
-   * Constructs a {@link MultiLineStringDataType} with a default {@link GeometryFactory}.
-   */
   public MultiLineStringDataType() {
     this(new GeometryFactory());
   }
 
-  /**
-   * Constructs a {@link MultiLineStringDataType} with a specified {@link GeometryFactory}.
-   *
-   * @param geometryFactory the geometry factory
-   */
   public MultiLineStringDataType(GeometryFactory geometryFactory) {
+    super(new LineStringDataType(geometryFactory));
     this.geometryFactory = geometryFactory;
-    this.lineStringDataType = new LineStringDataType(geometryFactory);
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
-  public int size(final MultiLineString value) {
-    int size = Integer.BYTES;
-    for (int i = 0; i < value.getNumGeometries(); i++) {
-      size += lineStringDataType.size((LineString) value.getGeometryN(i));
-    }
-    return size;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public void write(final ByteBuffer buffer, final int position, final MultiLineString value) {
-    buffer.putInt(position, size(value));
-    var p = position + Integer.BYTES;
-    for (int i = 0; i < value.getNumGeometries(); i++) {
-      lineStringDataType.write(buffer, p, (LineString) value.getGeometryN(i));
-      p += buffer.getInt(p);
-    }
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public MultiLineString read(final ByteBuffer buffer, final int position) {
-    var size = size(buffer, position);
-    var limit = position + size;
-    var p = position + Integer.BYTES;
-    var lineStrings = new ArrayList<LineString>();
-    while (p < limit) {
-      var lineString = lineStringDataType.read(buffer, p);
-      lineStrings.add(lineString);
-      p += lineStringDataType.size(buffer, p);
-    }
-    return geometryFactory.createMultiLineString(lineStrings.toArray(LineString[]::new));
+  protected MultiLineString create(List<LineString> members) {
+    return geometryFactory.createMultiLineString(members.toArray(LineString[]::new));
   }
 }

@@ -72,7 +72,7 @@ public class PolygonDataType implements DataType<Polygon> {
    */
   @Override
   public int size(final ByteBuffer buffer, final int position) {
-    return coordinateArrayDataType.size(buffer, position);
+    return buffer.getInt(position);
   }
 
   /**

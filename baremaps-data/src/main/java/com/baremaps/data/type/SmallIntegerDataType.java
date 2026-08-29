@@ -31,12 +31,15 @@ public class SmallIntegerDataType extends FixedSizeDataType<Integer> {
    * @throws IllegalArgumentException if n is less than 1 or greater than 4
    */
   public SmallIntegerDataType(int n) {
-    super(n);
-    if (n < 1 || n > 4) {
-      throw new IllegalArgumentException(
-          "The number of bytes used to store small integers must be comprised between 1 and 4");
-    }
+    super(checkSize(n));
     this.n = n;
+  }
+
+  private static int checkSize(int n) {
+    if (n < 1 || n > 4) {
+      throw new IllegalArgumentException("The number of bytes must be between 1 and 4");
+    }
+    return n;
   }
 
   /** {@inheritDoc} */

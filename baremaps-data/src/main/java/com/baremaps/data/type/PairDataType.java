@@ -14,8 +14,6 @@
 
 package com.baremaps.data.type;
 
-
-
 import com.baremaps.data.type.PairDataType.Pair;
 import java.nio.ByteBuffer;
 import java.util.Objects;

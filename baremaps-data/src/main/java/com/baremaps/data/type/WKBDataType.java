@@ -17,6 +17,7 @@ package com.baremaps.data.type;
 import static org.locationtech.jts.io.WKBConstants.wkbNDR;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.io.ParseException;
@@ -32,12 +33,7 @@ public class WKBDataType implements DataType<Geometry> {
   /** {@inheritDoc} */
   @Override
   public int size(final Geometry value) {
-    byte[] bytes = serialize(value);
-    if (bytes == null) {
-      return Integer.BYTES;
-    } else {
-      return Integer.BYTES + bytes.length;
-    }
+    return Integer.BYTES + serialize(value).length;
   }
 
   /** {@inheritDoc} */
@@ -50,19 +46,15 @@ public class WKBDataType implements DataType<Geometry> {
   @Override
   public void write(final ByteBuffer buffer, final int position, final Geometry value) {
     byte[] bytes = serialize(value);
-    if (bytes == null) {
-      buffer.putInt(position, Integer.BYTES);
-    } else {
-      buffer.putInt(position, Integer.BYTES + bytes.length);
-      buffer.put(position + Integer.BYTES, bytes);
-    }
+    buffer.putInt(position, Integer.BYTES + bytes.length);
+    buffer.put(position + Integer.BYTES, bytes);
   }
 
   /** {@inheritDoc} */
   @Override
   public Geometry read(final ByteBuffer buffer, final int position) {
     int size = buffer.getInt(position);
-    byte[] bytes = new byte[Math.max(size - Integer.BYTES, 0)];
+    byte[] bytes = new byte[size - Integer.BYTES];
     buffer.get(position + Integer.BYTES, bytes);
     return deserialize(bytes);
   }
@@ -74,9 +66,7 @@ public class WKBDataType implements DataType<Geometry> {
    * @return the serialized geometry as a byte array, or null if the input is null
    */
   private static byte[] serialize(Geometry geometry) {
-    if (geometry == null) {
-      return null;
-    }
+    Objects.requireNonNull(geometry, "Geometry cannot be null");
     WKBWriter writer = new WKBWriter(2, wkbNDR, true);
     return writer.write(geometry);
   }
@@ -89,9 +79,6 @@ public class WKBDataType implements DataType<Geometry> {
    * @throws IllegalArgumentException if the WKB cannot be parsed
    */
   private static Geometry deserialize(byte[] wkb) {
-    if (wkb == null) {
-      return null;
-    }
     try {
       WKBReader reader = new WKBReader(new GeometryFactory());
       return reader.read(wkb);

@@ -14,47 +14,10 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+/** A {@link ListDataType} of {@link Integer} values. */
+public class IntegerListDataType extends ListDataType<Integer> {
 
-/**
- * A {@link DataType} for reading and writing lists of integer values in {@link ByteBuffer}s.
- */
-public class IntegerListDataType implements DataType<List<Integer>> {
-
-  /** {@inheritDoc} */
-  @Override
-  public int size(final List<Integer> values) {
-    return Integer.BYTES + values.size() * Integer.BYTES;
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public void write(final ByteBuffer buffer, final int position, final List<Integer> values) {
-    buffer.putInt(position, size(values));
-    var p = position + Integer.BYTES;
-    for (int value : values) {
-      buffer.putInt(p, value);
-      p += Integer.BYTES;
-    }
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public List<Integer> read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
-    int length = (size - Integer.BYTES) / Integer.BYTES;
-    var values = new ArrayList<Integer>(length);
-    for (int index = 0; index < length; index++) {
-      values.add(buffer.getInt(position + Integer.BYTES + index * Integer.BYTES));
-    }
-    return values;
+  public IntegerListDataType() {
+    super(new IntegerDataType());
   }
 }

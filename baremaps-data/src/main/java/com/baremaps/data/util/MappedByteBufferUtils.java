@@ -14,8 +14,6 @@
 
 package com.baremaps.data.util;
 
-
-
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;

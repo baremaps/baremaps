@@ -34,10 +34,7 @@ class MemoryAlignedDataMapTest {
 
   @BeforeEach
   void setUp() {
-    map = MemoryAlignedDataMap.<Integer>builder()
-        .dataType(new IntegerDataType())
-        .memory(new OnHeapMemory(1024))
-        .build();
+    map = new MemoryAlignedDataMap<>(new IntegerDataType(), new OnHeapMemory(1024));
   }
 
   @AfterEach
@@ -127,7 +124,10 @@ class MemoryAlignedDataMapTest {
 
   @Test
   void clear() {
-    assertThrows(UnsupportedOperationException.class, () -> map.clear());
+    map.put(1L, 1);
+    map.clear();
+    assertEquals(0, map.size());
+    assertFalse(map.containsKey(1L));
   }
 
   @Test

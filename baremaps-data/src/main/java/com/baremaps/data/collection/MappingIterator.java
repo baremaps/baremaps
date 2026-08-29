@@ -12,28 +12,30 @@
  * limitations under the License.
  */
 
-package com.baremaps.data.memory;
+package com.baremaps.data.collection;
 
-import java.nio.ByteBuffer;
+import java.util.Iterator;
+import java.util.function.Function;
 
-/** A memory backed by heap buffers, suited to small data sets and tests. */
-public class OnHeapMemory extends Memory<ByteBuffer> {
+/** An iterator that applies a function to the elements of another iterator. */
+final class MappingIterator<S, T> implements Iterator<T> {
 
-  public OnHeapMemory() {
-    this(1 << 20);
-  }
+  private final Iterator<S> source;
 
-  public OnHeapMemory(int segmentSize) {
-    super(1024, segmentSize);
-  }
+  private final Function<? super S, ? extends T> mapper;
 
-  @Override
-  protected ByteBuffer allocateHeader() {
-    return ByteBuffer.allocate(headerSize());
+  MappingIterator(Iterator<S> source, Function<? super S, ? extends T> mapper) {
+    this.source = source;
+    this.mapper = mapper;
   }
 
   @Override
-  protected ByteBuffer allocateSegment(int index) {
-    return ByteBuffer.allocate(segmentSize());
+  public boolean hasNext() {
+    return source.hasNext();
+  }
+
+  @Override
+  public T next() {
+    return mapper.apply(source.next());
   }
 }

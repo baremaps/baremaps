@@ -14,8 +14,6 @@
 
 package com.baremaps.data.collection;
 
-
-
 import com.baremaps.data.memory.Memory;
 import com.baremaps.data.memory.OffHeapMemory;
 import com.baremaps.data.type.DataType;
@@ -23,263 +21,158 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * A log of elements that can only be appended to. Elements are stored in memory and can be accessed
- * by their position. Append operations are thread-safe.
+ * A log of values of variable size, appended back to back and addressed by their position.
  *
- * @param <E> The type of elements in the log
+ * <p>
+ * A value never crosses a segment boundary: when it does not fit in the remaining bytes of a
+ * segment, it starts the next one. The skipped tail stays zero-filled, which is how the iterator
+ * recognizes it (see {@link DataType#size(ByteBuffer, int)}).
+ *
+ * <p>
+ * The size and the end position are persisted in the first {@link #HEADER_BYTES} bytes of the
+ * memory header by {@link #flush()} and {@link #close()}, so that a log stored in a memory-mapped
+ * file can be reopened and appended to. Other users of the same header must write after them.
+ *
+ * <p>
+ * Thread safety: appends may be concurrent, the reservation of a position is synchronized and the
+ * write itself is not. Reads of a position returned by {@link #addPositioned(Object)} are safe once
+ * that call has returned.
  */
 public class AppendOnlyLog<E> implements DataCollection<E> {
 
+  /** The number of header bytes reserved by the log. */
+  public static final int HEADER_BYTES = 2 * Long.BYTES;
+
+  private static final int SIZE_OFFSET = 0;
+
+  private static final int END_OFFSET = Long.BYTES;
+
   private final DataType<E> dataType;
+
   private final Memory<?> memory;
-  private final long segmentSize;
-  private long offset;
+
+  // The number of values and the position of the next write, guarded by "this".
   private long size;
 
-  private final Lock lock = new ReentrantLock();
+  private long end;
 
-  /**
-   * Creates a new builder for an AppendOnlyLog.
-   *
-   * @param <E> the type of elements
-   * @return a new builder
-   */
-  public static <E> Builder<E> builder() {
-    return new Builder<>();
+  /** Creates a log in off-heap memory. */
+  public AppendOnlyLog(DataType<E> dataType) {
+    this(dataType, new OffHeapMemory());
   }
 
-  /**
-   * Builder for AppendOnlyLog.
-   *
-   * @param <E> the type of elements
-   */
-  public static class Builder<E> {
-    private DataType<E> dataType;
-    private Memory<?> memory;
-
-    /**
-     * Sets the data type for the log.
-     *
-     * @param dataType the data type
-     * @return this builder
-     */
-    public Builder<E> dataType(DataType<?> dataType) {
-      @SuppressWarnings("unchecked")
-      DataType<E> castedDataType = (DataType<E>) dataType;
-      this.dataType = castedDataType;
-      return this;
-    }
-
-    /**
-     * Sets the memory for the log.
-     *
-     * @param memory the memory
-     * @return this builder
-     */
-    public Builder<E> memory(Memory<?> memory) {
-      this.memory = memory;
-      return this;
-    }
-
-    /**
-     * Sets the memory for the log values.
-     *
-     * @param memory the memory
-     * @return this builder
-     */
-    public Builder<E> values(Memory<?> memory) {
-      return memory(memory);
-    }
-
-    /**
-     * Builds a new AppendOnlyLog.
-     *
-     * @return a new AppendOnlyLog
-     * @throws IllegalStateException if required parameters are missing
-     */
-    public AppendOnlyLog<E> build() {
-      if (dataType == null) {
-        throw new IllegalStateException("Data type must be specified");
-      }
-
-      if (memory == null) {
-        memory = new OffHeapMemory();
-      }
-
-      return new AppendOnlyLog<>(dataType, memory);
-    }
-  }
-
-  /**
-   * Constructs an AppendOnlyLog.
-   *
-   * @param dataType the data type
-   * @param memory the memory
-   */
-  private AppendOnlyLog(DataType<E> dataType, Memory<?> memory) {
+  /** Creates a log in the given memory, reopening it if the memory holds a header. */
+  public AppendOnlyLog(DataType<E> dataType, Memory<?> memory) {
     this.dataType = dataType;
     this.memory = memory;
-    this.segmentSize = memory.segmentSize();
-    this.size = memory.header().getLong(0);
-    this.offset = 0;
+    ByteBuffer header = memory.header();
+    this.size = header.getLong(SIZE_OFFSET);
+    this.end = header.getLong(END_OFFSET);
   }
 
   /**
-   * Persists the current size to memory.
-   */
-  public void persistSize() {
-    memory.segment(0).putLong(0, size);
-  }
-
-  /**
-   * Appends an element to the log and returns its position in memory.
+   * Appends a value and returns its position.
    *
-   * @param value the element to add
-   * @return the position of the element in memory
-   * @throws DataCollectionException if the element is too large for a segment
+   * @throws DataCollectionException if the value is larger than a segment
    */
   public long addPositioned(E value) {
     int valueSize = dataType.size(value);
-    if (valueSize > segmentSize) {
+    if (valueSize > memory.segmentSize()) {
       throw new DataCollectionException("The value is too big to fit in a segment");
     }
-
-    lock.lock();
-    long position = offset;
-    long segmentIndex = position / segmentSize;
-    long segmentOffset = position % segmentSize;
-
-    if (segmentOffset + valueSize > segmentSize) {
-      segmentOffset = 0;
-      segmentIndex = segmentIndex + 1;
-      position = segmentIndex * segmentSize;
+    long position;
+    synchronized (this) {
+      position = end;
+      if (memory.remaining(position) < valueSize) {
+        position += memory.remaining(position);
+      }
+      end = position + valueSize;
+      size++;
     }
-    offset = position + valueSize;
-    this.size++;
-    lock.unlock();
-
-    ByteBuffer segment = memory.segment((int) segmentIndex);
-    dataType.write(segment, (int) segmentOffset, value);
-
+    memory.write(dataType, position, value);
     return position;
   }
 
-  /**
-   * Returns the element at the specified position in memory.
-   *
-   * @param position the position of the element
-   * @return the element
-   */
+  /** Returns the value at a position returned by {@link #addPositioned(Object)}. */
   public E getPositioned(long position) {
-    long segmentIndex = position / segmentSize;
-    long segmentOffset = position % segmentSize;
-    ByteBuffer buffer = memory.segment((int) segmentIndex);
-    return dataType.read(buffer, (int) segmentOffset);
+    return memory.read(dataType, position);
   }
 
-  /** {@inheritDoc} */
   @Override
   public boolean add(E e) {
     addPositioned(e);
     return true;
   }
 
-  /** {@inheritDoc} */
-  public long size() {
+  @Override
+  public synchronized long size() {
     return size;
   }
 
-  /** {@inheritDoc} */
-  public void clear() {
+  /** Persists the size and end position in the memory header. */
+  public synchronized void flush() {
+    ByteBuffer header = memory.header();
+    header.putLong(SIZE_OFFSET, size);
+    header.putLong(END_OFFSET, end);
+  }
+
+  @Override
+  public synchronized void clear() {
     try {
-      this.size = 0;
+      size = 0;
+      end = 0;
       memory.clear();
     } catch (IOException e) {
       throw new DataCollectionException(e);
     }
   }
 
-  /**
-   * Returns an iterator over the elements of this log.
-   * 
-   * @return an iterator over the elements
-   */
   @Override
-  public AppendOnlyLogIterator iterator() {
-    return new AppendOnlyLogIterator(size);
-  }
-
-  @Override
-  public void close() throws Exception {
+  public void close() {
+    if (memory.isClosed()) {
+      return;
+    }
     try {
-      memory.header().putLong(0, size);
+      flush();
       memory.close();
     } catch (IOException e) {
       throw new DataCollectionException(e);
     }
   }
 
-  /**
-   * An iterator over the elements in this log.
-   */
-  public class AppendOnlyLogIterator implements Iterator<E> {
+  @Override
+  public Iterator<E> iterator() {
+    return new Iterator<>() {
+      private final long expected = size();
+      private long index = 0;
+      private long position = 0;
 
-    private final long size;
-    private long index;
-    private long position;
-
-    private AppendOnlyLogIterator(long size) {
-      this.size = size;
-      index = 0;
-      position = 0;
-    }
-
-    @Override
-    public boolean hasNext() {
-      return index < size;
-    }
-
-    @Override
-    public E next() {
-      if (!hasNext()) {
-        throw new NoSuchElementException();
-      }
-      long segmentIndex = position / segmentSize;
-      long segmentOffset = position % segmentSize;
-
-      ByteBuffer segment = memory.segment((int) segmentIndex);
-
-      int valueSize;
-      try {
-        valueSize = dataType.size(segment, (int) segmentOffset);
-      } catch (IndexOutOfBoundsException e) {
-        valueSize = 0;
+      @Override
+      public boolean hasNext() {
+        return index < expected;
       }
 
-      if (segmentOffset + valueSize > segmentSize || valueSize == 0) {
-        segmentIndex = segmentIndex + 1;
-        segmentOffset = 0;
-        position = segmentIndex * segmentSize;
-        segment = memory.segment((int) segmentIndex);
-        valueSize = dataType.size(segment, (int) segmentOffset);
+      @Override
+      public E next() {
+        if (!hasNext()) {
+          throw new NoSuchElementException();
+        }
+        int valueSize = memory.sizeOf(dataType, position);
+        if (valueSize == 0) {
+          // Nothing fits in the tail of this segment: the value starts the next one.
+          position += memory.remaining(position);
+          valueSize = memory.sizeOf(dataType, position);
+          if (valueSize == 0) {
+            throw new DataCollectionException("Corrupted log at position " + position);
+          }
+        }
+        E value = memory.read(dataType, position);
+        position += valueSize;
+        index++;
+        return value;
       }
-      position += valueSize;
-      index++;
-
-      return dataType.read(segment, (int) segmentOffset);
-    }
-
-    /**
-     * Returns the current position in memory.
-     *
-     * @return the current position
-     */
-    public long getPosition() {
-      return position;
-    }
+    };
   }
 }

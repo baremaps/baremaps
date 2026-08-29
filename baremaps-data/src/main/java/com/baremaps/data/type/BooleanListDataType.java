@@ -14,49 +14,10 @@
 
 package com.baremaps.data.type;
 
+/** A {@link ListDataType} of {@link Boolean} values. */
+public class BooleanListDataType extends ListDataType<Boolean> {
 
-
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
-
-/**
- * A {@link DataType} for reading and writing lists of boolean values in {@link ByteBuffer}s.
- */
-public class BooleanListDataType implements DataType<List<Boolean>> {
-
-  /** {@inheritDoc} */
-  @Override
-  public int size(final List<Boolean> values) {
-    return Integer.BYTES + values.size() * Byte.BYTES;
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public void write(final ByteBuffer buffer, final int position, final List<Boolean> values) {
-    buffer.putInt(position, size(values));
-    var p = position + Integer.BYTES;
-    for (boolean value : values) {
-      buffer.put(p, (byte) (value ? 1 : 0));
-      p += Byte.BYTES;
-    }
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public List<Boolean> read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
-    int length = (size - Integer.BYTES) / Byte.BYTES;
-    var values = new ArrayList<Boolean>(length);
-    for (int index = 0; index < length; index++) {
-      values.add(buffer.get(position + Integer.BYTES + index * Byte.BYTES) == 1);
-    }
-    return values;
+  public BooleanListDataType() {
+    super(new BooleanDataType());
   }
 }

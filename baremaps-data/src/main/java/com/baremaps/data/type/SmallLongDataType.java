@@ -31,17 +31,15 @@ public class SmallLongDataType extends FixedSizeDataType<Long> {
    * @throws IllegalArgumentException if n is less than 1 or greater than 8
    */
   public SmallLongDataType(int n) {
-    super(n);
-    if (n < 1 || n > 8) {
-      throw new IllegalArgumentException(
-          "The number of bytes used to store small longs must be comprised between 1 and 8");
-    }
+    super(checkSize(n));
     this.n = n;
   }
 
-  /** {@inheritDoc} */
-  @Override
-  public int size(final Long value) {
+
+  private static int checkSize(int n) {
+    if (n < 1 || n > 8) {
+      throw new IllegalArgumentException("The number of bytes must be between 1 and 8");
+    }
     return n;
   }
 

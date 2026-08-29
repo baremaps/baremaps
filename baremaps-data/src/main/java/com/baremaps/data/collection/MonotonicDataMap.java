@@ -1,9 +1,9 @@
 /*
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,208 +14,160 @@
 
 package com.baremaps.data.collection;
 
-
-
+import com.baremaps.data.type.DataType;
+import com.baremaps.data.type.FixedSizeDataType;
+import com.baremaps.data.type.LongDataType;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
-import com.baremaps.data.type.LongDataType;
-import com.baremaps.data.type.PairDataType;
-import com.baremaps.data.type.PairDataType.Pair;
+import java.util.NoSuchElementException;
 
 /**
- * A map that stores values in a monotonically increasing key order. Optimized for 
- * sequential insertions and binary search lookups with chunked indexing.
+ * A map whose keys are inserted in increasing order, as the ids of an OpenStreetMap file are. The
+ * keys are kept in a sorted list and the values in a parallel list, so that nothing is wasted on
+ * sparse keys and a lookup costs a binary search.
  *
  * <p>
- * This code has been adapted from Planetiler (Apache license).
+ * To keep that search short, the keys are grouped in chunks of 256 consecutive values and a third
+ * list records the index of the first key of each chunk. A lookup only searches the chunk of its
+ * key, which is at most 256 entries, whatever the size of the map.
+ *
+ * <p>
+ * Keys must be distinct and increasing, {@link #put(Long, Object)} rejects any other key.
  */
 public class MonotonicDataMap<E> implements DataMap<Long, E> {
 
+  private static final int CHUNK_SHIFT = 8;
+
   private final DataList<Long> offsets;
-  private final DataList<Pair<Long, Long>> keys;
-  private final AppendOnlyLog<E> values;
 
-  private long lastChunk = -1;
-  
-  /**
-   * Creates a new builder for a MonotonicDataMap.
-   *
-   * @param <E> the type of values in the map
-   * @return a new builder
-   */
-  public static <E> Builder<E> builder() {
-    return new Builder<>();
+  private final DataList<Long> keys;
+
+  private final DataList<E> values;
+
+  /** Creates a map of fixed-size values in off-heap memory. */
+  public MonotonicDataMap(FixedSizeDataType<E> dataType) {
+    this(new MemoryAlignedDataList<>(dataType));
   }
-  
-  /**
-   * Builder for MonotonicDataMap.
-   *
-   * @param <E> the type of values in the map
-   */
-  public static class Builder<E> {
-    private DataList<Long> offsets;
-    private DataList<Pair<Long, Long>> keys;
-    private AppendOnlyLog<E> values;
-    
-    /**
-     * Sets the offsets list.
-     *
-     * @param offsets the list of offsets
-     * @return this builder
-     */
-    public Builder<E> offsets(DataList<Long> offsets) {
-      this.offsets = offsets;
-      return this;
-    }
-    
-    /**
-     * Sets the keys list.
-     *
-     * @param keys the list of keys
-     * @return this builder
-     */
-    public Builder<E> keys(DataList<Pair<Long, Long>> keys) {
-      this.keys = keys;
-      return this;
-    }
-    
-    /**
-     * Sets the values buffer.
-     *
-     * @param values the buffer of values
-     * @return this builder
-     */
-    public Builder<E> values(AppendOnlyLog<E> values) {
-      this.values = values;
-      return this;
-    }
-    
-    /**
-     * Builds a new MonotonicDataMap.
-     *
-     * @return a new MonotonicDataMap
-     * @throws IllegalArgumentException if the values buffer is not provided
-     */
-    public MonotonicDataMap<E> build() {
-      if (values == null) {
-        throw new IllegalArgumentException("Values buffer must be provided");
-      }
-      
-      if (offsets == null) {
-        offsets = MemoryAlignedDataList.<Long>builder()
-            .dataType(new LongDataType())
-            .build();
-      }
-      
-      if (keys == null) {
-        keys = MemoryAlignedDataList.<Pair<Long, Long>>builder()
-            .dataType(new PairDataType<>(new LongDataType(), new LongDataType()))
-            .build();
-      }
-      
-      return new MonotonicDataMap<>(offsets, keys, values);
-    }
+
+  /** Creates a map of variable-size values in off-heap memory. */
+  public MonotonicDataMap(DataType<E> dataType) {
+    this(new IndexedDataList<>(dataType));
+  }
+
+  /** Creates a map over the given values, with keys and offsets in off-heap memory. */
+  public MonotonicDataMap(DataList<E> values) {
+    this(new MemoryAlignedDataList<>(new LongDataType()),
+        new MemoryAlignedDataList<>(new LongDataType()), values);
   }
 
   /**
-   * Constructs a MonotonicDataMap.
-   *
-   * @param offsets the list of offsets
-   * @param keys the list of keys
-   * @param values the buffer of values
+   * Creates a map over the given lists, which must either all be empty or come from the same
+   * closed map.
    */
-  private MonotonicDataMap(DataList<Long> offsets, DataList<Pair<Long, Long>> keys,
-      AppendOnlyLog<E> values) {
+  public MonotonicDataMap(DataList<Long> offsets, DataList<Long> keys, DataList<E> values) {
+    if (keys.size() != values.size()) {
+      throw new DataCollectionException("The keys and values have different sizes");
+    }
     this.offsets = offsets;
     this.keys = keys;
     this.values = values;
   }
 
-  /** {@inheritDoc} */
-  public E put(Long key, E value) {
+  @Override
+  public synchronized E put(Long key, E value) {
     long index = keys.size();
-    long chunk = key >>> 8;
-    if (chunk != lastChunk) {
-      while (offsets.size() <= chunk) {
-        offsets.add(index);
-      }
-      lastChunk = chunk;
+    if (index > 0 && key <= keys.get(index - 1)) {
+      throw new IllegalArgumentException(
+          "Keys must be increasing, but " + key + " follows " + keys.get(index - 1));
     }
-    long position = values.addPositioned(value);
-    keys.add(new Pair<>(key, position));
+    long chunk = key >>> CHUNK_SHIFT;
+    // Chunks without keys point to the first key of the next chunk.
+    while (offsets.size() <= chunk) {
+      offsets.add(index);
+    }
+    keys.add(key);
+    values.add(value);
     return null;
   }
 
-  /** {@inheritDoc} */
-  public E get(Object keyObject) {
-    long key = (long) keyObject;
-    long chunk = key >>> 8;
+  private long indexOf(Object keyObject) {
+    if (!(keyObject instanceof Long key) || key < 0) {
+      return -1;
+    }
+    long chunk = key >>> CHUNK_SHIFT;
     if (chunk >= offsets.size()) {
-      return null;
+      return -1;
     }
     long lo = offsets.get(chunk);
-    long hi =
-        Math.min(
-            keys.size(),
-            chunk >= offsets.size() - 1
-                ? keys.size()
-                : offsets.get(chunk + 1))
-            - 1;
+    long hi = (chunk + 1 < offsets.size() ? offsets.get(chunk + 1) : keys.size()) - 1;
     while (lo <= hi) {
-      long index = (lo + hi) >>> 1;
-      Pair<Long, Long> pair = keys.get(index);
-      long value = pair.left();
+      long mid = (lo + hi) >>> 1;
+      long value = keys.get(mid);
       if (value < key) {
-        lo = index + 1;
+        lo = mid + 1;
       } else if (value > key) {
-        hi = index - 1;
+        hi = mid - 1;
       } else {
-        // found
-        return values.getPositioned(pair.right());
+        return mid;
       }
     }
-    return null;
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public Iterator<Long> keyIterator() {
-    return keys.stream().map(Pair::left).iterator();
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public Iterator<E> valueIterator() {
-    return keys.stream().map(Pair::right).map(values::getPositioned).iterator();
+    return -1;
   }
 
   @Override
-  public Iterator<Entry<Long, E>> entryIterator() {
-    return keys.stream()
-        .map(p -> Map.entry(p.left(), values.getPositioned(p.right())))
-        .iterator();
+  public E get(Object key) {
+    long index = indexOf(key);
+    return index < 0 ? null : values.get(index);
   }
 
-  /** {@inheritDoc} */
-  @Override
-  public long size() {
-    return keys.size();
-  }
-
-  /** {@inheritDoc} */
   @Override
   public boolean containsKey(Object key) {
-    return get(key) != null;
+    return indexOf(key) >= 0;
   }
 
-  /** {@inheritDoc} */
   @Override
   public boolean containsValue(Object value) {
     return values.contains(value);
   }
 
-  /** {@inheritDoc} */
+  @Override
+  public long size() {
+    return keys.size();
+  }
+
+  @Override
+  public Iterator<Long> keyIterator() {
+    return keys.iterator();
+  }
+
+  @Override
+  public Iterator<E> valueIterator() {
+    return values.iterator();
+  }
+
+  @Override
+  public Iterator<Entry<Long, E>> entryIterator() {
+    return new Iterator<>() {
+      private final long size = size();
+      private long index = 0;
+
+      @Override
+      public boolean hasNext() {
+        return index < size;
+      }
+
+      @Override
+      public Entry<Long, E> next() {
+        if (!hasNext()) {
+          throw new NoSuchElementException();
+        }
+        long i = index++;
+        return Map.entry(keys.get(i), values.get(i));
+      }
+    };
+  }
+
   @Override
   public void clear() {
     offsets.clear();
@@ -223,15 +175,10 @@ public class MonotonicDataMap<E> implements DataMap<Long, E> {
     values.clear();
   }
 
-  /** {@inheritDoc} */
   @Override
   public void close() throws Exception {
-    try {
-      offsets.close();
-      keys.close();
-      values.close();
-    } catch (Exception e) {
-      throw new DataCollectionException(e);
-    }
+    offsets.close();
+    keys.close();
+    values.close();
   }
 }

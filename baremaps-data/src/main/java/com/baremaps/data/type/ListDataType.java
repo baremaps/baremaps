@@ -19,24 +19,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A {@link DataType} for reading and writing lists of objects in {@link ByteBuffer}s.
- *
- * @param <T> the type of elements in the list
+ * A {@link DataType} for lists of values of another type: the total size in bytes, then the
+ * elements back to back.
  */
 public class ListDataType<T> implements DataType<List<T>> {
 
-  public final DataType<T> dataType;
+  private final DataType<T> dataType;
 
-  /**
-   * Constructs a {@link ListDataType} with a data type for its elements.
-   *
-   * @param dataType the data type of the list elements
-   */
   public ListDataType(final DataType<T> dataType) {
     this.dataType = dataType;
   }
 
-  /** {@inheritDoc} */
   @Override
   public int size(final List<T> values) {
     int size = Integer.BYTES;
@@ -46,29 +39,26 @@ public class ListDataType<T> implements DataType<List<T>> {
     return size;
   }
 
-  /** {@inheritDoc} */
   @Override
   public int size(final ByteBuffer buffer, final int position) {
     return buffer.getInt(position);
   }
 
-  /** {@inheritDoc} */
   @Override
   public void write(final ByteBuffer buffer, final int position, final List<T> values) {
-    buffer.putInt(position, size(values));
     int p = position + Integer.BYTES;
     for (T value : values) {
       dataType.write(buffer, p, value);
-      p += dataType.size(value);
+      p += dataType.size(buffer, p);
     }
+    buffer.putInt(position, p - position);
   }
 
-  /** {@inheritDoc} */
   @Override
   public List<T> read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
-    var list = new ArrayList<T>(size);
-    for (var p = position + Integer.BYTES; p < position + size; p += dataType.size(buffer, p)) {
+    int limit = position + buffer.getInt(position);
+    var list = new ArrayList<T>();
+    for (int p = position + Integer.BYTES; p < limit; p += dataType.size(buffer, p)) {
       list.add(dataType.read(buffer, p));
     }
     return list;

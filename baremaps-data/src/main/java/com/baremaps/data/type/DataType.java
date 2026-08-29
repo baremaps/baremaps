@@ -14,13 +14,15 @@
 
 package com.baremaps.data.type;
 
-
-
 import java.nio.ByteBuffer;
 
 /**
- * A data type for reading and writing values in {@link ByteBuffer}s. Read and write operations must
- * use absolute positions within the {@link ByteBuffer}.
+ * A data type for reading and writing values at absolute positions in {@link ByteBuffer}s.
+ *
+ * <p>
+ * Values are never null. An encoding is self-delimiting: {@link #size(ByteBuffer, int)} recovers
+ * the size of a value from its first bytes and is never 0 for a written value, so that collections
+ * can tell written space from zero-filled space.
  *
  * @param <T> the type of value being read or written
  */

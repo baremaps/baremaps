@@ -14,51 +14,10 @@
 
 package com.baremaps.data.type;
 
+/** A {@link ListDataType} of {@link Byte} values. */
+public class ByteListDataType extends ListDataType<Byte> {
 
-
-import com.google.common.primitives.Bytes;
-import java.nio.ByteBuffer;
-import java.util.List;
-
-/**
- * A {@link DataType} for reading and writing lists of byte values in {@link ByteBuffer}s.
- */
-public class ByteListDataType implements DataType<List<Byte>> {
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public int size(final List<Byte> values) {
-    return Integer.BYTES + values.size() * Byte.BYTES;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public void write(final ByteBuffer buffer, final int position, final List<Byte> values) {
-    buffer.putInt(position, size(values));
-    byte[] bytes = Bytes.toArray(values);
-    buffer.put(position + Integer.BYTES, bytes, 0, bytes.length);
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public List<Byte> read(final ByteBuffer buffer, final int position) {
-    int size = buffer.getInt(position);
-    byte[] bytes = new byte[Math.max(size - Integer.BYTES, 0)];
-    buffer.get(position + Integer.BYTES, bytes);
-    return Bytes.asList(bytes);
+  public ByteListDataType() {
+    super(new ByteDataType());
   }
 }

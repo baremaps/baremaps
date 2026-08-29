@@ -19,48 +19,20 @@ import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 
-/**
- * A {@link DataType} for reading and writing {@link Point} objects in {@link ByteBuffer}s.
- */
-public class PointDataType implements DataType<Point> {
+/** A {@link DataType} for {@link Point}s: two doubles, NaN for the empty point. */
+public class PointDataType extends MemoryAlignedDataType<Point> {
 
   private final GeometryFactory geometryFactory;
 
-  /**
-   * Constructs a {@link PointDataType} with a default {@link GeometryFactory}.
-   */
   public PointDataType() {
     this(new GeometryFactory());
   }
 
-  /**
-   * Constructs a {@link PointDataType} with a specified {@link GeometryFactory}.
-   *
-   * @param geometryFactory the geometry factory
-   */
   public PointDataType(GeometryFactory geometryFactory) {
+    super(Double.BYTES * 2);
     this.geometryFactory = geometryFactory;
   }
 
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public int size(final Point value) {
-    return Double.BYTES * 2;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return Double.BYTES * 2;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public void write(final ByteBuffer buffer, final int position, final Point value) {
     if (value.isEmpty()) {
@@ -72,17 +44,13 @@ public class PointDataType implements DataType<Point> {
     }
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public Point read(final ByteBuffer buffer, final int position) {
     double x = buffer.getDouble(position);
     double y = buffer.getDouble(position + Double.BYTES);
     if (Double.isNaN(x) || Double.isNaN(y)) {
       return geometryFactory.createPoint();
-    } else {
-      return geometryFactory.createPoint(new Coordinate(x, y));
     }
+    return geometryFactory.createPoint(new Coordinate(x, y));
   }
 }

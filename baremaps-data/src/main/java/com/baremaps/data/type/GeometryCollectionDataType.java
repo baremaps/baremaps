@@ -14,99 +14,33 @@
 
 package com.baremaps.data.type;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
+import java.util.List;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryCollection;
 import org.locationtech.jts.geom.GeometryFactory;
 
-/**
- * A {@link DataType} for reading and writing {@link GeometryCollection} objects in
- * {@link ByteBuffer}s.
- */
-public class GeometryCollectionDataType implements DataType<GeometryCollection> {
+/** A {@link DataType} for {@link GeometryCollection}s of arbitrary geometries. */
+public class GeometryCollectionDataType extends GeometryListDataType<GeometryCollection, Geometry> {
 
   private final GeometryFactory geometryFactory;
 
-  private final GeometryDataType geometryDataType;
-
-  /**
-   * Constructs a {@link GeometryCollectionDataType} with a default {@link GeometryFactory}.
-   */
   public GeometryCollectionDataType() {
-    this(new GeometryFactory(), new GeometryDataType());
+    this(new GeometryFactory());
   }
 
-  /**
-   * Constructs a {@link GeometryCollectionDataType} with a specified {@link GeometryFactory}.
-   *
-   * @param geometryFactory the geometry factory
-   */
   public GeometryCollectionDataType(GeometryFactory geometryFactory) {
-    this(geometryFactory, new GeometryDataType());
+    this(geometryFactory, new GeometryDataType(geometryFactory));
   }
 
-  /**
-   * Constructs a {@link GeometryCollectionDataType} with a specified {@link GeometryFactory} and
-   * {@link GeometryDataType}.
-   *
-   * @param geometryFactory the geometry factory
-   * @param geometryDataType the geometry data type
-   */
+  /** Creates a type whose members are encoded by the given type, typically its parent. */
   public GeometryCollectionDataType(GeometryFactory geometryFactory,
-      GeometryDataType geometryDataType) {
+      DataType<Geometry> geometryDataType) {
+    super(geometryDataType);
     this.geometryFactory = geometryFactory;
-    this.geometryDataType = geometryDataType;
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
-  public int size(final GeometryCollection value) {
-    int size = Integer.BYTES;
-    for (int i = 0; i < value.getNumGeometries(); i++) {
-      size += geometryDataType.size(value.getGeometryN(i));
-    }
-    return size;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public int size(final ByteBuffer buffer, final int position) {
-    return buffer.getInt(position);
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public void write(final ByteBuffer buffer, final int position, final GeometryCollection value) {
-    buffer.putInt(position, size(value));
-    var p = position + Integer.BYTES;
-    for (int i = 0; i < value.getNumGeometries(); i++) {
-      var geometry = value.getGeometryN(i);
-      geometryDataType.write(buffer, p, geometry);
-      p += geometryDataType.size(buffer, p);
-    }
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public GeometryCollection read(final ByteBuffer buffer, final int position) {
-    var size = size(buffer, position);
-    var limit = position + size;
-    var p = position + Integer.BYTES;
-    var geometries = new ArrayList<Geometry>();
-    while (p < limit) {
-      var geometry = geometryDataType.read(buffer, p);
-      geometries.add(geometry);
-      p += geometryDataType.size(geometry);
-    }
-    return geometryFactory.createGeometryCollection(geometries.toArray(Geometry[]::new));
+  protected GeometryCollection create(List<Geometry> members) {
+    return geometryFactory.createGeometryCollection(members.toArray(Geometry[]::new));
   }
 }
