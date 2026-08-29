@@ -21,7 +21,7 @@ import java.lang.foreign.MemorySegment;
 /**
  * A {@link DataType} for reading and writing integer values in {@link MemorySegment}s.
  */
-public class IntegerDataType extends MemoryAlignedDataType<Integer> {
+public class IntegerDataType extends FixedSizeDataType<Integer> {
 
   /**
    * Constructs an {@link IntegerDataType} with a fixed size of {@link Integer#BYTES}.

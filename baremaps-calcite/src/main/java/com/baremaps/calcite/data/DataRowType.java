@@ -23,11 +23,11 @@ import com.baremaps.data.type.ByteArrayDataType;
 import com.baremaps.data.type.ByteDataType;
 import com.baremaps.data.type.DataType;
 import com.baremaps.data.type.DoubleDataType;
+import com.baremaps.data.type.FixedSizeDataType;
 import com.baremaps.data.type.FloatDataType;
 import com.baremaps.data.type.GeometryDataType;
 import com.baremaps.data.type.IntegerDataType;
 import com.baremaps.data.type.LongDataType;
-import com.baremaps.data.type.MemoryAlignedDataType;
 import com.baremaps.data.type.ShortDataType;
 import com.baremaps.data.type.StringDataType;
 import java.lang.foreign.MemorySegment;
@@ -142,7 +142,7 @@ public final class DataRowType implements DataType<Object[]> {
     return row;
   }
 
-  private static final class LocalDateDataType extends MemoryAlignedDataType<LocalDate> {
+  private static final class LocalDateDataType extends FixedSizeDataType<LocalDate> {
 
     LocalDateDataType() {
       super(Long.BYTES);
@@ -159,7 +159,7 @@ public final class DataRowType implements DataType<Object[]> {
     }
   }
 
-  private static final class LocalTimeDataType extends MemoryAlignedDataType<LocalTime> {
+  private static final class LocalTimeDataType extends FixedSizeDataType<LocalTime> {
 
     LocalTimeDataType() {
       super(Long.BYTES);
@@ -177,7 +177,7 @@ public final class DataRowType implements DataType<Object[]> {
   }
 
   private static final class LocalDateTimeDataType
-      extends MemoryAlignedDataType<LocalDateTime> {
+      extends FixedSizeDataType<LocalDateTime> {
 
     LocalDateTimeDataType() {
       super(2 * Long.BYTES);

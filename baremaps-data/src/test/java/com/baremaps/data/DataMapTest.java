@@ -159,9 +159,8 @@ class DataMapTest {
   static Stream<Arguments> mapProvider() {
     return Stream
         .of(
-            Arguments.of(new IndexedDataMap<>(new LongDataType())),
-            Arguments.of(new MonotonicDataMap<>(new LongDataType())),
-            Arguments.of(new MonotonicDataMap<>(new IndexedDataList<>(new LongDataType()))),
-            Arguments.of(new DirectHashDataMap<>(new LongDataType(), 1000)));
+            Arguments.of(new SparseDataMap<>(new LongDataType())),
+            Arguments.of(new SparseDataMap<>(new VariableSizeDataList<>(new LongDataType()))),
+            Arguments.of(new DenseDataMap<>(new LongDataType())));
   }
 }

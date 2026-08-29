@@ -63,22 +63,6 @@ class PersistenceTest {
   }
 
   @Test
-  void memoryAlignedDataList(@TempDir Path dir) throws Exception {
-    try (var list = new MemoryAlignedDataList<>(new LongDataType(),
-        Memory.mappedDirectory(dir, SEGMENT_BYTES))) {
-      for (long i = 0; i < 500; i++) {
-        list.add(i);
-      }
-    }
-    try (var list = new MemoryAlignedDataList<>(new LongDataType(),
-        Memory.mappedDirectory(dir, SEGMENT_BYTES))) {
-      assertEquals(500, list.size());
-      assertEquals(499L, list.get(499));
-      assertEquals(500, list.addIndexed(500L));
-    }
-  }
-
-  @Test
   void fixedSizeDataList(@TempDir Path dir) throws Exception {
     try (var list = new FixedSizeDataList<>(new LongDataType(),
         Memory.mappedDirectory(dir, SEGMENT_BYTES))) {
@@ -90,11 +74,12 @@ class PersistenceTest {
         Memory.mappedDirectory(dir, SEGMENT_BYTES))) {
       assertEquals(500, list.size());
       assertEquals(499L, list.get(499));
+      assertEquals(500, list.addIndexed(500L));
     }
   }
 
   @Test
-  void monotonicDataMap(@TempDir Path dir) throws Exception {
+  void sparseDataMap(@TempDir Path dir) throws Exception {
     try (var map = open(dir)) {
       for (long i = 0; i < 500; i++) {
         map.put(i * 3, List.of(i));
@@ -106,6 +91,28 @@ class PersistenceTest {
       assertNull(map.get(1L));
       map.put(1500L, List.of(500L));
       assertEquals(List.of(500L), map.get(1500L));
+    }
+  }
+
+  @Test
+  void denseDataMap(@TempDir Path dir) throws Exception {
+    try (var map = openDense(dir)) {
+      for (long i = 0; i < 500; i++) {
+        map.put(i * 3, i);
+      }
+    }
+    try (var map = openDense(dir)) {
+      assertEquals(500, map.size());
+      assertEquals(499L, map.get(499L * 3));
+      assertNull(map.get(1L));
+      assertNull(map.get(1500L));
+      // New keys land in new pages after the persisted page count, not over existing ones.
+      map.put(1500L, 500L);
+      map.put(1L << 30, 501L);
+      assertEquals(500L, map.get(1500L));
+      assertEquals(501L, map.get(1L << 30));
+      assertEquals(0L, map.get(0L));
+      assertEquals(502, map.size());
     }
   }
 
@@ -129,23 +136,30 @@ class PersistenceTest {
 
   @Test
   void neverClosedIsEmptyOnReopen(@TempDir Path dir) throws Exception {
-    var list = new MemoryAlignedDataList<>(new LongDataType(),
+    var list = new FixedSizeDataList<>(new LongDataType(),
         Memory.mappedDirectory(dir, SEGMENT_BYTES));
     list.add(1L);
-    try (var reopened = new MemoryAlignedDataList<>(new LongDataType(),
+    try (var reopened = new FixedSizeDataList<>(new LongDataType(),
         Memory.mappedDirectory(dir, SEGMENT_BYTES))) {
       assertEquals(0, reopened.size());
     }
   }
 
-  private static MonotonicDataMap<List<Long>> open(Path dir) {
-    return new MonotonicDataMap<>(
-        new MemoryAlignedDataList<>(new LongDataType(),
+  private static DenseDataMap<Long> openDense(Path dir) {
+    return new DenseDataMap<>(new LongDataType(), 6,
+        Memory.mappedDirectory(dir.resolve("table"), SEGMENT_BYTES),
+        Memory.mappedDirectory(dir.resolve("presence"), SEGMENT_BYTES),
+        Memory.mappedDirectory(dir.resolve("values"), SEGMENT_BYTES));
+  }
+
+  private static SparseDataMap<List<Long>> open(Path dir) {
+    return new SparseDataMap<>(
+        new FixedSizeDataList<>(new LongDataType(),
             Memory.mappedDirectory(dir.resolve("offsets"), SEGMENT_BYTES)),
-        new MemoryAlignedDataList<>(new LongDataType(),
+        new FixedSizeDataList<>(new LongDataType(),
             Memory.mappedDirectory(dir.resolve("keys"), SEGMENT_BYTES)),
-        new IndexedDataList<>(
-            new MemoryAlignedDataList<>(new LongDataType(),
+        new VariableSizeDataList<>(
+            new FixedSizeDataList<>(new LongDataType(),
                 Memory.mappedDirectory(dir.resolve("index"), SEGMENT_BYTES)),
             new AppendOnlyLog<>(new LongListDataType(),
                 Memory.mappedDirectory(dir.resolve("values"), SEGMENT_BYTES))));

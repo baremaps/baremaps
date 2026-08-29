@@ -26,9 +26,13 @@ import com.baremaps.utils.Compression;
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
 import java.io.BufferedInputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import java.util.StringJoiner;
+import org.locationtech.jts.geom.Coordinate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,9 +83,17 @@ public class ImportOsmOsc implements Task {
     var wayRepository = new WayRepository(datasource);
     var relationRepository = new RelationRepository(datasource);
 
-    var coordinateMap = context.getCoordinateMap();
-    var referenceMap = context.getReferenceMap();
+    try (var coordinateMap = context.getCoordinateMap();
+        var referenceMap = context.getReferenceMap()) {
+      execute(path, compression, coordinateMap, referenceMap, nodeRepository, wayRepository,
+          relationRepository, databaseSrid);
+    }
+  }
 
+  static void execute(Path path, Compression compression, Map<Long, Coordinate> coordinateMap,
+      Map<Long, List<Long>> referenceMap, NodeRepository nodeRepository,
+      WayRepository wayRepository, RelationRepository relationRepository, Integer databaseSrid)
+      throws IOException {
     var coordinateMapBuilder = new CoordinateMapBuilder(coordinateMap);
     var referenceMapBuilder = new ReferenceMapBuilder(referenceMap);
 

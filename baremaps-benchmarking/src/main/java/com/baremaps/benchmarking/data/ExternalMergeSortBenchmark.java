@@ -16,7 +16,7 @@ package com.baremaps.benchmarking.data;
 
 import com.baremaps.data.algorithm.ExternalMergeSort;
 import com.baremaps.data.collection.DataList;
-import com.baremaps.data.collection.MemoryAlignedDataList;
+import com.baremaps.data.collection.FixedSizeDataList;
 import com.baremaps.data.type.LongDataType;
 import java.util.Comparator;
 import java.util.Random;
@@ -56,7 +56,7 @@ public class ExternalMergeSortBenchmark {
   @Setup
   public void setup() {
     var random = new Random(0);
-    input = new MemoryAlignedDataList<>(new LongDataType());
+    input = new FixedSizeDataList<>(new LongDataType());
     for (int i = 0; i < COUNT; i++) {
       input.add(random.nextLong());
     }
@@ -64,7 +64,7 @@ public class ExternalMergeSortBenchmark {
 
   @Setup(Level.Invocation)
   public void setupOutput() {
-    output = new MemoryAlignedDataList<>(new LongDataType());
+    output = new FixedSizeDataList<>(new LongDataType());
   }
 
   @TearDown(Level.Invocation)
@@ -75,7 +75,7 @@ public class ExternalMergeSortBenchmark {
   @Benchmark
   public DataList<Long> sort() {
     ExternalMergeSort.sort(input, output, Comparator.naturalOrder(),
-        () -> new MemoryAlignedDataList<>(new LongDataType()), batchSize, false, true);
+        () -> new FixedSizeDataList<>(new LongDataType()), batchSize, false, true);
     return output;
   }
 }

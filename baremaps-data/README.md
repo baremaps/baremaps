@@ -19,6 +19,9 @@ com.baremaps.data.algorithm   sort, search and union over those collections
 power-of-two size, so a position splits into a segment index and an offset with a shift and a
 mask; segments may exceed 2 GB. They are allocated lazily and are always zero-filled; the header is
 a small extra segment where a collection persists its own metadata (size, end position, schema).
+Values go through a `DataType`; for the indexes and bitmaps a collection probes on every access,
+`get(ValueLayout.OfLong, position)` and its siblings mirror the layout-typed accessors of
+`MemorySegment` and skip the boxing, and `getAndSetBits` sets bits atomically.
 Backings: `Memory.offHeap()` (native memory), `Memory.mappedFile(path)`, and
 `Memory.mappedDirectory(path)` (one file per segment, the choice for large data). All segments of
 a memory live in one `Arena`: `close()` frees or unmaps them deterministically, later accesses
@@ -29,21 +32,22 @@ throw `IllegalStateException`, and memory that is never closed is never reclaime
 and files are not portable across endianness. Values are never null, and an encoding is
 self-delimiting: `size(segment, position)` recovers the size from the first bytes and is never 0
 for a written value. That invariant is what lets a collection tell written space from
-never-written space. `FixedSizeDataType` and `MemoryAlignedDataType` (a power-of-two size) are
-what the array-like collections need.
+never-written space. `FixedSizeDataType` is what the array-like collections need; `DenseDataMap`
+further requires a power-of-two size, so that the position of a slot is a shift.
 
 **Collections**
+
+The names say what the caller decides on, the shape of the values or of the keys, not how the
+collection works inside.
 
 | Class | Use when |
 |---|---|
 | `AppendOnlyLog` | Variable-size values, addressed by the position returned on append. |
-| `MemoryAlignedDataList` | Fixed power-of-two values, index → position is a shift. The default index. |
-| `FixedSizeDataList` | Fixed values of any size. |
-| `IndexedDataList` | Variable-size values with `long` indexes: an aligned index over a log. |
-| `MonotonicDataMap` | Keys inserted in increasing order (OSM ids). Sorted keys, chunked binary search. |
-| `MemoryAlignedDataMap` | Dense `long` keys; a flat array, so every key below the bound "exists". |
-| `DirectHashDataMap` | Sparse, unordered keys; open addressing with a fixed capacity. |
-| `IndexedDataMap` | Keys fit in the heap, values do not. |
+| `FixedSizeDataList` | Fixed-size values with `long` indexes: a flat array. The default index. |
+| `VariableSizeDataList` | Variable-size values with `long` indexes: a `FixedSizeDataList` of positions over an `AppendOnlyLog`. |
+| `DenseDataMap` | Dense but gappy `long` keys (a planet's OSM ids): a flat array in pages allocated on demand, one bit per key for presence. The index of a world import. |
+| `SparseDataMap` | Sparse `long` keys inserted in increasing order (extracts). Sorted keys, chunked binary search. |
+| `VariableSizeDataMap` | Variable-size values behind either map: a map of positions over an `AppendOnlyLog`. |
 
 `DataConversions` gives live `java.util` views over these and back.
 
@@ -73,6 +77,8 @@ jacoco:report` writes a coverage report to `target/site/jacoco`.
 
 JMH benchmarks for this module live in `baremaps-benchmarking` under
 `com.baremaps.benchmarking.data`: memory backings, maps, the log, data types and the external sort.
+`OsmIndexBenchmark` models the node index of a planet import (increasing, 75% dense ids, way-shaped
+lookups) and is the reference for choosing the map behind `WorkflowContext`.
 
 ```
 ./mvnw -pl baremaps-data,baremaps-benchmarking -DskipTests install

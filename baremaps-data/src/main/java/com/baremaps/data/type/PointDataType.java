@@ -22,7 +22,7 @@ import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 
 /** A {@link DataType} for {@link Point}s: two doubles, NaN for the empty point. */
-public class PointDataType extends MemoryAlignedDataType<Point> {
+public class PointDataType extends FixedSizeDataType<Point> {
 
   private final GeometryFactory geometryFactory;
 

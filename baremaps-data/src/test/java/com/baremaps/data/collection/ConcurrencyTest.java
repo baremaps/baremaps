@@ -74,8 +74,8 @@ class ConcurrencyTest {
   }
 
   @Test
-  void memoryAlignedDataList() throws Exception {
-    var list = new MemoryAlignedDataList<>(new LongDataType(), Memory.offHeap(SEGMENT));
+  void fixedSizeDataList() throws Exception {
+    var list = new FixedSizeDataList<>(new LongDataType(), Memory.offHeap(SEGMENT));
     var tasks = new ArrayList<Callable<long[]>>();
     for (int t = 0; t < THREADS; t++) {
       long thread = t;
@@ -123,5 +123,35 @@ class ConcurrencyTest {
     for (boolean ok : runAll(tasks)) {
       assertEquals(true, ok);
     }
+  }
+
+  @Test
+  void denseDataMap() throws Exception {
+    var map = new DenseDataMap<>(new LongDataType(), 6, Memory.offHeap(SEGMENT),
+        Memory.offHeap(SEGMENT), Memory.offHeap(SEGMENT));
+    // Interleaved keys: neighbouring threads write the same bitmap words and allocate the same
+    // pages at the same time.
+    var tasks = new ArrayList<Callable<Boolean>>();
+    for (int t = 0; t < THREADS; t++) {
+      int thread = t;
+      tasks.add(() -> {
+        for (int i = 0; i < PER_THREAD; i++) {
+          long key = (long) i * THREADS + thread;
+          map.put(key, key);
+        }
+        for (int i = 0; i < PER_THREAD; i++) {
+          long key = (long) i * THREADS + thread;
+          if (map.get(key) != key) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+    for (boolean ok : runAll(tasks)) {
+      assertEquals(true, ok);
+    }
+    assertEquals((long) THREADS * PER_THREAD, map.size());
+    map.close();
   }
 }

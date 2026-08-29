@@ -64,9 +64,11 @@ public class DataConversions {
     return new DataListAdapter<>(list);
   }
 
-  public static <K, V> Map<K, V> asMap(DataMap<K, V> dataMap) {
-    if (dataMap instanceof DataMapAdapter<K, V>adapter) {
-      return adapter.map;
+  /** Returns a map view; closing it closes the data map. */
+  public static <K, V> CloseableMap<K, V> asMap(DataMap<K, V> dataMap) {
+    if (dataMap instanceof DataMapAdapter<K, V>adapter
+        && adapter.map instanceof CloseableMap<K, V>map) {
+      return map;
     }
     return new MapAdapter<>(dataMap);
   }
@@ -227,12 +229,17 @@ public class DataConversions {
     }
   }
 
-  private static class MapAdapter<K, V> extends AbstractMap<K, V> {
+  private static class MapAdapter<K, V> extends AbstractMap<K, V> implements CloseableMap<K, V> {
 
     private final DataMap<K, V> map;
 
     MapAdapter(DataMap<K, V> map) {
       this.map = map;
+    }
+
+    @Override
+    public void close() throws Exception {
+      map.close();
     }
 
     @Override

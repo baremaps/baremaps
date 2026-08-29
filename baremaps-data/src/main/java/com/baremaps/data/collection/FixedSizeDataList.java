@@ -22,9 +22,8 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * A list of fixed-size values packed back to back. Values may straddle segments as far as the
- * arithmetic goes, so the segment size must be a multiple of the value size; see
- * {@link MemoryAlignedDataList} for the faster power-of-two variant.
+ * A list of fixed-size values packed back to back: the position of an index is a multiplication.
+ * The segment size must be a multiple of the value size so that no value straddles a segment.
  *
  * <p>
  * The size is persisted in the memory header by {@link #close()}. Appends may be concurrent.

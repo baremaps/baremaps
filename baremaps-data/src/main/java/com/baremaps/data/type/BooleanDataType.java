@@ -22,7 +22,7 @@ import java.lang.foreign.MemorySegment;
 /**
  * A {@link DataType} for reading and writing boolean values in {@link MemorySegment}s.
  */
-public class BooleanDataType extends MemoryAlignedDataType<Boolean> {
+public class BooleanDataType extends FixedSizeDataType<Boolean> {
 
   /**
    * Constructs a {@link BooleanDataType} with a fixed size of {@link Byte#BYTES}.

@@ -21,7 +21,7 @@ import java.lang.foreign.MemorySegment;
 /**
  * A {@link DataType} for reading and writing byte values in {@link MemorySegment}s.
  */
-public class ByteDataType extends MemoryAlignedDataType<Byte> {
+public class ByteDataType extends FixedSizeDataType<Byte> {
 
   /**
    * Constructs a {@link ByteDataType} with a fixed size of {@link Byte#BYTES}.

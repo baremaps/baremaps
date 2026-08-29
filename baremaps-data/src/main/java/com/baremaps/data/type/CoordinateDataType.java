@@ -22,7 +22,7 @@ import org.locationtech.jts.geom.Coordinate;
 /**
  * A {@link DataType} for reading and writing {@link Coordinate} values in {@link MemorySegment}s.
  */
-public class CoordinateDataType extends MemoryAlignedDataType<Coordinate> {
+public class CoordinateDataType extends FixedSizeDataType<Coordinate> {
 
   /**
    * Constructs a {@link CoordinateDataType} with a fixed size of two {@link Double#BYTES}.

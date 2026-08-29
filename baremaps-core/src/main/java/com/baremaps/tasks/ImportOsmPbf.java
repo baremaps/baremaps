@@ -104,18 +104,19 @@ public class ImportOsmPbf implements Task {
       relationRepository.truncate();
     }
 
-    var coordinateMap = context.getCoordinateMap();
-    var referenceMap = context.getReferenceMap();
-
-    execute(
-        path,
-        coordinateMap,
-        referenceMap,
-        headerRepository,
-        nodeRepository,
-        wayRepository,
-        relationRepository,
-        databaseSrid);
+    // Closing the maps persists them in the cache directory for the updates that follow.
+    try (var coordinateMap = context.getCoordinateMap();
+        var referenceMap = context.getReferenceMap()) {
+      execute(
+          path,
+          coordinateMap,
+          referenceMap,
+          headerRepository,
+          nodeRepository,
+          wayRepository,
+          relationRepository,
+          databaseSrid);
+    }
   }
 
   /**

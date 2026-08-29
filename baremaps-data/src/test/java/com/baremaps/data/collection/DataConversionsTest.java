@@ -28,7 +28,7 @@ class DataConversionsTest {
 
   @Test
   void listViewIsLive() {
-    var list = new MemoryAlignedDataList<>(new LongDataType());
+    var list = new FixedSizeDataList<>(new LongDataType());
     List<Long> view = DataConversions.asList(list);
     assertEquals(0, view.size());
     list.add(1L);
@@ -41,7 +41,7 @@ class DataConversionsTest {
 
   @Test
   void mapViewIsLive() {
-    var map = new IndexedDataMap<>(new LongDataType());
+    var map = new DenseDataMap<>(new LongDataType());
     var view = DataConversions.asMap(map);
     map.put(1L, 10L);
     assertEquals(1, view.size());

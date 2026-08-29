@@ -24,7 +24,7 @@ import org.locationtech.jts.geom.Coordinate;
  * {@link MemorySegment}s. An integer is used to compress the coordinates to the detriment of
  * precision (centimeters).
  */
-public class LonLatDataType extends MemoryAlignedDataType<Coordinate> {
+public class LonLatDataType extends FixedSizeDataType<Coordinate> {
 
   // Each axis gets a 32-bit lane; scaling by 2^31 rather than 2^32 keeps the inclusive upper
   // bounds (180 and 90) from overflowing the lane, at the price of one bit of precision.

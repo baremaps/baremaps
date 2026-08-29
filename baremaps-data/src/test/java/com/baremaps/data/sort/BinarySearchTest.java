@@ -17,7 +17,7 @@ package com.baremaps.data.sort;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.baremaps.data.algorithm.BinarySearch;
-import com.baremaps.data.collection.MemoryAlignedDataList;
+import com.baremaps.data.collection.FixedSizeDataList;
 import com.baremaps.data.type.LongDataType;
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +25,7 @@ class BinarySearchTest {
 
   @Test
   void binarySearch() {
-    var list = new MemoryAlignedDataList<>(new LongDataType());
+    var list = new FixedSizeDataList<>(new LongDataType());
     for (long i = 0; i < 1000; i++) {
       list.add(i);
     }

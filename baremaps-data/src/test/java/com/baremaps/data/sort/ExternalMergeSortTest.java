@@ -21,8 +21,8 @@ import com.baremaps.data.algorithm.ExternalMergeSort;
 import com.baremaps.data.collection.AppendOnlyLog;
 import com.baremaps.data.collection.DataConversions;
 import com.baremaps.data.collection.DataList;
-import com.baremaps.data.collection.IndexedDataList;
-import com.baremaps.data.collection.MemoryAlignedDataList;
+import com.baremaps.data.collection.FixedSizeDataList;
+import com.baremaps.data.collection.VariableSizeDataList;
 import com.baremaps.data.memory.Memory;
 import com.baremaps.data.type.LongDataType;
 import com.baremaps.data.type.StringDataType;
@@ -51,8 +51,8 @@ class ExternalMergeSortTest {
     stringsAsc = strings.stream().sorted(Comparator.naturalOrder()).toList();
     stringsDsc = strings.stream().sorted(Comparator.reverseOrder()).toList();
     stringsDistinct = stringsAsc.stream().distinct().toList();
-    supplier = () -> new IndexedDataList<>(
-        new MemoryAlignedDataList<>(new LongDataType(), Memory.offHeap()),
+    supplier = () -> new VariableSizeDataList<>(
+        new FixedSizeDataList<>(new LongDataType(), Memory.offHeap()),
         new AppendOnlyLog<>(new StringDataType(), Memory.offHeap()));
     input = supplier.get();
     output = supplier.get();

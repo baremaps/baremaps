@@ -64,13 +64,12 @@ public class CreateGeocoderOpenStreetMap implements Task {
   public void execute(WorkflowContext context) throws Exception {
     var path = file.toAbsolutePath();
 
-    var coordinateMap = context.getCoordinateMap();
-    var referenceMap = context.getReferenceMap();
-
     var directory = FSDirectory.open(indexDirectory);
     var config = new IndexWriterConfig(GeocoderConstants.ANALYZER);
 
-    try (var indexWriter = new IndexWriter(directory, config)) {
+    try (var coordinateMap = context.getCoordinateMap();
+        var referenceMap = context.getReferenceMap();
+        var indexWriter = new IndexWriter(directory, config)) {
       var importer = new OpenStreetMapEntityConsumer(indexWriter);
       execute(
           path,

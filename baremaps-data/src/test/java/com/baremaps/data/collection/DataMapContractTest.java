@@ -33,8 +33,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * The contract every sparse {@link DataMap} must honour. {@link MemoryAlignedDataMap} is dense and
- * has its own test.
+ * The contract every {@link DataMap} must honour.
  */
 class DataMapContractTest {
 
@@ -42,14 +41,16 @@ class DataMapContractTest {
 
   static Stream<Arguments> maps() {
     return Stream.of(
-        Arguments.of(new IndexedDataMap<>(new HashMap<>(),
-            new AppendOnlyLog<>(new LongListDataType(), Memory.offHeap(SEGMENT_BYTES)))),
-        Arguments.of(new MonotonicDataMap<>(
-            new MemoryAlignedDataList<>(new LongDataType(), Memory.offHeap(SEGMENT_BYTES)),
-            new MemoryAlignedDataList<>(new LongDataType(), Memory.offHeap(SEGMENT_BYTES)),
-            new IndexedDataList<>(
-                new MemoryAlignedDataList<>(new LongDataType(), Memory.offHeap(SEGMENT_BYTES)),
-                new AppendOnlyLog<>(new LongListDataType(), Memory.offHeap(SEGMENT_BYTES))))));
+        Arguments.of(new SparseDataMap<>(
+            new FixedSizeDataList<>(new LongDataType(), Memory.offHeap(SEGMENT_BYTES)),
+            new FixedSizeDataList<>(new LongDataType(), Memory.offHeap(SEGMENT_BYTES)),
+            new VariableSizeDataList<>(
+                new FixedSizeDataList<>(new LongDataType(), Memory.offHeap(SEGMENT_BYTES)),
+                new AppendOnlyLog<>(new LongListDataType(), Memory.offHeap(SEGMENT_BYTES))))),
+        Arguments.of(new VariableSizeDataMap<>(
+            new DenseDataMap<>(new LongDataType(), 6, Memory.offHeap(SEGMENT_BYTES),
+                Memory.offHeap(SEGMENT_BYTES), Memory.offHeap(SEGMENT_BYTES)),
+            new AppendOnlyLog<>(new LongListDataType(), Memory.offHeap(SEGMENT_BYTES)))));
   }
 
   // Sparse, increasing keys with gaps larger than a chunk.
@@ -133,8 +134,8 @@ class DataMapContractTest {
   }
 
   @Test
-  void monotonicKeysMustIncrease() {
-    var map = new MonotonicDataMap<>(new LongDataType());
+  void sparseKeysMustIncrease() {
+    var map = new SparseDataMap<>(new LongDataType());
     map.put(10L, 1L);
     assertThrows(IllegalArgumentException.class, () -> map.put(10L, 2L));
     assertThrows(IllegalArgumentException.class, () -> map.put(5L, 2L));
@@ -143,8 +144,8 @@ class DataMapContractTest {
   }
 
   @Test
-  void monotonicGetAllWalksSortedKeys() {
-    var map = new MonotonicDataMap<>(new LongDataType());
+  void sparseGetAllWalksSortedKeys() {
+    var map = new SparseDataMap<>(new LongDataType());
     for (long i = 0; i < 2000; i++) {
       map.put(i * 3, i);
     }
@@ -156,35 +157,5 @@ class DataMapContractTest {
     }
     assertEquals(expected, map.getAll(keys));
     assertEquals(map.get(5997L), map.get((Object) 5997L));
-  }
-
-  @Test
-  void directHashProbesWrapAround() {
-    // Small capacity forces collisions and probing past the end of the table.
-    var map = new DirectHashDataMap<>(new LongDataType(), 16);
-    for (long i = 0; i < 16; i++) {
-      map.put(i * 16, i);
-    }
-    for (long i = 0; i < 16; i++) {
-      assertEquals(i, map.get(i * 16));
-    }
-    assertNull(map.get(8L));
-    assertEquals(16, map.size());
-    var keys = new java.util.HashSet<Long>();
-    map.keys().forEach(keys::add);
-    assertEquals(16, keys.size());
-  }
-
-  @Test
-  void directHashFull() {
-    var map = new DirectHashDataMap<>(new LongDataType(), 3);
-    map.put(1L, 1L);
-    map.put(2L, 2L);
-    map.put(3L, 3L);
-    map.put(3L, 4L);
-    assertEquals(3, map.size());
-    assertEquals(4L, map.get(3L));
-    assertThrows(IllegalStateException.class, () -> map.put(4L, 4L));
-    assertThrows(IllegalArgumentException.class, () -> map.put(Long.MIN_VALUE, 4L));
   }
 }

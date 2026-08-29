@@ -15,7 +15,11 @@
 package com.baremaps.data.memory;
 
 import static com.baremaps.data.memory.MemoryProvider.SEGMENT_BYTES;
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import static java.lang.foreign.ValueLayout.JAVA_DOUBLE_UNALIGNED;
+import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
 import static java.lang.foreign.ValueLayout.JAVA_LONG_UNALIGNED;
+import static java.lang.foreign.ValueLayout.JAVA_SHORT_UNALIGNED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -45,6 +49,33 @@ class MemoryTest {
     }
     assertEquals(SEGMENT_NUMBER + 1, memory.segmentCount());
     assertEquals((long) (SEGMENT_NUMBER + 1) * SEGMENT_BYTES, memory.size());
+    memory.clear();
+    memory.close();
+  }
+
+  @ParameterizedTest
+  @MethodSource("com.baremaps.data.memory.MemoryProvider#memories")
+  void primitives(Memory memory) throws IOException {
+    // Across a segment boundary and at odd offsets, as the unaligned layouts allow.
+    long base = SEGMENT_BYTES - 3;
+    memory.set(JAVA_BYTE, base, (byte) 7);
+    memory.set(JAVA_SHORT_UNALIGNED, base + 1, (short) -2);
+    memory.set(JAVA_INT_UNALIGNED, base + 3, Integer.MIN_VALUE);
+    memory.set(JAVA_LONG_UNALIGNED, base + 7, Long.MAX_VALUE);
+    memory.set(JAVA_DOUBLE_UNALIGNED, base + 15, Math.PI);
+    assertEquals((byte) 7, memory.get(JAVA_BYTE, base));
+    assertEquals((short) -2, memory.get(JAVA_SHORT_UNALIGNED, base + 1));
+    assertEquals(Integer.MIN_VALUE, memory.get(JAVA_INT_UNALIGNED, base + 3));
+    assertEquals(Long.MAX_VALUE, memory.get(JAVA_LONG_UNALIGNED, base + 7));
+    assertEquals(Math.PI, memory.get(JAVA_DOUBLE_UNALIGNED, base + 15));
+    // The same bytes through a DataType.
+    assertEquals(Long.MAX_VALUE, memory.read(new LongDataType(), base + 7));
+    long bits = 1L << 40;
+    assertEquals(0L, memory.getAndSetBits(2 * SEGMENT_BYTES, bits));
+    assertEquals(bits, memory.getAndSetBits(2 * SEGMENT_BYTES, 1L));
+    assertEquals(bits | 1L, memory.get(JAVA_LONG_UNALIGNED, 2 * SEGMENT_BYTES));
+    assertThrows(IndexOutOfBoundsException.class, () -> memory.getAndSetBits(1, 1L));
+    assertThrows(IndexOutOfBoundsException.class, () -> memory.get(JAVA_LONG_UNALIGNED, -8));
     memory.clear();
     memory.close();
   }

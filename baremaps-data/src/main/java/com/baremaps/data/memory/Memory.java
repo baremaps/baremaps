@@ -18,6 +18,8 @@ import com.baremaps.data.type.DataType;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.VarHandle;
 import java.nio.file.Path;
 import java.util.Arrays;
 
@@ -49,6 +51,9 @@ public final class Memory implements AutoCloseable {
 
   /** The size of the header, large enough for a serialized table schema. */
   public static final int HEADER_BYTES = 1 << 14;
+
+  // Atomic access to an aligned long, for bitmaps updated by several threads.
+  private static final VarHandle LONG = ValueLayout.JAVA_LONG.varHandle();
 
   private final Backing backing;
 
@@ -179,6 +184,107 @@ public final class Memory implements AutoCloseable {
           "Value of " + size + " bytes at position " + position + " crosses a segment boundary");
     }
     dataType.write(segment(segmentIndex(position)), offset, value);
+  }
+
+  /*
+   * Primitive access without a DataType, mirroring the layout-typed accessors of MemorySegment: the
+   * caller chooses the layout, and with it the alignment and byte order. This is what an index or a
+   * bitmap probed on every access uses, since a DataType would box the value.
+   */
+
+  /** Reads a {@code byte} at the given position. */
+  public byte get(ValueLayout.OfByte layout, long position) {
+    return segment(segmentIndex(position)).get(layout, position & segmentMask);
+  }
+
+  /** Writes a {@code byte} at the given position. */
+  public void set(ValueLayout.OfByte layout, long position, byte value) {
+    segment(segmentIndex(position)).set(layout, position & segmentMask, value);
+  }
+
+  /** Reads a {@code boolean} at the given position. */
+  public boolean get(ValueLayout.OfBoolean layout, long position) {
+    return segment(segmentIndex(position)).get(layout, position & segmentMask);
+  }
+
+  /** Writes a {@code boolean} at the given position. */
+  public void set(ValueLayout.OfBoolean layout, long position, boolean value) {
+    segment(segmentIndex(position)).set(layout, position & segmentMask, value);
+  }
+
+  /** Reads a {@code char} at the given position. */
+  public char get(ValueLayout.OfChar layout, long position) {
+    return segment(segmentIndex(position)).get(layout, position & segmentMask);
+  }
+
+  /** Writes a {@code char} at the given position. */
+  public void set(ValueLayout.OfChar layout, long position, char value) {
+    segment(segmentIndex(position)).set(layout, position & segmentMask, value);
+  }
+
+  /** Reads a {@code short} at the given position. */
+  public short get(ValueLayout.OfShort layout, long position) {
+    return segment(segmentIndex(position)).get(layout, position & segmentMask);
+  }
+
+  /** Writes a {@code short} at the given position. */
+  public void set(ValueLayout.OfShort layout, long position, short value) {
+    segment(segmentIndex(position)).set(layout, position & segmentMask, value);
+  }
+
+  /** Reads a {@code int} at the given position. */
+  public int get(ValueLayout.OfInt layout, long position) {
+    return segment(segmentIndex(position)).get(layout, position & segmentMask);
+  }
+
+  /** Writes a {@code int} at the given position. */
+  public void set(ValueLayout.OfInt layout, long position, int value) {
+    segment(segmentIndex(position)).set(layout, position & segmentMask, value);
+  }
+
+  /** Reads a {@code long} at the given position. */
+  public long get(ValueLayout.OfLong layout, long position) {
+    return segment(segmentIndex(position)).get(layout, position & segmentMask);
+  }
+
+  /** Writes a {@code long} at the given position. */
+  public void set(ValueLayout.OfLong layout, long position, long value) {
+    segment(segmentIndex(position)).set(layout, position & segmentMask, value);
+  }
+
+  /** Reads a {@code float} at the given position. */
+  public float get(ValueLayout.OfFloat layout, long position) {
+    return segment(segmentIndex(position)).get(layout, position & segmentMask);
+  }
+
+  /** Writes a {@code float} at the given position. */
+  public void set(ValueLayout.OfFloat layout, long position, float value) {
+    segment(segmentIndex(position)).set(layout, position & segmentMask, value);
+  }
+
+  /** Reads a {@code double} at the given position. */
+  public double get(ValueLayout.OfDouble layout, long position) {
+    return segment(segmentIndex(position)).get(layout, position & segmentMask);
+  }
+
+  /** Writes a {@code double} at the given position. */
+  public void set(ValueLayout.OfDouble layout, long position, double value) {
+    segment(segmentIndex(position)).set(layout, position & segmentMask, value);
+  }
+
+  /**
+   * Atomically sets the given bits in the {@code long} at the given position and returns its
+   * previous value. The position must be a multiple of 8.
+   *
+   * @throws IndexOutOfBoundsException if the position is negative, beyond the addressable range, or
+   *         not aligned
+   */
+  public long getAndSetBits(long position, long bits) {
+    if ((position & (Long.BYTES - 1)) != 0) {
+      throw new IndexOutOfBoundsException("Position " + position + " is not aligned on a long");
+    }
+    return (long) LONG.getAndBitwiseOr(segment(segmentIndex(position)), position & segmentMask,
+        bits);
   }
 
   /**

@@ -21,7 +21,7 @@ import java.lang.foreign.MemorySegment;
 /**
  * A {@link DataType} for reading and writing short values in {@link MemorySegment}s.
  */
-public class ShortDataType extends MemoryAlignedDataType<Short> {
+public class ShortDataType extends FixedSizeDataType<Short> {
 
   /**
    * Constructs a {@link ShortDataType} with a fixed size of {@link Short#BYTES}.

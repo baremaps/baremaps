@@ -14,13 +14,14 @@
 
 package com.baremaps.postgres.openstreetmap;
 
+import com.baremaps.openstreetmap.utils.BatchMap;
 import com.google.common.collect.Streams;
 import java.util.*;
 
 /**
  * An abstract map of data elements backed by a Postgres database.
  */
-abstract class PostgresMap<K, V> implements Map<K, V> {
+abstract class PostgresMap<K, V> implements BatchMap<K, V> {
 
   /** {@inheritDoc} */
   @Override
@@ -28,12 +29,8 @@ abstract class PostgresMap<K, V> implements Map<K, V> {
     m.forEach(this::put);
   }
 
-  /**
-   * Returns the value associated with the specified key or null if the key is not present.
-   *
-   * @param keys the keys
-   * @return the values
-   */
+  /** {@inheritDoc} */
+  @Override
   public List<V> getAll(List<K> keys) {
     return Streams.stream(keys).map(this::get).toList();
   }

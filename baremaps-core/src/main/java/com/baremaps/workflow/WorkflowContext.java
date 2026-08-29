@@ -16,11 +16,12 @@ package com.baremaps.workflow;
 
 
 import com.baremaps.data.collection.AppendOnlyLog;
+import com.baremaps.data.collection.CloseableMap;
 import com.baremaps.data.collection.DataConversions;
-import com.baremaps.data.collection.IndexedDataList;
-import com.baremaps.data.collection.MemoryAlignedDataList;
-import com.baremaps.data.collection.MonotonicDataMap;
+import com.baremaps.data.collection.DenseDataMap;
+import com.baremaps.data.collection.VariableSizeDataMap;
 import com.baremaps.data.memory.Memory;
+import com.baremaps.data.type.FixedSizeDataType;
 import com.baremaps.data.type.LonLatDataType;
 import com.baremaps.data.type.LongDataType;
 import com.baremaps.data.type.LongListDataType;
@@ -67,32 +68,31 @@ public class WorkflowContext {
 
   /**
    * Returns a map from node ids to coordinates, backed by the cache directory. Coordinates are
-   * quantized to 8 bytes, which keeps a planet's worth of nodes within a few tens of gigabytes.
+   * quantized to 8 bytes and the ids of a planet are dense, so a {@link DenseDataMap} keeps a
+   * planet's worth of nodes within a few tens of gigabytes at one probe per lookup.
+   *
+   * <p>
+   * The map is persistent: close it and the next call reopens it with its content, which is how an
+   * update reuses the index built by an import instead of querying the database.
    */
-  public Map<Long, Coordinate> getCoordinateMap() throws IOException {
-    Path dir = cacheDir.resolve("coordinates");
-    return DataConversions.asMap(new MonotonicDataMap<>(
-        new MemoryAlignedDataList<>(new LongDataType(),
-            Memory.mappedDirectory(dir.resolve("offsets"))),
-        new MemoryAlignedDataList<>(new LongDataType(),
-            Memory.mappedDirectory(dir.resolve("keys"))),
-        new MemoryAlignedDataList<>(new LonLatDataType(),
-            Memory.mappedDirectory(dir.resolve("values")))));
+  public CloseableMap<Long, Coordinate> getCoordinateMap() throws IOException {
+    return DataConversions.asMap(denseMap(new LonLatDataType(), cacheDir.resolve("coordinates")));
   }
 
   /** Returns a map from way ids to their node ids, backed by the cache directory. */
-  public Map<Long, List<Long>> getReferenceMap() throws IOException {
+  public CloseableMap<Long, List<Long>> getReferenceMap() throws IOException {
     Path dir = cacheDir.resolve("references");
-    return DataConversions.asMap(new MonotonicDataMap<>(
-        new MemoryAlignedDataList<>(new LongDataType(),
-            Memory.mappedDirectory(dir.resolve("offsets"))),
-        new MemoryAlignedDataList<>(new LongDataType(),
-            Memory.mappedDirectory(dir.resolve("keys"))),
-        new IndexedDataList<>(
-            new MemoryAlignedDataList<>(new LongDataType(),
-                Memory.mappedDirectory(dir.resolve("index"))),
-            new AppendOnlyLog<>(new LongListDataType(),
-                Memory.mappedDirectory(dir.resolve("values"))))));
+    return DataConversions.asMap(new VariableSizeDataMap<>(
+        denseMap(new LongDataType(), dir),
+        new AppendOnlyLog<>(new LongListDataType(),
+            Memory.mappedDirectory(dir.resolve("values")))));
+  }
+
+  private static <E> DenseDataMap<E> denseMap(FixedSizeDataType<E> dataType, Path dir) {
+    return new DenseDataMap<>(dataType, DenseDataMap.DEFAULT_PAGE_SHIFT,
+        Memory.mappedDirectory(dir.resolve("table")),
+        Memory.mappedDirectory(dir.resolve("presence")),
+        Memory.mappedDirectory(dir.resolve("pages")));
   }
 
   public void cleanCache() throws IOException {

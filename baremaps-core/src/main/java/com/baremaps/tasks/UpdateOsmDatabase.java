@@ -15,11 +15,13 @@
 package com.baremaps.tasks;
 
 import com.baremaps.openstreetmap.function.*;
+import com.baremaps.openstreetmap.model.Change;
 import com.baremaps.openstreetmap.model.Header;
 import com.baremaps.openstreetmap.model.Node;
 import com.baremaps.openstreetmap.model.Relation;
 import com.baremaps.openstreetmap.model.Way;
 import com.baremaps.openstreetmap.state.StateReader;
+import com.baremaps.openstreetmap.utils.BatchMap;
 import com.baremaps.openstreetmap.xml.XmlChangeReader;
 import com.baremaps.postgres.openstreetmap.*;
 import com.baremaps.workflow.Task;
@@ -29,6 +31,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
+import java.util.function.Consumer;
 import java.util.zip.GZIPInputStream;
 import org.locationtech.jts.geom.Coordinate;
 import org.slf4j.Logger;
@@ -70,28 +73,46 @@ public class UpdateOsmDatabase implements Task {
   @Override
   public void execute(WorkflowContext context) throws Exception {
     var datasource = context.getDataSource(database);
-    var coordinateMap = new CoordinateMap(datasource);
-    var referenceMap = new ReferenceMap(datasource);
     var headerRepository = new HeaderRepository(datasource);
     var nodeRepository = new NodeRepository(datasource);
     var wayRepository = new WayRepository(datasource);
     var relationRepository = new RelationRepository(datasource);
-    execute(
-        coordinateMap,
-        referenceMap,
-        headerRepository,
-        nodeRepository,
-        wayRepository,
-        relationRepository,
-        databaseSrid,
-        replicationUrl);
+    // The index left in the cache by the import answers a node lookup in nanoseconds, where the
+    // database answers it with a query; fall back to the database only when there is no cache.
+    try (var coordinateMap = context.getCoordinateMap();
+        var referenceMap = context.getReferenceMap()) {
+      if (coordinateMap.isEmpty()) {
+        logger.info("No cached index, reading coordinates and references from the database");
+        execute(
+            new CoordinateMap(datasource),
+            new ReferenceMap(datasource),
+            headerRepository,
+            nodeRepository,
+            wayRepository,
+            relationRepository,
+            databaseSrid,
+            replicationUrl);
+      } else {
+        execute(
+            coordinateMap,
+            referenceMap,
+            headerRepository,
+            nodeRepository,
+            wayRepository,
+            relationRepository,
+            databaseSrid,
+            replicationUrl);
+      }
+    }
   }
 
   /**
    * Executes the task.
    *
-   * @param coordinateMap the coordinate map
-   * @param referenceMap the reference map
+   * @param coordinateMap the coordinate map, updated with the nodes of the change when it is not
+   *        read-only
+   * @param referenceMap the reference map, updated with the ways of the change when it is not
+   *        read-only
    * @param headerRepository the header repository
    * @param nodeRepository the node repository
    * @param wayRepository the way repository
@@ -136,6 +157,16 @@ public class UpdateOsmDatabase implements Task {
     var changeUrl = stateReader.getUrl(nextSequenceNumber, "osc.gz");
     logger.info("Updating the database with the changeset: {}", changeUrl);
 
+    // Record the nodes and ways of the change before building geometries from them; a database
+    // map is read-only and already sees them once imported. A deleted node keeps its last
+    // coordinate, which only matters to a way that still references it, and such a way is
+    // invalid anyway.
+    Consumer<Change> updateMaps = coordinateMap instanceof BatchMap
+        ? change -> {
+        }
+        : new ChangeEntitiesHandler(
+            new CoordinateMapBuilder(coordinateMap).andThen(new ReferenceMapBuilder(referenceMap)));
+
     // Process the changeset and update the database
     var buildNodeGeometry = new NodeGeometryBuilder();
     var reprojectNodeGeometry = new EntityProjectionTransformer(4326, databaseSrid);
@@ -155,7 +186,8 @@ public class UpdateOsmDatabase implements Task {
         new ChangeEntitiesHandler(buildRelationGeometry.andThen(reprojectRelationGeometry));
     var importRelations = new ChangeElementsImporter<>(Relation.class, relationRepository);
 
-    var entityProcessor = prepareNodeGeometry
+    var entityProcessor = updateMaps
+        .andThen(prepareNodeGeometry)
         .andThen(importNodes)
         .andThen(prepareWayGeometry)
         .andThen(importWays)

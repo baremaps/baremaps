@@ -626,9 +626,6 @@ limitations under the License.
             <excludes>
               <include>**/CopyWriter.java</include>
               <include>**/BufferedSpliterator.java</include>
-              <include>**/MemoryAlignedDataMap.java</include>
-              <include>**/MonotonicDataMap.java</include>
-              <include>**/MonotonicFixedSizeDataMap.java</include>
               <include>**/StateReader.java</include>
             </excludes>
           </java>

@@ -21,7 +21,7 @@ import java.lang.foreign.MemorySegment;
 /**
  * A {@link DataType} for reading and writing double values in {@link MemorySegment}s.
  */
-public class DoubleDataType extends MemoryAlignedDataType<Double> {
+public class DoubleDataType extends FixedSizeDataType<Double> {
 
   /**
    * Constructs a {@link DoubleDataType} with a fixed size of {@link Double#BYTES}.

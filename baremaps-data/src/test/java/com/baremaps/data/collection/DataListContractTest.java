@@ -42,9 +42,8 @@ class DataListContractTest {
   static Stream<Arguments> lists() throws IOException {
     List<Function<Supplier<Memory>, DataList<Long>>> factories = List.of(
         m -> new FixedSizeDataList<>(new LongDataType(), m.get()),
-        m -> new MemoryAlignedDataList<>(new LongDataType(), m.get()),
-        m -> new IndexedDataList<>(
-            new MemoryAlignedDataList<>(new LongDataType(), m.get()),
+        m -> new VariableSizeDataList<>(
+            new FixedSizeDataList<>(new LongDataType(), m.get()),
             new AppendOnlyLog<>(new LongDataType(), m.get())));
     List<Arguments> arguments = new ArrayList<>();
     for (var factory : factories) {

@@ -15,11 +15,8 @@
 package com.baremaps.benchmarking.data;
 
 import com.baremaps.data.collection.DataMap;
-import com.baremaps.data.collection.DirectHashDataMap;
-import com.baremaps.data.collection.IndexedDataMap;
-import com.baremaps.data.collection.MemoryAlignedDataMap;
-import com.baremaps.data.collection.MonotonicDataMap;
-import com.baremaps.data.memory.Memory;
+import com.baremaps.data.collection.DenseDataMap;
+import com.baremaps.data.collection.SparseDataMap;
 import com.baremaps.data.type.LongDataType;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -58,10 +55,8 @@ public class DataMapBenchmark {
 
   private static DataMap<Long, Long> create(String kind) {
     return switch (kind) {
-      case "aligned" -> new MemoryAlignedDataMap<>(new LongDataType(), Memory.offHeap());
-      case "monotonic" -> new MonotonicDataMap<>(new LongDataType());
-      case "directhash" -> new DirectHashDataMap<>(new LongDataType(), COUNT * 2L);
-      case "indexed" -> new IndexedDataMap<>(new LongDataType());
+      case "monotonic" -> new SparseDataMap<>(new LongDataType());
+      case "paged" -> new DenseDataMap<>(new LongDataType());
       default -> throw new IllegalArgumentException(kind);
     };
   }
@@ -69,7 +64,7 @@ public class DataMapBenchmark {
   @State(Scope.Benchmark)
   public static class Filled {
 
-    @Param({"aligned", "monotonic", "directhash", "indexed"})
+    @Param({"monotonic", "paged"})
     public String kind;
 
     DataMap<Long, Long> map;
@@ -100,7 +95,7 @@ public class DataMapBenchmark {
   @State(Scope.Benchmark)
   public static class Empty {
 
-    @Param({"aligned", "monotonic", "directhash", "indexed"})
+    @Param({"monotonic", "paged"})
     public String kind;
 
     DataMap<Long, Long> map;

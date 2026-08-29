@@ -21,7 +21,7 @@ import java.lang.foreign.MemorySegment;
 /**
  * A {@link DataType} for reading and writing float values in {@link MemorySegment}s.
  */
-public class FloatDataType extends MemoryAlignedDataType<Float> {
+public class FloatDataType extends FixedSizeDataType<Float> {
 
   /**
    * Constructs a {@link FloatDataType} with a fixed size of {@link Float#BYTES}.

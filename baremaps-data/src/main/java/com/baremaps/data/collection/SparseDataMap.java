@@ -35,7 +35,7 @@ import java.util.NoSuchElementException;
  * <p>
  * Keys must be distinct and increasing, {@link #put(Long, Object)} rejects any other key.
  */
-public class MonotonicDataMap<E> implements DataMap<Long, E> {
+public class SparseDataMap<E> implements DataMap<Long, E> {
 
   private static final int CHUNK_SHIFT = 8;
 
@@ -49,26 +49,26 @@ public class MonotonicDataMap<E> implements DataMap<Long, E> {
   private long lastKey;
 
   /** Creates a map of fixed-size values in off-heap memory. */
-  public MonotonicDataMap(FixedSizeDataType<E> dataType) {
-    this(new MemoryAlignedDataList<>(dataType));
+  public SparseDataMap(FixedSizeDataType<E> dataType) {
+    this(new FixedSizeDataList<>(dataType));
   }
 
   /** Creates a map of variable-size values in off-heap memory. */
-  public MonotonicDataMap(DataType<E> dataType) {
-    this(new IndexedDataList<>(dataType));
+  public SparseDataMap(DataType<E> dataType) {
+    this(new VariableSizeDataList<>(dataType));
   }
 
   /** Creates a map over the given values, with keys and offsets in off-heap memory. */
-  public MonotonicDataMap(DataList<E> values) {
-    this(new MemoryAlignedDataList<>(new LongDataType()),
-        new MemoryAlignedDataList<>(new LongDataType()), values);
+  public SparseDataMap(DataList<E> values) {
+    this(new FixedSizeDataList<>(new LongDataType()),
+        new FixedSizeDataList<>(new LongDataType()), values);
   }
 
   /**
-   * Creates a map over the given lists, which must either all be empty or come from the same
-   * closed map.
+   * Creates a map over the given lists, which must either all be empty or come from the same closed
+   * map.
    */
-  public MonotonicDataMap(DataList<Long> offsets, DataList<Long> keys, DataList<E> values) {
+  public SparseDataMap(DataList<Long> offsets, DataList<Long> keys, DataList<E> values) {
     if (keys.size() != values.size()) {
       throw new DataCollectionException("The keys and values have different sizes");
     }

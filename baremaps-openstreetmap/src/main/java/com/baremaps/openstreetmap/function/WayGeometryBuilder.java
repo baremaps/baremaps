@@ -16,6 +16,7 @@ package com.baremaps.openstreetmap.function;
 
 import com.baremaps.openstreetmap.model.Entity;
 import com.baremaps.openstreetmap.model.Way;
+import com.baremaps.openstreetmap.utils.BatchMap;
 import com.baremaps.openstreetmap.utils.GeometryUtils;
 import java.util.ArrayList;
 import java.util.List;
@@ -84,13 +85,21 @@ public class WayGeometryBuilder implements Consumer<Entity> {
   static LineString lineString(List<Long> nodes, Map<Long, Coordinate> coordinateMap) {
     List<Coordinate> list = new ArrayList<>(nodes.size());
     Coordinate previous = null;
-    for (Long id : nodes) {
-      Coordinate coordinate = coordinateMap.get(id);
+    for (Coordinate coordinate : coordinates(nodes, coordinateMap)) {
       if (coordinate != null && !coordinate.equals(previous)) {
         list.add(coordinate);
         previous = coordinate;
       }
     }
     return GeometryUtils.GEOMETRY_FACTORY_WGS84.createLineString(list.toArray(new Coordinate[0]));
+  }
+
+  /** One round trip for a database-backed map, one probe per node for an in-memory one. */
+  private static Iterable<Coordinate> coordinates(List<Long> nodes,
+      Map<Long, Coordinate> coordinateMap) {
+    if (coordinateMap instanceof BatchMap<Long, Coordinate>batch) {
+      return batch.getAll(nodes);
+    }
+    return () -> nodes.stream().map(coordinateMap::get).iterator();
   }
 }

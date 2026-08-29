@@ -22,18 +22,18 @@ import com.baremaps.data.type.LongDataType;
  * each position in the list to a position in the log. Replacing a value appends the new one and
  * leaves the old one unreferenced; the space is reclaimed only by {@link #clear()}.
  */
-public class IndexedDataList<E> implements DataList<E> {
+public class VariableSizeDataList<E> implements DataList<E> {
 
   private final DataList<Long> index;
 
   private final AppendOnlyLog<E> values;
 
   /** Creates a list in off-heap memory. */
-  public IndexedDataList(DataType<E> dataType) {
-    this(new MemoryAlignedDataList<>(new LongDataType()), new AppendOnlyLog<>(dataType));
+  public VariableSizeDataList(DataType<E> dataType) {
+    this(new FixedSizeDataList<>(new LongDataType()), new AppendOnlyLog<>(dataType));
   }
 
-  public IndexedDataList(DataList<Long> index, AppendOnlyLog<E> values) {
+  public VariableSizeDataList(DataList<Long> index, AppendOnlyLog<E> values) {
     this.index = index;
     this.values = values;
   }

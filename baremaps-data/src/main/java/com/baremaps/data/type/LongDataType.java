@@ -21,7 +21,7 @@ import java.lang.foreign.MemorySegment;
 /**
  * A {@link DataType} for reading and writing long values in {@link MemorySegment}s.
  */
-public class LongDataType extends MemoryAlignedDataType<Long> {
+public class LongDataType extends FixedSizeDataType<Long> {
 
   /**
    * Constructs a {@link LongDataType} with a fixed size of {@link Long#BYTES}.
