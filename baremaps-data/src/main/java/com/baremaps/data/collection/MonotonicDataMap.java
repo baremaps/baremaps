@@ -45,6 +45,9 @@ public class MonotonicDataMap<E> implements DataMap<Long, E> {
 
   private final DataList<E> values;
 
+  // The last key inserted, or -1 for an empty map; keeps put from re-reading the keys.
+  private long lastKey;
+
   /** Creates a map of fixed-size values in off-heap memory. */
   public MonotonicDataMap(FixedSizeDataType<E> dataType) {
     this(new MemoryAlignedDataList<>(dataType));
@@ -72,15 +75,16 @@ public class MonotonicDataMap<E> implements DataMap<Long, E> {
     this.offsets = offsets;
     this.keys = keys;
     this.values = values;
+    this.lastKey = keys.isEmpty() ? -1 : keys.get(keys.size() - 1);
   }
 
   @Override
   public synchronized E put(Long key, E value) {
-    long index = keys.size();
-    if (index > 0 && key <= keys.get(index - 1)) {
+    if (key <= lastKey) {
       throw new IllegalArgumentException(
-          "Keys must be increasing, but " + key + " follows " + keys.get(index - 1));
+          "Keys must be increasing, but " + key + " follows " + lastKey);
     }
+    long index = keys.size();
     long chunk = key >>> CHUNK_SHIFT;
     // Chunks without keys point to the first key of the next chunk.
     while (offsets.size() <= chunk) {
@@ -88,6 +92,7 @@ public class MonotonicDataMap<E> implements DataMap<Long, E> {
     }
     keys.add(key);
     values.add(value);
+    lastKey = key;
     return null;
   }
 
@@ -169,10 +174,11 @@ public class MonotonicDataMap<E> implements DataMap<Long, E> {
   }
 
   @Override
-  public void clear() {
+  public synchronized void clear() {
     offsets.clear();
     keys.clear();
     values.clear();
+    lastKey = -1;
   }
 
   @Override

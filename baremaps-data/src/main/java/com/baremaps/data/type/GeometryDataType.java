@@ -89,7 +89,12 @@ public class GeometryDataType implements DataType<Geometry> {
 
   @Override
   public int size(final ByteBuffer buffer, final int position) {
-    return Byte.BYTES + typeOf(buffer.get(position)).size(buffer, position + Byte.BYTES);
+    int tag = buffer.get(position);
+    if (tag == 0) {
+      // Zero-filled memory holds no geometry; collections rely on a size of 0 to tell.
+      return 0;
+    }
+    return Byte.BYTES + typeOf(tag).size(buffer, position + Byte.BYTES);
   }
 
   @Override

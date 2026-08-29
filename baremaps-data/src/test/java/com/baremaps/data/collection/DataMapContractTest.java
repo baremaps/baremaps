@@ -143,6 +143,39 @@ class DataMapContractTest {
   }
 
   @Test
+  void monotonicGetAllWalksSortedKeys() {
+    var map = new MonotonicDataMap<>(new LongDataType());
+    for (long i = 0; i < 2000; i++) {
+      map.put(i * 3, i);
+    }
+    // Increasing keys within and across chunks, with misses in between, then a backwards key.
+    var keys = List.of(0L, 3L, 4L, 6L, 300L, 303L, 765L, 768L, 6000L, 5997L, 1L, 5994L);
+    var expected = new java.util.ArrayList<Long>();
+    for (long key : keys) {
+      expected.add(key % 3 == 0 && key < 6000 ? key / 3 : null);
+    }
+    assertEquals(expected, map.getAll(keys));
+    assertEquals(map.get(5997L), map.get((Object) 5997L));
+  }
+
+  @Test
+  void directHashProbesWrapAround() {
+    // Small capacity forces collisions and probing past the end of the table.
+    var map = new DirectHashDataMap<>(new LongDataType(), 16);
+    for (long i = 0; i < 16; i++) {
+      map.put(i * 16, i);
+    }
+    for (long i = 0; i < 16; i++) {
+      assertEquals(i, map.get(i * 16));
+    }
+    assertNull(map.get(8L));
+    assertEquals(16, map.size());
+    var keys = new java.util.HashSet<Long>();
+    map.keys().forEach(keys::add);
+    assertEquals(16, keys.size());
+  }
+
+  @Test
   void directHashFull() {
     var map = new DirectHashDataMap<>(new LongDataType(), 3);
     map.put(1L, 1L);

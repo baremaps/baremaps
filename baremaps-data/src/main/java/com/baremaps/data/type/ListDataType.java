@@ -26,12 +26,20 @@ public class ListDataType<T> implements DataType<List<T>> {
 
   private final DataType<T> dataType;
 
+  // The element size when it is fixed, or 0. Lists of fixed-size elements are the common case
+  // (the node ids of a way) and a fixed stride keeps their loops free of per-element size calls.
+  private final int stride;
+
   public ListDataType(final DataType<T> dataType) {
     this.dataType = dataType;
+    this.stride = dataType instanceof FixedSizeDataType<T>fixed ? fixed.size() : 0;
   }
 
   @Override
   public int size(final List<T> values) {
+    if (stride > 0) {
+      return Integer.BYTES + values.size() * stride;
+    }
     int size = Integer.BYTES;
     for (T value : values) {
       size += dataType.size(value);
@@ -49,7 +57,7 @@ public class ListDataType<T> implements DataType<List<T>> {
     int p = position + Integer.BYTES;
     for (T value : values) {
       dataType.write(buffer, p, value);
-      p += dataType.size(buffer, p);
+      p += stride > 0 ? stride : dataType.size(buffer, p);
     }
     buffer.putInt(position, p - position);
   }
@@ -57,6 +65,13 @@ public class ListDataType<T> implements DataType<List<T>> {
   @Override
   public List<T> read(final ByteBuffer buffer, final int position) {
     int limit = position + buffer.getInt(position);
+    if (stride > 0) {
+      var list = new ArrayList<T>((limit - position - Integer.BYTES) / stride);
+      for (int p = position + Integer.BYTES; p < limit; p += stride) {
+        list.add(dataType.read(buffer, p));
+      }
+      return list;
+    }
     var list = new ArrayList<T>();
     for (int p = position + Integer.BYTES; p < limit; p += dataType.size(buffer, p)) {
       list.add(dataType.read(buffer, p));

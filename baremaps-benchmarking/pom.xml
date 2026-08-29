@@ -31,6 +31,10 @@ limitations under the License.
   <dependencies>
     <dependency>
       <groupId>com.baremaps</groupId>
+      <artifactId>baremaps-data</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.baremaps</groupId>
       <artifactId>baremaps-geoparquet</artifactId>
     </dependency>
     <dependency>
@@ -54,6 +58,15 @@ limitations under the License.
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <!-- JMH generates its benchmark list with an annotation processor, which recent JDKs
+               no longer run from the classpath unless asked to. -->
+          <proc>full</proc>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
         <version>3.6.1</version>
         <executions>
@@ -64,10 +77,25 @@ limitations under the License.
             <phase>package</phase>
             <configuration>
               <finalName>benchmarks</finalName>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>org.openjdk.jmh.Main</mainClass>
+                  <manifestEntries>
+                    <!-- Keep the META-INF/versions classes of multi-release dependencies. -->
+                    <Multi-Release>true</Multi-Release>
+                  </manifestEntries>
                 </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
               </transformers>
             </configuration>
           </execution>

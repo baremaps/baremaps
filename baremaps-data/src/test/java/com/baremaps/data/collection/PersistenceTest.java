@@ -110,6 +110,35 @@ class PersistenceTest {
     }
   }
 
+  @Test
+  void unflushedWritesAreNotVisibleAfterReopen(@TempDir Path dir) throws Exception {
+    Path file = dir.resolve("log");
+    var log = new AppendOnlyLog<>(new StringDataType(), new MemoryMappedFile(file, SEGMENT_BYTES));
+    log.add("a");
+    log.flush();
+    log.add("b");
+    // Simulate a crash: neither flush nor close.
+    try (var reopened = new AppendOnlyLog<>(new StringDataType(),
+        new MemoryMappedFile(file, SEGMENT_BYTES))) {
+      assertEquals(1, reopened.size());
+      assertEquals(List.of("a"), reopened.stream().toList());
+      // Appending continues after the flushed end and does not clobber "a".
+      reopened.add("c");
+      assertEquals(List.of("a", "c"), reopened.stream().toList());
+    }
+  }
+
+  @Test
+  void neverClosedIsEmptyOnReopen(@TempDir Path dir) throws Exception {
+    var list = new MemoryAlignedDataList<>(new LongDataType(),
+        new MemoryMappedDirectory(dir, SEGMENT_BYTES));
+    list.add(1L);
+    try (var reopened = new MemoryAlignedDataList<>(new LongDataType(),
+        new MemoryMappedDirectory(dir, SEGMENT_BYTES))) {
+      assertEquals(0, reopened.size());
+    }
+  }
+
   private static MonotonicDataMap<List<Long>> open(Path dir) {
     return new MonotonicDataMap<>(
         new MemoryAlignedDataList<>(new LongDataType(),

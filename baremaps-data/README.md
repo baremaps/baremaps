@@ -56,3 +56,23 @@ what the array-like collections need.
 - Every implementation passes the same contract tests (`DataListContractTest`,
   `DataMapContractTest`) over every memory, plus `PersistenceTest` for close-and-reopen. Add a
   new implementation to those providers before anything else.
+
+## Tests and benchmarks
+
+Beyond the contract tests, `AppendOnlyLogBoundaryTest`, `ConcurrencyTest`, `LargePositionTest`,
+`DataTypeInvariantTest` and `GeometryDataTypeTest` pin the behaviours that only show up at scale:
+segment boundaries, concurrent appends, positions beyond `int`, and the size invariant of every
+type. Run them with `./mvnw -pl baremaps-data test`; `./mvnw -pl baremaps-data jacoco:prepare-agent test
+jacoco:report` writes a coverage report to `target/site/jacoco`.
+
+JMH benchmarks for this module live in `baremaps-benchmarking` under
+`com.baremaps.benchmarking.data`: memory backings, maps, the log, data types and the external sort.
+
+```
+./mvnw -pl baremaps-data,baremaps-benchmarking -DskipTests install
+java -jar baremaps-benchmarking/target/benchmarks.jar 'com.baremaps.benchmarking.data.*'
+```
+
+Run a subset with a class name (`MemoryBenchmark`) and compare two builds with
+`-rf json -rff before.json` / `after.json`. Any change to `Memory`, the map layouts or a data type
+encoding should come with a before/after run.

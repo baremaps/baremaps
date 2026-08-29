@@ -112,6 +112,24 @@ class ExternalMergeSortTest {
   }
 
   @Test
+  void batchSizesAroundInputSize() throws IOException {
+    for (long batchSize : new long[] {1, strings.size() - 1, strings.size(), strings.size() + 1,
+        Long.MAX_VALUE}) {
+      var out = supplier.get();
+      ExternalMergeSort.sort(input, out, Comparator.naturalOrder(), supplier, batchSize, false,
+          false);
+      assertEquals(stringsAsc, stringList(out), "batch size " + batchSize);
+    }
+  }
+
+  @Test
+  void emptyInput() throws IOException {
+    var empty = supplier.get();
+    ExternalMergeSort.sort(empty, output, Comparator.naturalOrder(), supplier, 4, true, true);
+    assertEquals(0, output.size());
+  }
+
+  @Test
   void sortRandomString() throws IOException {
     var random = new Random(0);
     for (int i = 0; i < 1_000_000; i++) {
