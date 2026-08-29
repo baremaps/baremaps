@@ -14,32 +14,19 @@
 
 package com.baremaps.shapefile;
 
-
-
 import java.io.IOException;
 
 /**
- * Thrown when the shapefile seems to be invalid.
- *
- * @author Marc Le Bihan
+ * Thrown when a shapefile does not hold what the specification says it should. It extends
+ * {@link IOException} because a caller reading a file has no more recourse against a file that is
+ * malformed than against one that cannot be read.
  */
 public class ShapefileException extends IOException {
 
-  /**
-   * Construct an exception.
-   *
-   * @param message Message of the exception.
-   */
   public ShapefileException(String message) {
     super(message);
   }
 
-  /**
-   * Construct an exception.
-   *
-   * @param message Message of the exception.
-   * @param cause Root cause of the exception.
-   */
   public ShapefileException(String message, Throwable cause) {
     super(message, cause);
   }

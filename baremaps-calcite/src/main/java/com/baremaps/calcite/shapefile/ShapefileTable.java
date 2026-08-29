@@ -14,12 +14,13 @@
 
 package com.baremaps.calcite.shapefile;
 
-import com.baremaps.shapefile.DBaseFieldDescriptor;
-import com.baremaps.shapefile.ShapefileInputStream;
+import com.baremaps.shapefile.Shapefile;
 import com.baremaps.shapefile.ShapefileReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.apache.calcite.DataContext;
 import org.apache.calcite.linq4j.AbstractEnumerable;
@@ -37,36 +38,48 @@ import org.apache.calcite.sql.type.SqlTypeName;
 public class ShapefileTable extends AbstractTable implements ScannableTable {
 
   private final File file;
-  private final List<DBaseFieldDescriptor> fieldDescriptors;
+  private final List<Shapefile.Column> columns;
 
   public ShapefileTable(File file) throws IOException {
     this.file = file;
-    try (ShapefileReader reader = new ShapefileReader(file.getPath())) {
-      this.fieldDescriptors = reader.getDatabaseFieldsDescriptors();
+    try (ShapefileReader reader = new ShapefileReader(file.toPath())) {
+      this.columns = reader.columns();
     }
   }
 
   @Override
   public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     RelDataTypeFactory.Builder builder = typeFactory.builder();
-    for (DBaseFieldDescriptor field : fieldDescriptors) {
-      builder.add(field.getName(), typeFactory.createSqlType(sqlType(field)));
+    for (Shapefile.Column column : columns) {
+      builder.add(column.name(), typeFactory.createSqlType(sqlType(column)));
     }
     builder.add("geometry", typeFactory.createSqlType(SqlTypeName.GEOMETRY));
     return builder.build();
   }
 
-  private static SqlTypeName sqlType(DBaseFieldDescriptor field) {
-    return switch (field.getType()) {
-      case CHARACTER, MEMO, PICTURE, VARI_FIELD, VARIANT -> SqlTypeName.VARCHAR;
-      case NUMBER -> field.getDecimalCount() == 0 ? SqlTypeName.BIGINT : SqlTypeName.DOUBLE;
-      case CURRENCY, DOUBLE -> SqlTypeName.DOUBLE;
-      case INTEGER, AUTO_INCREMENT -> SqlTypeName.INTEGER;
-      case LOGICAL -> SqlTypeName.BOOLEAN;
-      case DATE -> SqlTypeName.DATE;
-      case FLOATING_POINT -> SqlTypeName.FLOAT;
-      case TIMESTAMP, DATE_TIME -> SqlTypeName.TIMESTAMP;
-    };
+  /**
+   * The SQL type of a column, derived from the Java type the reader produces for it rather than
+   * from the type the table declares, so that the two cannot come to disagree.
+   */
+  private static SqlTypeName sqlType(Shapefile.Column column) {
+    Class<?> type = column.javaType();
+    if (type == String.class) {
+      return SqlTypeName.VARCHAR;
+    } else if (type == Long.class) {
+      return SqlTypeName.BIGINT;
+    } else if (type == Integer.class) {
+      return SqlTypeName.INTEGER;
+    } else if (type == Double.class) {
+      return SqlTypeName.DOUBLE;
+    } else if (type == Boolean.class) {
+      return SqlTypeName.BOOLEAN;
+    } else if (type == LocalDate.class) {
+      return SqlTypeName.DATE;
+    } else if (type == LocalDateTime.class) {
+      return SqlTypeName.TIMESTAMP;
+    } else {
+      throw new IllegalStateException("Unsupported column type: " + type);
+    }
   }
 
   @Override
@@ -83,7 +96,6 @@ public class ShapefileTable extends AbstractTable implements ScannableTable {
 
     private final File file;
     private ShapefileReader reader;
-    private ShapefileInputStream rows;
     private List<Object> current;
 
     ShapefileEnumerator(File file) {
@@ -93,8 +105,7 @@ public class ShapefileTable extends AbstractTable implements ScannableTable {
 
     private void open() {
       try {
-        reader = new ShapefileReader(file.getPath());
-        rows = reader.read();
+        reader = new ShapefileReader(file.toPath());
       } catch (IOException e) {
         throw new UncheckedIOException(e);
       }
@@ -108,7 +119,7 @@ public class ShapefileTable extends AbstractTable implements ScannableTable {
     @Override
     public boolean moveNext() {
       try {
-        current = rows.readRow();
+        current = reader.readRow();
         return current != null;
       } catch (IOException e) {
         throw new UncheckedIOException(e);
@@ -123,12 +134,7 @@ public class ShapefileTable extends AbstractTable implements ScannableTable {
 
     @Override
     public void close() {
-      try {
-        rows.close();
-        reader.close();
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
+      reader.close();
     }
   }
 }
