@@ -14,39 +14,38 @@
 
 package com.baremaps.flatgeobuf;
 
-import java.nio.ByteBuffer;
 import java.util.List;
+import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Geometry;
 
 /**
- * This class describes the domain model for FlatGeoBuf.
- *
+ * The domain model of a FlatGeoBuf file, as read by {@link FlatGeoBufReader} and written by
+ * {@link FlatGeoBufWriter}. It mirrors the FlatGeoBuf schema without exposing FlatBuffers: the
+ * generated classes are an encoding detail of the reader and the writer.
+ * <p>
  * This code has been adapted from FlatGeoBuf (BSD 2-Clause "Simplified" License).
  * <p>
- * Copyright (c) 2018, Björn Harrtell
+ * Copyright (c) 2018, Bj&ouml;rn Harrtell
  */
-public class FlatGeoBuf {
+public final class FlatGeoBuf {
 
-  protected static final byte[] MAGIC_BYTES =
-      new byte[] {0x66, 0x67, 0x62, 0x03, 0x66, 0x67, 0x62, 0x00};
+  /**
+   * The 8 byte file signature. Bytes 0-2 and 4-6 spell "fgb"; byte 3 is the major version of the
+   * specification and byte 4 its patch level. A file whose major version differs is deliberately
+   * rejected rather than parsed, because the layout it describes is not the one implemented here.
+   */
+  static final byte[] MAGIC = {0x66, 0x67, 0x62, 0x03, 0x66, 0x67, 0x62, 0x00};
 
   private FlatGeoBuf() {
     // Prevent instantiation
   }
 
-  public static boolean isFlatGeoBuf(ByteBuffer bb) {
-    return bb.get() == MAGIC_BYTES[0] &&
-        bb.get() == MAGIC_BYTES[1] &&
-        bb.get() == MAGIC_BYTES[2] &&
-        bb.get() == MAGIC_BYTES[3] &&
-        bb.get() == MAGIC_BYTES[4] &&
-        bb.get() == MAGIC_BYTES[5] &&
-        bb.get() == MAGIC_BYTES[6] &&
-        bb.get() == MAGIC_BYTES[7];
-  }
-
-  // Geometry type enumeration
+  /**
+   * The geometry types of the specification. The wire value is declared explicitly so that the
+   * order of the constants stays a matter of readability rather than of file compatibility.
+   */
   public enum GeometryType {
+
     UNKNOWN(0),
     POINT(1),
     LINESTRING(2),
@@ -66,33 +65,78 @@ public class FlatGeoBuf {
     TIN(16),
     TRIANGLE(17);
 
+    private static final GeometryType[] BY_VALUE = new GeometryType[TRIANGLE.value + 1];
+
+    static {
+      for (GeometryType type : values()) {
+        BY_VALUE[type.value] = type;
+      }
+    }
+
     private final int value;
 
     GeometryType(int value) {
       this.value = value;
     }
 
-    public int getValue() {
+    public int value() {
       return value;
+    }
+
+    public static GeometryType of(int value) {
+      if (value < 0 || value >= BY_VALUE.length) {
+        throw new IllegalArgumentException("Unsupported geometry type: " + value);
+      }
+      return BY_VALUE[value];
     }
   }
 
+  /**
+   * The column types of the specification, with explicit wire values for the same reason as
+   * {@link GeometryType}.
+   */
   public enum ColumnType {
-    BYTE,
-    UBYTE,
-    BOOL,
-    SHORT,
-    USHORT,
-    INT,
-    UINT,
-    LONG,
-    ULONG,
-    FLOAT,
-    DOUBLE,
-    STRING,
-    JSON,
-    DATETIME,
-    BINARY
+
+    BYTE(0),
+    UBYTE(1),
+    BOOL(2),
+    SHORT(3),
+    USHORT(4),
+    INT(5),
+    UINT(6),
+    LONG(7),
+    ULONG(8),
+    FLOAT(9),
+    DOUBLE(10),
+    STRING(11),
+    JSON(12),
+    DATETIME(13),
+    BINARY(14);
+
+    private static final ColumnType[] BY_VALUE = new ColumnType[BINARY.value + 1];
+
+    static {
+      for (ColumnType type : values()) {
+        BY_VALUE[type.value] = type;
+      }
+    }
+
+    private final int value;
+
+    ColumnType(int value) {
+      this.value = value;
+    }
+
+    public int value() {
+      return value;
+    }
+
+    public static ColumnType of(int value) {
+      if (value < 0 || value >= BY_VALUE.length) {
+        throw new IllegalArgumentException("Unsupported column type: " + value);
+      }
+      return BY_VALUE[value];
+    }
   }
 
   public record Column(
@@ -118,14 +162,23 @@ public class FlatGeoBuf {
       String codeString) {
   }
 
+  /**
+   * The header of a FlatGeoBuf file. All the reference typed components are optional and may be
+   * null; {@code envelope} and {@code crs} are absent from many files in the wild.
+   *
+   * @param geometryType the type of every geometry in the file, or {@link GeometryType#UNKNOWN}
+   *        when the file mixes types and each feature carries its own
+   * @param hasZ whether the file stores a Z ordinate; features are written accordingly, so a
+   *        geometry with a Z ordinate loses it when the header says otherwise
+   */
   public record Header(
       String name,
-      List<Double> envelope,
+      Envelope envelope,
       GeometryType geometryType,
       boolean hasZ,
       boolean hasM,
       boolean hasT,
-      boolean hasTM,
+      boolean hasTm,
       List<Column> columns,
       long featuresCount,
       int indexNodeSize,
@@ -135,6 +188,15 @@ public class FlatGeoBuf {
       String metadata) {
   }
 
+  /**
+   * A feature of a FlatGeoBuf file.
+   *
+   * @param properties one value per {@link Header#columns() header column}, in column order, with
+   *        null for the properties the feature does not carry. Keeping the list aligned with the
+   *        columns is what lets a feature be read and written back without shifting its values onto
+   *        the wrong columns, since the format omits absent properties rather than encoding them as
+   *        null.
+   */
   public record Feature(List<Object> properties, Geometry geometry) {
   }
 }

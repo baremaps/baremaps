@@ -14,61 +14,76 @@
 
 package com.baremaps.flatgeobuf;
 
-
-import com.baremaps.flatgeobuf.generated.*;
+import com.baremaps.flatgeobuf.generated.Column;
+import com.baremaps.flatgeobuf.generated.Crs;
+import com.baremaps.flatgeobuf.generated.Feature;
+import com.baremaps.flatgeobuf.generated.Header;
 import com.google.flatbuffers.FlatBufferBuilder;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.Envelope;
 
 /**
- * This class contains the logic for writing FlatGeoBuf files. It can either write FlatBuffers
- * directly or write the domain model objects.
+ * Writes a FlatGeoBuf file: its header, then its spatial index, then its features, in that order.
+ * <p>
+ * The FlatBuffers encoding stays inside this class, and so do the buffers it encodes into. They are
+ * reused from one feature to the next, because a file has as many features as a dataset has rows
+ * and an allocation per feature is an allocation too many.
  * <p>
  * This code has been adapted from FlatGeoBuf (BSD 2-Clause "Simplified" License).
  * <p>
- * Copyright (c) 2018, Björn Harrtell
+ * Copyright (c) 2018, Bj&ouml;rn Harrtell
  */
 public class FlatGeoBufWriter implements AutoCloseable {
 
+  private static final int BUILDER_CAPACITY = 1 << 12;
+
+  private static final int PROPERTIES_CAPACITY = 1 << 10;
+
   private final WritableByteChannel channel;
 
-  private Header header;
+  private final FlatBufferBuilder builder = new FlatBufferBuilder(BUILDER_CAPACITY);
+
+  private final ByteBuffer length =
+      ByteBuffer.allocate(Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+
+  private ByteBuffer properties =
+      ByteBuffer.allocate(PROPERTIES_CAPACITY).order(ByteOrder.LITTLE_ENDIAN);
+
+  private FlatGeoBuf.Header header;
 
   public FlatGeoBufWriter(WritableByteChannel channel) {
     this.channel = channel;
   }
 
-  public void writeHeaderBuffer(Header header) throws IOException {
-    writeHeaderBuffer(channel, header);
-  }
-
+  /** Writes the header, which the features are encoded against and which therefore comes first. */
   public void writeHeader(FlatGeoBuf.Header header) throws IOException {
-    this.header = asFlatBuffer(header);
-    writeHeader(channel, header);
+    ByteBuffer encoded = encodeHeader(header);
+    ByteBuffer prefix = ByteBuffer.allocate(FlatGeoBuf.MAGIC.length + Integer.BYTES)
+        .order(ByteOrder.LITTLE_ENDIAN)
+        .put(FlatGeoBuf.MAGIC)
+        .putInt(encoded.remaining())
+        .flip();
+    writeFully(prefix);
+    writeFully(encoded);
+    this.header = header;
   }
 
-  public void writeIndexStream(InputStream inputStream) throws IOException {
-    writeIndexStream(channel, inputStream);
+  /**
+   * Writes the spatial index that follows the header. The index has to describe the features that
+   * follow it, so in practice this takes the index of the file being copied or rewritten.
+   */
+  public void writeIndex(ByteBuffer index) throws IOException {
+    writeFully(index);
   }
 
-  public void writeIndexBuffer(ByteBuffer buffer) throws IOException {
-    writeIndexBuffer(channel, buffer);
-  }
-
-  public void writeFeatureBuffer(Feature feature) throws IOException {
-    writeFeatureBuffer(channel, feature);
-  }
-
+  /** Writes a feature, whose properties must line up with the columns of the header. */
   public void writeFeature(FlatGeoBuf.Feature feature) throws IOException {
-    writeFeature(channel, header, feature);
+    ByteBuffer encoded = encodeFeature(feature, requireHeader());
+    writeFully(length.clear().putInt(encoded.remaining()).flip());
+    writeFully(encoded);
   }
 
   @Override
@@ -76,214 +91,121 @@ public class FlatGeoBufWriter implements AutoCloseable {
     channel.close();
   }
 
-  public static void writeHeaderBuffer(WritableByteChannel channel, Header header)
-      throws IOException {
-    ByteBuffer headerBuffer = header.getByteBuffer();
-    ByteBuffer startBuffer = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN);
-    startBuffer.put(FlatGeoBuf.MAGIC_BYTES);
-    startBuffer.putInt(headerBuffer.remaining());
-    startBuffer.flip();
-    while (startBuffer.hasRemaining()) {
-      channel.write(startBuffer);
+  private ByteBuffer encodeHeader(FlatGeoBuf.Header header) {
+    builder.clear();
+
+    // FlatBuffers cannot nest a table inside another, so every string, vector and table the header
+    // refers to has to be built before the header table is started.
+    int[] columns = new int[header.columns().size()];
+    for (int i = 0; i < columns.length; i++) {
+      columns[i] = encodeColumn(header.columns().get(i));
     }
-    while (headerBuffer.hasRemaining()) {
-      channel.write(headerBuffer);
-    }
-  }
-
-  public static void writeHeader(WritableByteChannel channel, FlatGeoBuf.Header header)
-      throws IOException {
-    Header headerFlatGeoBuf = asFlatBuffer(header);
-    writeHeaderBuffer(channel, headerFlatGeoBuf);
-  }
-
-  public static Header asFlatBuffer(FlatGeoBuf.Header header) {
-    FlatBufferBuilder builder = new FlatBufferBuilder(4096);
-
-    int[] columnsArray = header.columns().stream().mapToInt(c -> {
-      int nameOffset = builder.createString(c.name());
-      int type = c.type().ordinal();
-      return Column.createColumn(
-          builder, nameOffset, type, 0, 0, c.width(), c.precision(), c.scale(), c.nullable(),
-          c.unique(),
-          c.primaryKey(), 0);
-    }).toArray();
-    int columnsOffset =
-        Header.createColumnsVector(builder, columnsArray);
-
-    int envelopeOffset = 0;
-    if (header.envelope() != null) {
-      envelopeOffset = Header.createEnvelopeVector(builder,
-          header.envelope().stream().mapToDouble(d -> d).toArray());
-    }
-
-    int nameOffset = 0;
-    if (header.name() != null) {
-      nameOffset = builder.createString(header.name());
-    }
-
-    int crsOrgOffset = 0;
-    if (header.crs() != null && header.crs().org() != null) {
-      crsOrgOffset = builder.createString(header.crs().org());
-    }
-
-    int crsNameOffset = 0;
-    if (header.crs() != null && header.crs().name() != null) {
-      crsNameOffset = builder.createString(header.crs().name());
-    }
-
-    int crsDescriptionOffset = 0;
-    if (header.crs() != null && header.crs().description() != null) {
-      crsDescriptionOffset = builder.createString(header.crs().description());
-    }
-
-    int crsWktOffset = 0;
-    if (header.crs() != null && header.crs().wkt() != null) {
-      crsWktOffset = builder.createString(header.crs().wkt());
-    }
-
-    int crsCodeStringOffset = 0;
-    if (header.crs() != null && header.crs().codeString() != null) {
-      crsCodeStringOffset = builder.createString(header.crs().codeString());
-    }
-
-    Crs.startCrs(builder);
-    Crs.addOrg(builder, crsOrgOffset);
-    if (header.crs() != null) {
-      Crs.addCode(builder, header.crs().code());
-    }
-    Crs.addName(builder, crsNameOffset);
-    Crs.addDescription(builder, crsDescriptionOffset);
-    Crs.addWkt(builder, crsWktOffset);
-    Crs.addCodeString(builder, crsCodeStringOffset);
-    int crsOffset = Crs.endCrs(builder);
+    int columnsOffset = Header.createColumnsVector(builder, columns);
+    int envelopeOffset = encodeEnvelope(header.envelope());
+    int crsOffset = encodeCrs(header.crs());
+    int nameOffset = encodeString(header.name());
+    int titleOffset = encodeString(header.title());
+    int descriptionOffset = encodeString(header.description());
+    int metadataOffset = encodeString(header.metadata());
 
     Header.startHeader(builder);
-    Header.addGeometryType(builder, header.geometryType().getValue());
+    Header.addName(builder, nameOffset);
+    Header.addEnvelope(builder, envelopeOffset);
+    Header.addGeometryType(builder, header.geometryType().value());
+    Header.addHasZ(builder, header.hasZ());
+    Header.addHasM(builder, header.hasM());
+    Header.addHasT(builder, header.hasT());
+    Header.addHasTm(builder, header.hasTm());
+    Header.addColumns(builder, columnsOffset);
     Header.addFeaturesCount(builder, header.featuresCount());
     Header.addIndexNodeSize(builder, header.indexNodeSize());
-    Header.addColumns(builder, columnsOffset);
-    Header.addEnvelope(builder, envelopeOffset);
-    Header.addName(builder, nameOffset);
     Header.addCrs(builder, crsOffset);
+    Header.addTitle(builder, titleOffset);
+    Header.addDescription(builder, descriptionOffset);
+    Header.addMetadata(builder, metadataOffset);
+    builder.finish(Header.endHeader(builder));
 
-    int offset = Header.endHeader(builder);
-    builder.finish(offset);
-
-    ByteBuffer buffer = builder.dataBuffer().asReadOnlyBuffer();
-    return Header.getRootAsHeader(buffer);
+    return builder.dataBuffer().duplicate();
   }
 
-
-  public static void writeFeatureBuffer(WritableByteChannel channel, Feature feature)
-      throws IOException {
-    ByteBuffer sizeBuffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-    sizeBuffer.putInt(feature.getByteBuffer().remaining());
-    sizeBuffer.flip();
-    while (sizeBuffer.hasRemaining()) {
-      channel.write(sizeBuffer);
-    }
-    ByteBuffer featureBuffer = feature.getByteBuffer().duplicate();
-    while (featureBuffer.hasRemaining()) {
-      channel.write(featureBuffer);
-    }
+  private int encodeColumn(FlatGeoBuf.Column column) {
+    return Column.createColumn(
+        builder,
+        encodeString(column.name()),
+        column.type().value(),
+        encodeString(column.title()),
+        encodeString(column.description()),
+        column.width(),
+        column.precision(),
+        column.scale(),
+        column.nullable(),
+        column.unique(),
+        column.primaryKey(),
+        encodeString(column.metadata()));
   }
 
-  public static void writeFeature(
-      WritableByteChannel channel,
-      Header header,
-      FlatGeoBuf.Feature feature) throws IOException {
-    Feature flatBuffer = asFlatBuffer(header, feature);
-    writeFeatureBuffer(channel, flatBuffer);
+  private int encodeEnvelope(Envelope envelope) {
+    if (envelope == null || envelope.isNull()) {
+      return 0;
+    }
+    return Header.createEnvelopeVector(builder, new double[] {
+        envelope.getMinX(), envelope.getMinY(), envelope.getMaxX(), envelope.getMaxY()});
   }
 
-  public static Feature asFlatBuffer(Header header, FlatGeoBuf.Feature feature) {
-    FlatBufferBuilder builder = new FlatBufferBuilder(4096);
-
-    // Write the properties
-    ByteBuffer propertiesBuffer = ByteBuffer.allocate(1 << 20).order(ByteOrder.LITTLE_ENDIAN);
-    List<Object> properties = feature.properties();
-    for (int i = 0; i < properties.size(); i++) {
-      var column = header.columns(i);
-      var value = properties.get(i);
-      propertiesBuffer.putShort((short) i);
-      writeValue(propertiesBuffer, column, value);
+  private int encodeCrs(FlatGeoBuf.Crs crs) {
+    if (crs == null) {
+      return 0;
     }
-    if (propertiesBuffer.position() > 0) {
-      propertiesBuffer.flip();
-    }
-    int propertiesOffset = Feature.createPropertiesVector(builder, propertiesBuffer);
+    int orgOffset = encodeString(crs.org());
+    int nameOffset = encodeString(crs.name());
+    int descriptionOffset = encodeString(crs.description());
+    int wktOffset = encodeString(crs.wkt());
+    int codeStringOffset = encodeString(crs.codeString());
 
-    // Write the geometry
-    Geometry geometry = feature.geometry();
-    int geometryOffset = 0;
-    if (geometry != null) {
-      geometryOffset =
-          GeometryConversions.writeGeometry(builder, geometry,
-              (byte) header.geometryType());
-    }
+    Crs.startCrs(builder);
+    Crs.addOrg(builder, orgOffset);
+    Crs.addCode(builder, crs.code());
+    Crs.addName(builder, nameOffset);
+    Crs.addDescription(builder, descriptionOffset);
+    Crs.addWkt(builder, wktOffset);
+    Crs.addCodeString(builder, codeStringOffset);
+    return Crs.endCrs(builder);
+  }
 
-    // Write the feature
+  /** Returns the offset of {@code value}, or 0 for the null that FlatBuffers reads as absent. */
+  private int encodeString(String value) {
+    return value == null ? 0 : builder.createString(value);
+  }
+
+  private ByteBuffer encodeFeature(FlatGeoBuf.Feature feature, FlatGeoBuf.Header header) {
+    properties = PropertyCodec.encode(properties, feature.properties(), header.columns());
+
+    builder.clear();
+    int propertiesOffset =
+        properties.hasRemaining() ? Feature.createPropertiesVector(builder, properties) : 0;
+    int geometryOffset = feature.geometry() == null ? 0
+        : GeometryConversions.write(builder, feature.geometry(), header.geometryType(),
+            header.hasZ(), header.hasM());
+
     Feature.startFeature(builder);
     Feature.addGeometry(builder, geometryOffset);
     Feature.addProperties(builder, propertiesOffset);
-    Feature.addColumns(builder, 0);
+    builder.finish(Feature.endFeature(builder));
 
-    int offset = Feature.endFeature(builder);
-    builder.finish(offset);
-
-    ByteBuffer buffer = builder.dataBuffer().asReadOnlyBuffer();
-    return Feature.getRootAsFeature(buffer);
+    return builder.dataBuffer().duplicate();
   }
 
-  private static void writeValue(ByteBuffer buffer, Column column, Object value) {
-    switch (column.type()) {
-      case ColumnType.Bool -> buffer.put((byte) ((boolean) value ? 1 : 0));
-      case ColumnType.Short -> buffer.putShort((short) value);
-      case ColumnType.UShort -> buffer.putShort((short) value);
-      case ColumnType.Int -> buffer.putInt((int) value);
-      case ColumnType.UInt -> buffer.putInt((int) value);
-      case ColumnType.Long -> buffer.putLong((long) value);
-      case ColumnType.ULong -> buffer.putLong((long) value);
-      case ColumnType.Float -> buffer.putFloat((float) value);
-      case ColumnType.Double -> buffer.putDouble((double) value);
-      case ColumnType.String -> writeString(buffer, value);
-      case ColumnType.Json -> writeJson(buffer, value);
-      case ColumnType.DateTime -> writeDateTime(buffer, value);
-      case ColumnType.Binary -> writeBinary(buffer, value);
-      default -> throw new UnsupportedOperationException();
+  private FlatGeoBuf.Header requireHeader() {
+    if (header == null) {
+      throw new IllegalStateException("The header has to be written before the rest of the file");
     }
+    return header;
   }
 
-  private static void writeString(ByteBuffer buffer, Object value) {
-    var bytes = ((String) value).getBytes(StandardCharsets.UTF_8);
-    buffer.putInt(bytes.length);
-    buffer.put(bytes);
-  }
-
-  private static void writeJson(ByteBuffer buffer, Object value) {
-    throw new UnsupportedOperationException();
-  }
-
-  private static void writeDateTime(ByteBuffer buffer, Object value) {
-    throw new UnsupportedOperationException();
-  }
-
-  private static void writeBinary(ByteBuffer buffer, Object value) {
-    throw new UnsupportedOperationException();
-  }
-
-  public static void writeIndexStream(WritableByteChannel channel, InputStream inputStream)
-      throws IOException {
-    try (OutputStream outputStream = Channels.newOutputStream(channel)) {
-      outputStream.write(inputStream.readAllBytes());
-    }
-  }
-
-  public static void writeIndexBuffer(WritableByteChannel channel, ByteBuffer buffer)
-      throws IOException {
+  private void writeFully(ByteBuffer buffer) throws IOException {
     while (buffer.hasRemaining()) {
       channel.write(buffer);
     }
   }
+
 }
