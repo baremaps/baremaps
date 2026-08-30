@@ -46,11 +46,6 @@ limitations under the License.
       <artifactId>baremaps-server</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.baremaps</groupId>
-      <artifactId>baremaps-testing</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
       <groupId>info.picocli</groupId>
       <artifactId>picocli</artifactId>
     </dependency>

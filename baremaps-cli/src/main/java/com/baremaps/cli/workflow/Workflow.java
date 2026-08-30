@@ -14,20 +14,13 @@
 
 package com.baremaps.cli.workflow;
 
-
-
-import picocli.CommandLine;
+import com.baremaps.cli.CommandGroup;
 import picocli.CommandLine.Command;
 
 @Command(
     name = "workflow",
     description = "Manage a workflow.",
-    subcommands = {Init.class, Execute.class})
-@SuppressWarnings("squid:S106")
-public class Workflow implements Runnable {
-
-  @Override
-  public void run() {
-    CommandLine.usage(this, System.out);
-  }
+    subcommands = {Init.class, Execute.class},
+    sortOptions = false)
+public class Workflow extends CommandGroup {
 }

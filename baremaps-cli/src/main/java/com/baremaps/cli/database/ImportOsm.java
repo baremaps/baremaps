@@ -14,24 +14,22 @@
 
 package com.baremaps.cli.database;
 
-
-import com.baremaps.cli.Options;
 import com.baremaps.tasks.ImportOsmPbf;
 import com.baremaps.workflow.WorkflowContext;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
-import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 @Command(
     name = "import-osm",
     description = "Import OpenStreetMap data in Postgres.")
-@SuppressWarnings("squid:S106")
 public class ImportOsm implements Callable<Integer> {
 
-  @Mixin
-  private Options options;
+  // An import starts from a clean slate: the tables it needs are recreated and emptied. An update
+  // is the command to run to add data to an existing database.
+  private static final boolean REPLACE_EXISTING = true;
+  private static final boolean TRUNCATE_TABLES = true;
 
   @Option(names = {"--file"}, paramLabel = "FILE",
       description = "The PBF file to import in the database.", required = true)
@@ -47,12 +45,8 @@ public class ImportOsm implements Callable<Integer> {
 
   @Override
   public Integer call() throws Exception {
-    new ImportOsmPbf(
-        file.toAbsolutePath(),
-        database,
-        srid,
-        true,
-        true).execute(new WorkflowContext());
+    new ImportOsmPbf(file.toAbsolutePath(), database, srid, REPLACE_EXISTING, TRUNCATE_TABLES)
+        .execute(new WorkflowContext());
     return 0;
   }
 }

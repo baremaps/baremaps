@@ -14,8 +14,9 @@
 
 package com.baremaps.config;
 
+import static com.baremaps.utils.ObjectMapperUtils.objectMapper;
 
-
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
@@ -25,12 +26,38 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.proxy.ProxyObject;
 
+/**
+ * Reads the configuration files of Baremaps. A JSON file is read as is, whereas a JavaScript file
+ * is evaluated first, which lets a configuration be assembled programmatically and read the
+ * environment it runs in.
+ */
 public class ConfigReader {
 
   static {
     System.setProperty("polyglot.engine.WarnInterpreterOnly", "false");
   }
 
+  private final ObjectMapper mapper = objectMapper();
+
+  /**
+   * Reads a configuration file and maps it to an object.
+   *
+   * @param path the path of the configuration file
+   * @param type the type of the configuration object
+   * @return the configuration object
+   * @throws IOException if the configuration cannot be read
+   */
+  public <T> T read(Path path, Class<T> type) throws IOException {
+    return mapper.readValue(read(path), type);
+  }
+
+  /**
+   * Reads a configuration file as JSON text.
+   *
+   * @param path the path of the configuration file
+   * @return the JSON representation of the configuration
+   * @throws IOException if the configuration cannot be read
+   */
   public String read(Path path) throws IOException {
     var extension = com.google.common.io.Files.getFileExtension(path.toString());
     return switch (extension) {

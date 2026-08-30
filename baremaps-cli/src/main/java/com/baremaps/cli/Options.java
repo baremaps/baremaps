@@ -14,19 +14,38 @@
 
 package com.baremaps.cli;
 
-
-
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.config.Configurator;
 import picocli.CommandLine.Option;
 
+/** The options understood by every command of the CLI. */
 public class Options {
 
+  /** The log levels a user can choose from, mapped onto the levels of the logging framework. */
   public enum LogLevel {
-    DEBUG,
-    INFO,
-    TRACE,
-    ERROR
+    TRACE(Level.TRACE),
+    DEBUG(Level.DEBUG),
+    INFO(Level.INFO),
+    WARN(Level.WARN),
+    ERROR(Level.ERROR),
+    OFF(Level.OFF);
+
+    private final Level level;
+
+    LogLevel(Level level) {
+      this.level = level;
+    }
   }
 
-  @Option(names = {"--log-level"}, paramLabel = "LOG_LEVEL", description = {"The log level."})
-  public LogLevel logLevel = LogLevel.INFO;
+  /**
+   * Applies the log level while the command line is being parsed, hence before the command it
+   * belongs to starts logging. The default level is the one configured in {@code log4j2.xml}.
+   *
+   * @param logLevel the log level
+   */
+  @Option(names = {"--log-level"}, paramLabel = "LOG_LEVEL",
+      description = "The log level (${COMPLETION-CANDIDATES}).")
+  public void setLogLevel(LogLevel logLevel) {
+    Configurator.setRootLevel(logLevel.level);
+  }
 }

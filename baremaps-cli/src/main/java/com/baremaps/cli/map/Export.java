@@ -14,29 +14,17 @@
 
 package com.baremaps.cli.map;
 
-
-import com.baremaps.cli.Options;
 import com.baremaps.tasks.ExportVectorTiles;
 import com.baremaps.workflow.WorkflowContext;
-import java.net.URI;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import picocli.CommandLine.Command;
-import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 @Command(
     name = "export",
     description = "Export vector tiles from the database.")
-@SuppressWarnings("squid:S106")
 public class Export implements Callable<Integer> {
-
-  private static final Logger logger = LoggerFactory.getLogger(Export.class);
-
-  @Mixin
-  private Options options;
 
   @Option(names = {"--tileset"}, paramLabel = "TILESET", description = "The tileset file.",
       required = true)
@@ -50,11 +38,8 @@ public class Export implements Callable<Integer> {
       required = true)
   private Path repository;
 
-  @Option(names = {"--tiles"}, paramLabel = "TILES", description = "The tiles to export.")
-  private URI tiles;
-
   @Option(names = {"--format"}, paramLabel = "FORMAT",
-      description = "The format of the repository.")
+      description = "The format of the repository (${COMPLETION-CANDIDATES}).")
   private ExportVectorTiles.Format format = ExportVectorTiles.Format.FILE;
 
   @Override

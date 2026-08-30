@@ -64,6 +64,10 @@ public final class SqliteUtils {
     hikariConfig.setDataSource(sqliteDataSource);
     hikariConfig.setMaximumPoolSize(readOnly ? Runtime.getRuntime().availableProcessors() : 1);
 
+    // The pool has to agree with the connections it hands out: a SQLite connection refuses to
+    // change its read-only flag once established, and the pool sets that flag on every connection.
+    hikariConfig.setReadOnly(readOnly);
+
     return new HikariDataSource(hikariConfig);
   }
 

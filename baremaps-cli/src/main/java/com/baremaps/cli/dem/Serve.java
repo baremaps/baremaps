@@ -14,17 +14,14 @@
 
 package com.baremaps.cli.dem;
 
-import static com.baremaps.utils.ObjectMapperUtils.objectMapper;
-
+import com.baremaps.cli.WebServer;
 import com.baremaps.server.BufferedImageResource;
 import com.baremaps.server.VectorTileResource;
-import com.baremaps.tilestore.raster.*;
-import com.linecorp.armeria.common.*;
-import com.linecorp.armeria.server.Server;
-import com.linecorp.armeria.server.annotation.JacksonResponseConverterFunction;
-import com.linecorp.armeria.server.cors.CorsService;
-import com.linecorp.armeria.server.docs.DocService;
-import com.linecorp.armeria.server.file.HttpFile;
+import com.baremaps.tilestore.raster.GeoTiffReader;
+import com.baremaps.tilestore.raster.RasterHillshadeTileStore;
+import com.baremaps.tilestore.raster.TerrariumTileStore;
+import com.baremaps.tilestore.raster.VectorContourTileStore;
+import com.baremaps.tilestore.raster.VectorHillshadeTileStore;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
@@ -37,81 +34,33 @@ import picocli.CommandLine.Option;
 @Command(name = "serve", description = "Start a tile server to preview elevation data.")
 public class Serve implements Callable<Integer> {
 
+  // The server listens on every interface, as it is often reached from outside the machine or the
+  // container that runs it.
   @Option(names = {"--host"}, paramLabel = "HOST", description = "The host of the server.")
-  private String host = "localhost";
+  private String host = "0.0.0.0";
 
   @Option(names = {"--port"}, paramLabel = "PORT", description = "The port of the server.")
   private int port = 9000;
 
-  @Option(names = {"--path"}, paramLabel = "PATH",
+  @Option(names = {"--path"}, paramLabel = "PATH", required = true,
       description = "The path of a digital elevation model (DEM) file in the geotiff format.")
   private Path path;
 
   @Override
   public Integer call() throws Exception {
-    // Initialize the tile stores
-    var geoTiffReader = new GeoTiffReader(path);
-    var rasterElevationTileStore = new TerrariumTileStore(geoTiffReader);
-    var rasterHillshadeTileStore =
-        new RasterHillshadeTileStore(geoTiffReader);
-    var vectorHillshadeTileStore =
-        new VectorHillshadeTileStore(
-            geoTiffReader);
-    var vectorContourTileStore =
-        new VectorContourTileStore(geoTiffReader);
-
-    // Initialize the server
-    var objectMapper = objectMapper();
-    var jsonResponseConverter = new JacksonResponseConverterFunction(objectMapper);
-    var serverBuilder = Server.builder();
-    serverBuilder.http(port);
-
-    // Register the services
-    serverBuilder.annotatedService(
-        "/raster/elevation",
-        new BufferedImageResource(() -> rasterElevationTileStore),
-        jsonResponseConverter);
-    serverBuilder.annotatedService(
-        "/raster/hillshade",
-        new BufferedImageResource(() -> rasterHillshadeTileStore),
-        jsonResponseConverter);
-    serverBuilder.annotatedService(
-        "/vector/contour",
-        new VectorTileResource(() -> vectorContourTileStore),
-        jsonResponseConverter);
-    serverBuilder.annotatedService(
-        "/vector/hillshade",
-        new VectorTileResource(() -> vectorHillshadeTileStore),
-        jsonResponseConverter);
-
-    var index = HttpFile.of(ClassLoader.getSystemClassLoader(), "/dem/index.html");
-    serverBuilder.service("/", index.asService());
-
-    serverBuilder.decorator(CorsService.builderForAnyOrigin()
-        .allowAllRequestHeaders(true)
-        .allowRequestMethods(
-            HttpMethod.GET,
-            HttpMethod.POST,
-            HttpMethod.PUT,
-            HttpMethod.DELETE,
-            HttpMethod.OPTIONS,
-            HttpMethod.HEAD)
-        .allowCredentials()
-        .exposeHeaders(HttpHeaderNames.LOCATION)
-        .newDecorator());
-
-    serverBuilder.serviceUnder("/docs", new DocService());
-
-    serverBuilder.disableServerHeader();
-    serverBuilder.disableDateHeader();
-    var server = serverBuilder.build();
-
-    var startFuture = server.start();
-    startFuture.join();
-
-    var shutdownFuture = server.closeOnJvmShutdown();
-    shutdownFuture.join();
-
+    try (var geoTiffReader = new GeoTiffReader(path);
+        var rasterElevation = new TerrariumTileStore(geoTiffReader);
+        var rasterHillshade = new RasterHillshadeTileStore(geoTiffReader);
+        var vectorContour = new VectorContourTileStore(geoTiffReader);
+        var vectorHillshade = new VectorHillshadeTileStore(geoTiffReader)) {
+      new WebServer(host, port)
+          .resource("/raster/elevation", new BufferedImageResource(() -> rasterElevation))
+          .resource("/raster/hillshade", new BufferedImageResource(() -> rasterHillshade))
+          .resource("/vector/contour", new VectorTileResource(() -> vectorContour))
+          .resource("/vector/hillshade", new VectorTileResource(() -> vectorHillshade))
+          .files("/dem", "index.html")
+          .run();
+    }
     return 0;
   }
 }

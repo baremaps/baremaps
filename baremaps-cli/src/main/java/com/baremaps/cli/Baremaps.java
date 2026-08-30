@@ -14,9 +14,6 @@
 
 package com.baremaps.cli;
 
-
-
-import com.baremaps.cli.Baremaps.VersionProvider;
 import com.baremaps.cli.database.Database;
 import com.baremaps.cli.dem.DEM;
 import com.baremaps.cli.geocoder.Geocoder;
@@ -24,22 +21,14 @@ import com.baremaps.cli.iploc.IpLoc;
 import com.baremaps.cli.map.Map;
 import com.baremaps.cli.workflow.Workflow;
 import java.io.InputStream;
-import java.net.URL;
 import java.util.Properties;
-import java.util.concurrent.Callable;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.core.config.Configurator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.IVersionProvider;
-import picocli.CommandLine.Option;
 
 @Command(
     name = "baremaps",
     description = "A toolkit for producing vector tiles.",
-    versionProvider = VersionProvider.class,
     subcommands = {
         Workflow.class,
         Database.class,
@@ -49,57 +38,46 @@ import picocli.CommandLine.Option;
         DEM.class
     },
     sortOptions = false)
-@SuppressWarnings("squid:S106")
-public class Baremaps implements Callable<Integer> {
-
-  private static final Logger logger = LoggerFactory.getLogger(Baremaps.class);
-
-  @Option(names = {"-V", "--version"}, versionHelp = true, description = "Print version info.")
-  boolean version;
+public class Baremaps extends CommandGroup {
 
   public static void main(String... args) {
-    // Set the log level
-    for (int i = 0; i < args.length; i++) {
-      String arg = args[i];
-      String level = "";
-      if (arg.equals("--log-level") && i + 1 < args.length) {
-        level = args[i + 1].strip();
-      } else if (arg.startsWith("--log-level=")) {
-        level = arg.substring(12).strip();
-      }
-      if (!"".equals(level)) {
-        Configurator.setRootLevel(Level.getLevel(level));
-      }
-    }
-
-    // Execute the command
-    CommandLine commandLine = new CommandLine(new Baremaps())
+    var commandLine = new CommandLine(new Baremaps())
         .setCaseInsensitiveEnumValuesAllowed(true)
-        .setUsageHelpLongOptionsMaxWidth(30)
-        .addMixin("options", new Options());
+        .setUsageHelpLongOptionsMaxWidth(30);
+    configure(commandLine);
 
-    commandLine.execute(args);
+    // The exit code tells the shell, and the scripts and workflows built on it, whether the command
+    // succeeded.
+    System.exit(commandLine.execute(args));
   }
 
-  @Override
-  public Integer call() {
-    CommandLine.usage(this, System.out);
-    return 0;
+  /**
+   * Gives a command and its subcommands the options that are understood at every level of the
+   * hierarchy, so that a user never has to remember where an option belongs.
+   *
+   * @param commandLine the command to configure
+   */
+  private static void configure(CommandLine commandLine) {
+    commandLine.addMixin("options", new Options());
+    commandLine.getCommandSpec().mixinStandardHelpOptions(true);
+    commandLine.getCommandSpec().versionProvider(new VersionProvider());
+    commandLine.getSubcommands().values().forEach(Baremaps::configure);
   }
 
-
+  /** Reports the version of the application, as recorded in the artifact at build time. */
   static class VersionProvider implements IVersionProvider {
 
+    @Override
     public String[] getVersion() throws Exception {
-      URL url = Baremaps.class.getResource("version.txt");
+      var url = Baremaps.class.getResource("version.txt");
       if (url == null) {
         return new String[] {"No version.txt file found in the classpath."};
       }
       try (InputStream inputStream = url.openStream()) {
-        Properties properties = new Properties();
+        var properties = new Properties();
         properties.load(inputStream);
         return new String[] {
-            properties.getProperty("application") + " v" + properties.getProperty("version"),};
+            properties.getProperty("application") + " v" + properties.getProperty("version")};
       }
     }
   }

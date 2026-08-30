@@ -14,9 +14,7 @@
 
 package com.baremaps.cli.map;
 
-import static com.baremaps.utils.ObjectMapperUtils.objectMapper;
-
-import com.baremaps.cli.Options;
+import com.baremaps.cli.WebServer;
 import com.baremaps.config.ConfigReader;
 import com.baremaps.maplibre.style.Style;
 import com.baremaps.maplibre.tilejson.TileJSON;
@@ -26,38 +24,18 @@ import com.baremaps.server.SearchResource;
 import com.baremaps.server.StyleResource;
 import com.baremaps.server.TileJSONResource;
 import com.baremaps.server.VectorTileResource;
-import com.baremaps.tilestore.TileStore;
 import com.baremaps.tilestore.postgres.PostgresTileStore;
 import com.baremaps.tilestore.vector.VectorTileCache;
 import com.github.benmanes.caffeine.cache.CaffeineSpec;
-import com.linecorp.armeria.common.HttpHeaderNames;
-import com.linecorp.armeria.common.HttpMethod;
-import com.linecorp.armeria.server.Server;
-import com.linecorp.armeria.server.annotation.JacksonResponseConverterFunction;
-import com.linecorp.armeria.server.cors.CorsService;
-import com.linecorp.armeria.server.docs.DocService;
-import com.linecorp.armeria.server.file.FileService;
-import com.linecorp.armeria.server.file.HttpFile;
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
-import java.util.function.Supplier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import picocli.CommandLine.Command;
-import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 @Command(
     name = "serve",
     description = "Start a tile server with caching capabilities.")
-@SuppressWarnings("squid:S106")
 public class Serve implements Callable<Integer> {
-
-  private static final Logger logger = LoggerFactory.getLogger(Serve.class);
-
-  @Mixin
-  private Options options;
 
   @Option(names = {"--cache"}, paramLabel = "CACHE", description = {
       "The caffeine specification of the cache. " +
@@ -73,79 +51,38 @@ public class Serve implements Callable<Integer> {
       required = true)
   private Path stylePath;
 
-  @Option(names = {"--assets"}, paramLabel = "ASSETS", description = "The assets directory.",
-      required = false)
+  @Option(names = {"--assets"}, paramLabel = "ASSETS", description = "The assets directory.")
   private Path assetsPath;
 
+  // The server listens on every interface, as it is often reached from outside the machine or the
+  // container that runs it.
   @Option(names = {"--host"}, paramLabel = "HOST", description = "The host of the server.")
-  private String host = "localhost";
+  private String host = "0.0.0.0";
 
   @Option(names = {"--port"}, paramLabel = "PORT", description = "The port of the server.")
   private int port = 9000;
 
   @Override
   public Integer call() throws Exception {
-    var objectMapper = objectMapper();
     var configReader = new ConfigReader();
-    var caffeineSpec = CaffeineSpec.parse(cache);
-    var tileset = objectMapper.readValue(configReader.read(tilesetPath), Tileset.class);
+    var tileset = configReader.read(tilesetPath, Tileset.class);
+    var style = configReader.read(stylePath, Style.class);
+    var tileJSON = configReader.read(tilesetPath, TileJSON.class);
+
     var datasource = PostgresUtils.createDataSourceFromObject(tileset.getDatabase());
     var postgresVersion = PostgresUtils.getPostgresVersion(datasource);
 
-    try (
-        var tileStore = new PostgresTileStore(datasource, tileset, postgresVersion);
-        var tileCache = new VectorTileCache(tileStore, caffeineSpec)) {
-
-      var tileStoreSupplier = (Supplier<TileStore<ByteBuffer>>) () -> tileCache;
-
-      var style = objectMapper.readValue(configReader.read(stylePath), Style.class);
-      var styleSupplier = (Supplier<Style>) () -> style;
-
-      var tileJSON = objectMapper.readValue(configReader.read(tilesetPath), TileJSON.class);
-      var tileJSONSupplier = (Supplier<TileJSON>) () -> tileJSON;
-
-      var serverBuilder = Server.builder();
-      serverBuilder.http(port);
-
-      var jsonResponseConverter = new JacksonResponseConverterFunction(objectMapper);
-      serverBuilder.annotatedService("/tiles", new VectorTileResource(tileStoreSupplier),
-          jsonResponseConverter);
-      serverBuilder.annotatedService(new StyleResource(styleSupplier), jsonResponseConverter);
-      serverBuilder.annotatedService(new TileJSONResource(tileJSONSupplier), jsonResponseConverter);
-      serverBuilder.annotatedService(new SearchResource(datasource), jsonResponseConverter);
-
-      var index = HttpFile.of(ClassLoader.getSystemClassLoader(), "/static/server.html");
-      serverBuilder.service("/", index.asService());
-      serverBuilder.serviceUnder("/",
-          FileService.of(ClassLoader.getSystemClassLoader(), "/static"));
-
-      if (assetsPath != null) {
-        serverBuilder.serviceUnder("/assets", FileService.of(assetsPath));
-      }
-
-      serverBuilder.decorator(CorsService.builderForAnyOrigin()
-          .allowRequestMethods(HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE,
-              HttpMethod.OPTIONS, HttpMethod.HEAD)
-          .allowRequestHeaders(HttpHeaderNames.ORIGIN, HttpHeaderNames.CONTENT_TYPE,
-              HttpHeaderNames.ACCEPT, HttpHeaderNames.AUTHORIZATION)
-          .allowCredentials()
-          .exposeHeaders(HttpHeaderNames.LOCATION)
-          .newDecorator());
-
-      serverBuilder.serviceUnder("/docs", new DocService());
-
-      serverBuilder.disableServerHeader();
-      serverBuilder.disableDateHeader();
-
-      var server = serverBuilder.build();
-
-      var startFuture = server.start();
-      startFuture.join();
-
-      var shutdownFuture = server.closeOnJvmShutdown();
-      shutdownFuture.join();
+    try (var tileStore = new PostgresTileStore(datasource, tileset, postgresVersion);
+        var tileCache = new VectorTileCache(tileStore, CaffeineSpec.parse(cache))) {
+      new WebServer(host, port)
+          .resource("/tiles", new VectorTileResource(() -> tileCache))
+          .resource(new StyleResource(() -> style))
+          .resource(new TileJSONResource(() -> tileJSON))
+          .resource(new SearchResource(datasource))
+          .files("/static", "server.html")
+          .assets(assetsPath)
+          .run();
     }
-
     return 0;
   }
 }

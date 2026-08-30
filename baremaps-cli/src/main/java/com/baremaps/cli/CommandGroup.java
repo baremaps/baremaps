@@ -12,15 +12,25 @@
  * limitations under the License.
  */
 
-package com.baremaps.cli.database;
+package com.baremaps.cli;
 
-import com.baremaps.cli.CommandGroup;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Spec;
 
-@Command(
-    name = "database",
-    description = "Database commands.",
-    subcommands = {ExecuteSql.class, ImportOsm.class, UpdateOsm.class},
-    sortOptions = false)
-public class Database extends CommandGroup {
+/**
+ * A command that does nothing but group subcommands. Invoked on its own, it lists the subcommands
+ * it groups.
+ */
+@Command
+@SuppressWarnings("squid:S106")
+public abstract class CommandGroup implements Runnable {
+
+  @Spec
+  private CommandSpec spec;
+
+  @Override
+  public void run() {
+    spec.commandLine().usage(System.out);
+  }
 }

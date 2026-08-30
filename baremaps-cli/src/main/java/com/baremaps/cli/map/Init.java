@@ -16,31 +16,28 @@ package com.baremaps.cli.map;
 
 import static com.baremaps.utils.ObjectMapperUtils.objectMapper;
 
-import com.baremaps.cli.Options;
 import com.baremaps.maplibre.style.Style;
 import com.baremaps.maplibre.style.StyleSource;
 import com.baremaps.maplibre.tileset.Tileset;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Map;
+import java.util.List;
 import java.util.concurrent.Callable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine.Command;
-import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 @Command(
     name = "init",
     description = "Init configuration files.")
-@SuppressWarnings("squid:S106")
 public class Init implements Callable<Integer> {
 
   private static final Logger logger = LoggerFactory.getLogger(Init.class);
 
-  @Mixin
-  private Options options;
+  // The files are initialized for the server started by the serve and dev commands, which is where
+  // they are meant to be tried out first.
+  private static final String TILEJSON_URL = "http://localhost:9000/tiles.json";
 
   @Option(names = {"--style"}, paramLabel = "STYLE", description = "A style file.")
   private Path style;
@@ -55,25 +52,35 @@ public class Init implements Callable<Integer> {
       return 0;
     }
     if (style != null) {
-      Style styleObject = new Style();
-      styleObject.setName("Baremaps");
-      StyleSource sources = new StyleSource();
-      sources.setType("vector");
-      sources.setUrl("http://localhost:9000/tiles.json");
-      styleObject.setSources(Map.of("baremaps", sources));
-      Files.write(style,
-          objectMapper().writerWithDefaultPrettyPrinter().writeValueAsBytes(styleObject));
+      write(style, style());
       logger.info("Style initialized: {}", style);
     }
     if (tileset != null) {
-      Tileset tilesetObject = new Tileset();
-      tilesetObject.setTilejson("2.2.0");
-      tilesetObject.setName("Baremaps");
-      tilesetObject.setTiles(Arrays.asList("http://localhost:9000/tiles.json"));
-      Files.write(tileset,
-          objectMapper().writerWithDefaultPrettyPrinter().writeValueAsBytes(tilesetObject));
+      write(tileset, tileset());
       logger.info("Tileset initialized: {}", tileset);
     }
     return 0;
+  }
+
+  private static Style style() {
+    var source = new StyleSource();
+    source.setType("vector");
+    source.setUrl(TILEJSON_URL);
+    var style = new Style();
+    style.setName("Baremaps");
+    style.setSources(java.util.Map.of("baremaps", source));
+    return style;
+  }
+
+  private static Tileset tileset() {
+    var tileset = new Tileset();
+    tileset.setTilejson("2.2.0");
+    tileset.setName("Baremaps");
+    tileset.setTiles(List.of(TILEJSON_URL));
+    return tileset;
+  }
+
+  private static void write(Path path, Object config) throws Exception {
+    Files.write(path, objectMapper().writerWithDefaultPrettyPrinter().writeValueAsBytes(config));
   }
 }

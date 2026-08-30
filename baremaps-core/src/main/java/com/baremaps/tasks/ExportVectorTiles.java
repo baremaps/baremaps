@@ -17,8 +17,6 @@ package com.baremaps.tasks;
 import static com.baremaps.utils.ObjectMapperUtils.objectMapper;
 
 import com.baremaps.config.ConfigReader;
-import com.baremaps.data.stream.ProgressLogger;
-import com.baremaps.data.stream.StreamUtils;
 import com.baremaps.maplibre.style.Style;
 import com.baremaps.maplibre.tileset.Tileset;
 import com.baremaps.maplibre.tileset.TilesetQuery;
@@ -31,7 +29,6 @@ import com.baremaps.tilestore.postgres.PostgresTileStore;
 import com.baremaps.utils.SqliteUtils;
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
-import com.baremaps.workflow.WorkflowException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -69,8 +66,6 @@ public class ExportVectorTiles implements Task {
   private Format format;
 
   // The number of tiles read at once, and the number of tiles written per round trip.
-  private static final int BUFFER_SIZE = 1000;
-
   private static final int BATCH_SIZE = 1000;
 
   /**
@@ -109,7 +104,8 @@ public class ExportVectorTiles implements Task {
     var datasource = context.getDataSource(tilesetObject.getDatabase());
     try (var sourceTileStore = sourceTileStore(tilesetObject, datasource);
         var targetTileStore = targetTileStore(tilesetObject)) {
-      copyTiles(tilesetObject, sourceTileStore, targetTileStore);
+      TileStoreUtils.copy(sourceTileStore, targetTileStore, envelope(tilesetObject),
+          tilesetObject.getMinzoom(), tilesetObject.getMaxzoom(), BATCH_SIZE);
     }
   }
 
@@ -131,43 +127,6 @@ public class ExportVectorTiles implements Task {
 
   private static void write(Path file, byte[] content) throws IOException {
     Files.write(file, content, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-  }
-
-  /**
-   * Reads every tile of the tileset from the source and writes it to the target.
-   *
-   * <p>
-   * Reads are the slow part and are buffered so that many run at once, while the writes are
-   * batched: a tile store commits a batch in one round trip.
-   */
-  private void copyTiles(Tileset tileset, TileStore<ByteBuffer> source,
-      TileStore<ByteBuffer> target) {
-    var envelope = envelope(tileset);
-    var count = TileCoord.count(envelope, tileset.getMinzoom(), tileset.getMaxzoom());
-    var start = System.currentTimeMillis();
-
-    var tileCoords = StreamUtils.stream(
-        TileCoord.iterator(envelope, tileset.getMinzoom(), tileset.getMaxzoom()))
-        .peek(new ProgressLogger<>(count, 5000));
-
-    var entries = StreamUtils.bufferInCompletionOrder(tileCoords, tile -> {
-      try {
-        return new TileEntry<>(tile, source.read(tile));
-      } catch (TileStoreException e) {
-        throw new WorkflowException(e);
-      }
-    }, BUFFER_SIZE);
-
-    StreamUtils.partition(entries, BATCH_SIZE).forEach(batch -> {
-      try {
-        target.write(batch);
-      } catch (TileStoreException e) {
-        throw new WorkflowException(e);
-      }
-    });
-
-    var stop = System.currentTimeMillis();
-    logger.info("Exported {} tiles in {}s", count, (stop - start) / 1000);
   }
 
   /** Returns the bounds of the tileset, defaulting to the whole web mercator extent. */

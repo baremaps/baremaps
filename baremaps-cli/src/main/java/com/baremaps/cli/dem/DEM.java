@@ -14,25 +14,13 @@
 
 package com.baremaps.cli.dem;
 
-
-
-import picocli.CommandLine;
+import com.baremaps.cli.CommandGroup;
 import picocli.CommandLine.Command;
 
-/**
- * A command group that contains commands for processing digital elevation models (DEMs).
- */
-@Command(name = "dem", description = "Digital Elevation Models (DEMs) processing",
-    subcommands = {
-        Serve.class,
-        VectorTileContours.class
-    },
+@Command(
+    name = "dem",
+    description = "Digital Elevation Models (DEMs) processing.",
+    subcommands = {Serve.class, VectorTileContours.class},
     sortOptions = false)
-@SuppressWarnings("squid:S106")
-public class DEM implements Runnable {
-
-  @Override
-  public void run() {
-    CommandLine.usage(this, System.out);
-  }
+public class DEM extends CommandGroup {
 }

@@ -14,24 +14,16 @@
 
 package com.baremaps.cli.database;
 
-
-
-import com.baremaps.cli.Options;
 import com.baremaps.tasks.UpdateOsmDatabase;
 import com.baremaps.workflow.WorkflowContext;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
-import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 @Command(
     name = "update-osm",
     description = "Update OpenStreetMap data in Postgres.")
-@SuppressWarnings("squid:S106")
 public class UpdateOsm implements Callable<Integer> {
-
-  @Mixin
-  private Options options;
 
   @Option(names = {"--database"}, paramLabel = "DATABASE",
       description = "The JDBC url of Postgres.", required = true)
@@ -47,8 +39,7 @@ public class UpdateOsm implements Callable<Integer> {
 
   @Override
   public Integer call() throws Exception {
-    new UpdateOsmDatabase(database, srid, replicationUrl)
-        .execute(new WorkflowContext());
+    new UpdateOsmDatabase(database, srid, replicationUrl).execute(new WorkflowContext());
     return 0;
   }
 }

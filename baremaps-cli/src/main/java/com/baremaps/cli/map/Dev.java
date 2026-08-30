@@ -14,10 +14,8 @@
 
 package com.baremaps.cli.map;
 
-import static com.baremaps.utils.ObjectMapperUtils.objectMapper;
-
 import com.baremaps.cli.BaremapsException;
-import com.baremaps.cli.Options;
+import com.baremaps.cli.WebServer;
 import com.baremaps.config.ConfigReader;
 import com.baremaps.maplibre.style.Style;
 import com.baremaps.maplibre.tileset.Tileset;
@@ -26,39 +24,19 @@ import com.baremaps.server.ChangeResource;
 import com.baremaps.server.StyleResource;
 import com.baremaps.server.TilesetResource;
 import com.baremaps.server.VectorTileResource;
-import com.baremaps.tilestore.TileStore;
 import com.baremaps.tilestore.postgres.PostgresTileStore;
-import com.linecorp.armeria.common.HttpMethod;
-import com.linecorp.armeria.server.Server;
-import com.linecorp.armeria.server.annotation.JacksonResponseConverterFunction;
-import com.linecorp.armeria.server.cors.CorsService;
-import com.linecorp.armeria.server.docs.DocService;
-import com.linecorp.armeria.server.file.FileService;
-import com.linecorp.armeria.server.file.HttpFile;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
-import java.util.function.Supplier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import picocli.CommandLine.Command;
-import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 @Command(
     name = "dev",
     description = "Start a development server with live reload.")
-@SuppressWarnings("squid:S106")
 public class Dev implements Callable<Integer> {
 
-  private static final Logger logger = LoggerFactory.getLogger(Dev.class);
-
-  @Mixin
-  private Options options;
-
-  @Option(names = {"--cache"}, paramLabel = "CACHE", description = "The caffeine cache directive.")
-  private String cache = "";
+  private final ConfigReader configReader = new ConfigReader();
 
   @Option(names = {"--tileset"}, paramLabel = "TILESET", description = "The tileset file.",
       required = true)
@@ -68,85 +46,53 @@ public class Dev implements Callable<Integer> {
       required = true)
   private Path stylePath;
 
-  @Option(names = {"--assets"}, paramLabel = "ASSETS", description = "The assets directory.",
-      required = false)
+  @Option(names = {"--assets"}, paramLabel = "ASSETS", description = "The assets directory.")
   private Path assetsPath;
 
+  // The server listens on every interface, as it is often reached from outside the machine or the
+  // container that runs it.
   @Option(names = {"--host"}, paramLabel = "HOST", description = "The host of the server.")
-  private String host = "localhost";
+  private String host = "0.0.0.0";
 
   @Option(names = {"--port"}, paramLabel = "PORT", description = "The port of the server.")
   private int port = 9000;
 
   @Override
   public Integer call() throws Exception {
-    var configReader = new ConfigReader();
-    var objectMapper = objectMapper();
-    var tileset = objectMapper.readValue(configReader.read(this.tilesetPath), Tileset.class);
-    var datasource = PostgresUtils.createDataSourceFromObject(tileset.getDatabase());
+    var datasource = PostgresUtils.createDataSourceFromObject(tileset().getDatabase());
     var postgresVersion = PostgresUtils.getPostgresVersion(datasource);
 
-    var tilesetSupplier = (Supplier<Tileset>) () -> {
-      try {
-        var config = configReader.read(tilesetPath);
-        return objectMapper.readValue(config, Tileset.class);
-      } catch (IOException e) {
-        throw new BaremapsException(e);
-      }
-    };
-
-    var tileStoreSupplier = (Supplier<TileStore<ByteBuffer>>) () -> {
-      var tileJSON = tilesetSupplier.get();
-      return new PostgresTileStore(datasource, tileJSON, postgresVersion);
-    };
-
-    var styleSupplier = (Supplier<Style>) () -> {
-      try {
-        var config = configReader.read(stylePath);
-        return objectMapper.readValue(config, Style.class);
-      } catch (IOException e) {
-        throw new BaremapsException(e);
-      }
-    };
-
-    var serverBuilder = Server.builder();
-    serverBuilder.http(port);
-
-    var jsonResponseConverter = new JacksonResponseConverterFunction(objectMapper);
-    serverBuilder.annotatedService(new ChangeResource(tilesetPath, stylePath),
-        jsonResponseConverter);
-    serverBuilder.annotatedService("/tiles", new VectorTileResource(tileStoreSupplier),
-        jsonResponseConverter);
-    serverBuilder.annotatedService(new StyleResource(styleSupplier), jsonResponseConverter);
-    serverBuilder.annotatedService(new TilesetResource(tilesetSupplier), jsonResponseConverter);
-
-    var index = HttpFile.of(ClassLoader.getSystemClassLoader(), "/static/viewer.html");
-    serverBuilder.service("/", index.asService());
-    serverBuilder.serviceUnder("/", FileService.of(ClassLoader.getSystemClassLoader(), "/static"));
-
-    if (assetsPath != null) {
-      serverBuilder.serviceUnder("/assets", FileService.of(assetsPath));
-    }
-
-    serverBuilder.decorator(CorsService.builderForAnyOrigin()
-        .allowRequestMethods(HttpMethod.POST, HttpMethod.GET, HttpMethod.PUT)
-        .allowRequestHeaders("Origin", "Content-Type", "Accept")
-        .newDecorator());
-
-    serverBuilder.serviceUnder("/docs", new DocService());
-
-
-    serverBuilder.disableServerHeader();
-    serverBuilder.disableDateHeader();
-
-    var server = serverBuilder.build();
-
-    var startFuture = server.start();
-    startFuture.join();
-
-    var shutdownFuture = server.closeOnJvmShutdown();
-    shutdownFuture.join();
+    new WebServer(host, port)
+        .resource(new ChangeResource(tilesetPath, stylePath))
+        .resource("/tiles", new VectorTileResource(
+            () -> new PostgresTileStore(datasource, tileset(), postgresVersion)))
+        .resource(new StyleResource(this::style))
+        .resource(new TilesetResource(this::tileset))
+        .files("/static", "viewer.html")
+        .assets(assetsPath)
+        .run();
 
     return 0;
+  }
+
+  // The configuration files are read again on every request, and the tile store rebuilt from them,
+  // so that an edit shows up in the browser without a restart. This is what makes this command a
+  // development server rather than the serve command. The connection to the database is the one
+  // thing that is kept, as the tileset is not expected to be pointed at another database midway.
+
+  private Tileset tileset() {
+    return read(tilesetPath, Tileset.class);
+  }
+
+  private Style style() {
+    return read(stylePath, Style.class);
+  }
+
+  private <T> T read(Path path, Class<T> type) {
+    try {
+      return configReader.read(path, type);
+    } catch (IOException e) {
+      throw new BaremapsException(e);
+    }
   }
 }

@@ -14,21 +14,13 @@
 
 package com.baremaps.cli.map;
 
-
-
-import picocli.CommandLine;
+import com.baremaps.cli.CommandGroup;
 import picocli.CommandLine.Command;
 
 @Command(
     name = "map",
     description = "Map commands.",
-    sortOptions = false,
-    subcommands = {Init.class, Export.class, Serve.class, Dev.class, MBTiles.class})
-@SuppressWarnings("squid:S106")
-public class Map implements Runnable {
-
-  @Override
-  public void run() {
-    CommandLine.usage(this, System.out);
-  }
+    subcommands = {Init.class, Export.class, Serve.class, Dev.class, MBTiles.class},
+    sortOptions = false)
+public class Map extends CommandGroup {
 }

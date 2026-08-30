@@ -18,7 +18,6 @@ import static com.baremaps.utils.ObjectMapperUtils.objectMapper;
 
 import com.baremaps.tasks.LogMessage;
 import com.baremaps.workflow.Step;
-import com.baremaps.workflow.Workflow;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -31,22 +30,20 @@ import picocli.CommandLine.Option;
 @Command(
     name = "init",
     description = "Initialize a workflow.")
-@SuppressWarnings("squid:S106")
 public class Init implements Callable<Integer> {
 
   private static final Logger logger = LoggerFactory.getLogger(Init.class);
 
   @Option(names = {"--file"}, paramLabel = "FILE", description = "A workflow file.",
       required = true)
-  private Path workflow;
+  private Path file;
 
   @Override
   public Integer call() throws Exception {
-    com.baremaps.workflow.Workflow workflowObject = new Workflow(
+    var workflow = new com.baremaps.workflow.Workflow(
         List.of(new Step("hello", List.of(), List.of(new LogMessage("Hello World!")))));
-    Files.write(workflow,
-        objectMapper().writerWithDefaultPrettyPrinter().writeValueAsBytes(workflowObject));
-    logger.info("Workflow initialized");
+    Files.write(file, objectMapper().writerWithDefaultPrettyPrinter().writeValueAsBytes(workflow));
+    logger.info("Workflow initialized: {}", file);
     return 0;
   }
 }

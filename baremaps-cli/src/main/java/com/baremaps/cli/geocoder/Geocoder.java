@@ -14,21 +14,13 @@
 
 package com.baremaps.cli.geocoder;
 
-
-
-import picocli.CommandLine;
+import com.baremaps.cli.CommandGroup;
 import picocli.CommandLine.Command;
 
 @Command(
     name = "geocoder",
     description = "Geocoder commands (experimental).",
-    sortOptions = false,
-    subcommands = {Serve.class, Search.class})
-@SuppressWarnings("squid:S106")
-public class Geocoder implements Runnable {
-
-  @Override
-  public void run() {
-    CommandLine.usage(this, System.out);
-  }
+    subcommands = {Serve.class, Search.class},
+    sortOptions = false)
+public class Geocoder extends CommandGroup {
 }

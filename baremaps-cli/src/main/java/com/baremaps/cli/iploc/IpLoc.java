@@ -14,20 +14,13 @@
 
 package com.baremaps.cli.iploc;
 
-
-
-import picocli.CommandLine;
+import com.baremaps.cli.CommandGroup;
 import picocli.CommandLine.Command;
 
 @Command(
     name = "iploc",
     description = "IP to location commands (experimental).",
-    subcommands = {Serve.class})
-@SuppressWarnings("squid:S106")
-public class IpLoc implements Runnable {
-
-  @Override
-  public void run() {
-    CommandLine.usage(this, System.out);
-  }
+    subcommands = {Serve.class},
+    sortOptions = false)
+public class IpLoc extends CommandGroup {
 }
