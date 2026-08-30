@@ -38,14 +38,14 @@ import javax.sql.DataSource;
  */
 public class MBTilesStore implements TileStore<ByteBuffer> {
 
-  public static final String CREATE_TABLE_METADATA =
+  private static final String CREATE_TABLE_METADATA =
       "CREATE TABLE IF NOT EXISTS metadata (name TEXT, value TEXT, PRIMARY KEY (name))";
 
   private static final String CREATE_TABLE_TILES =
       "CREATE TABLE IF NOT EXISTS tiles (zoom_level INTEGER, tile_column INTEGER, tile_row INTEGER, tile_data BLOB, PRIMARY KEY (zoom_level, tile_column, tile_row))";
 
   private static final String CREATE_INDEX_TILES =
-      "CREATE UNIQUE INDEX tile_index on tiles (zoom_level, tile_column, tile_row)";
+      "CREATE UNIQUE INDEX IF NOT EXISTS tile_index on tiles (zoom_level, tile_column, tile_row)";
 
   private static final String SELECT_METADATA = "SELECT name, value FROM metadata";
 
@@ -120,15 +120,19 @@ public class MBTilesStore implements TileStore<ByteBuffer> {
     try (
         Connection connection = dataSource.getConnection();
         PreparedStatement statement = connection.prepareStatement(INSERT_TILE)) {
+      // One transaction and one round trip for the whole batch: an export writes millions of
+      // tiles, and committing each of them separately dominates the run.
+      connection.setAutoCommit(false);
       for (TileEntry<ByteBuffer> tileEntry : tileEntries) {
-        TileCoord tileCoord = tileEntry.getTileCoord();
-        ByteBuffer byteBuffer = tileEntry.getTileValue();
+        TileCoord tileCoord = tileEntry.tileCoord();
         statement.setInt(1, tileCoord.z());
         statement.setInt(2, tileCoord.x());
         statement.setInt(3, reverseY(tileCoord.y(), tileCoord.z()));
-        statement.setBytes(4, byteBuffer.array());
-        statement.execute();
+        statement.setBytes(4, tileEntry.tileValue().array());
+        statement.addBatch();
       }
+      statement.executeBatch();
+      connection.commit();
     } catch (SQLException e) {
       throw new TileStoreException(e);
     }
@@ -151,9 +155,9 @@ public class MBTilesStore implements TileStore<ByteBuffer> {
   }
 
   /**
-   * Initializes the SQLite database.
+   * Creates the tables and the index of the MBTiles file, unless they are already there.
    *
-   * @throws TileStoreException
+   * @throws TileStoreException if the database cannot be initialized
    */
   public void initializeDatabase() throws TileStoreException {
     try (Connection connection = dataSource.getConnection();
@@ -170,7 +174,7 @@ public class MBTilesStore implements TileStore<ByteBuffer> {
    * Reads the MBTiles metadata.
    *
    * @return the metadata
-   * @throws IOException
+   * @throws IOException if the metadata cannot be read
    */
   public Map<String, String> readMetadata() throws IOException {
     try (Connection connection = dataSource.getConnection();
@@ -192,7 +196,7 @@ public class MBTilesStore implements TileStore<ByteBuffer> {
    * Writes the MBTiles metadata.
    *
    * @param metadata the metadata
-   * @throws IOException
+   * @throws IOException if the metadata cannot be written
    */
   public void writeMetadata(Map<String, String> metadata) throws IOException {
     try (Connection connection = dataSource.getConnection()) {
@@ -211,8 +215,12 @@ public class MBTilesStore implements TileStore<ByteBuffer> {
     }
   }
 
+  /**
+   * Returns the row of a tile in the MBTiles scheme, which numbers rows from the bottom whereas a
+   * {@link TileCoord} numbers them from the top.
+   */
   private static int reverseY(int y, int z) {
-    return (int) (Math.pow(2.0, z) - 1 - y);
+    return (1 << z) - 1 - y;
   }
 
   @Override

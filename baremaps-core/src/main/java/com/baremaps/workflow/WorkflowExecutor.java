@@ -21,9 +21,11 @@ import com.google.common.graph.GraphBuilder;
 import com.google.common.graph.Graphs;
 import com.google.common.graph.ImmutableGraph;
 import java.time.Duration;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.StringJoiner;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -70,31 +72,34 @@ public class WorkflowExecutor implements AutoCloseable {
         .collect(Collectors.toMap(step -> step.getId(), step -> step));
     this.futures = new ConcurrentSkipListMap<>();
     this.stepMeasures = new CopyOnWriteArrayList<>();
+    this.graph = dependencyGraph(this.steps.values());
+  }
 
-    // Create a graph from the workflow
-    ImmutableGraph.Builder<String> graphBuilder = GraphBuilder.directed().immutable();
-
-    // Add the nodes (e.g. steps) to the graph
-    for (String id : this.steps.keySet()) {
-      graphBuilder.addNode(id);
+  /**
+   * Returns the graph whose edges point from a step to the steps that need it, so that a step can
+   * be scheduled as soon as its predecessors complete.
+   *
+   * @param steps the steps of the workflow
+   * @return the dependency graph
+   * @throws WorkflowException if the dependencies form a cycle
+   */
+  private static Graph<String> dependencyGraph(Collection<Step> steps) {
+    ImmutableGraph.Builder<String> builder = GraphBuilder.directed().immutable();
+    for (Step step : steps) {
+      builder.addNode(step.getId());
     }
-
-    // Add the edges (e.g. needs) to the graph
-    for (Step step : this.steps.values()) {
+    for (Step step : steps) {
       if (step.getNeeds() != null) {
         for (String stepNeeded : step.getNeeds()) {
-          graphBuilder.putEdge(stepNeeded, step.getId());
+          builder.putEdge(stepNeeded, step.getId());
         }
       }
     }
-
-    // Build the graph
-    this.graph = graphBuilder.build();
-
-    // Check that the graph is acyclic
-    if (Graphs.hasCycle(this.graph)) {
+    var graph = builder.build();
+    if (Graphs.hasCycle(graph)) {
       throw new WorkflowException("The workflow must be a directed acyclic graph");
     }
+    return graph;
   }
 
   /**
@@ -103,9 +108,9 @@ public class WorkflowExecutor implements AutoCloseable {
   public void execute() {
     try {
       executeAsync().join();
-      logStepMeasures();
-    } catch (Exception e) {
-      logger.error("Error while executing the workflow", e);
+    } finally {
+      // The measures of the tasks that did run are worth reporting even when a later task failed.
+      logMeasures();
     }
   }
 
@@ -113,7 +118,7 @@ public class WorkflowExecutor implements AutoCloseable {
     // Create futures for each end step
     var endSteps = graph.nodes().stream()
         .filter(this::isEndStep)
-        .map(this::getStep)
+        .map(this::stepFuture)
         .toArray(CompletableFuture[]::new);
 
     // Wait for all the end steps to complete
@@ -127,8 +132,8 @@ public class WorkflowExecutor implements AutoCloseable {
    * @param step the step id
    * @return the future step
    */
-  private CompletableFuture<Void> getStep(String step) {
-    return futures.computeIfAbsent(step, this::createStep);
+  private CompletableFuture<Void> stepFuture(String step) {
+    return futures.computeIfAbsent(step, this::createStepFuture);
   }
 
   /**
@@ -137,13 +142,14 @@ public class WorkflowExecutor implements AutoCloseable {
    * @param stepId the step id
    * @return the future step
    */
-  private CompletableFuture<Void> createStep(String stepId) {
+  private CompletableFuture<Void> createStepFuture(String stepId) {
     // Initialize the future step with the previous future step
     // as it depends on its completion.
-    var future = getPreviousStep(stepId);
+    var future = predecessorsFuture(stepId);
 
-    // Time the execution of the tasks
-    var measures = new ArrayList<TaskMeasure>();
+    // Time the execution of the tasks. The list is appended to by the pool threads running the
+    // tasks and read by logMeasures, which runs while sibling steps may still be in flight.
+    var measures = new CopyOnWriteArrayList<TaskMeasure>();
 
     // Get the step from the workflow and skip it if it does not exist.
     // This allows to comment out steps in the workflow without breaking the execution.
@@ -171,7 +177,7 @@ public class WorkflowExecutor implements AutoCloseable {
       }, executorService);
     }
 
-    // Record the measure
+    // The measures are registered now and filled in as the tasks run.
     this.stepMeasures.add(new StepMeasure(step, measures));
 
     return future;
@@ -184,7 +190,7 @@ public class WorkflowExecutor implements AutoCloseable {
    * @param stepId the step id
    * @return the future step
    */
-  private CompletableFuture<Void> getPreviousStep(String stepId) {
+  private CompletableFuture<Void> predecessorsFuture(String stepId) {
     var predecessors = graph.predecessors(stepId).stream().toList();
 
     // If the step has no predecessor,
@@ -196,96 +202,65 @@ public class WorkflowExecutor implements AutoCloseable {
     // If the step has one predecessor,
     // return the future step associated to it.
     if (predecessors.size() == 1) {
-      return getStep(predecessors.get(0));
+      return stepFuture(predecessors.get(0));
     }
 
     // If the step has multiple predecessors,
     // return a future step that completes when all the predecessors complete.
     var futurePredecessors = predecessors.stream()
-        .map(this::getStep)
+        .map(this::stepFuture)
         .toArray(CompletableFuture[]::new);
     return CompletableFuture.allOf(futurePredecessors);
   }
 
-  /**
-   * Logs the step measures.
-   */
-  private void logStepMeasures() {
+  /** Logs how long the workflow, each of its steps, and each of their tasks took. */
+  private void logMeasures() {
     logger.info("----------------------------------------");
-
-    var workflowStart = stepMeasures.stream()
-        .flatMapToLong(measures -> measures.stepMeasures.stream()
-            .mapToLong(measure -> measure.start))
-        .min();
-
-    var workflowEnd = stepMeasures.stream()
-        .flatMapToLong(measures -> measures.stepMeasures.stream()
-            .mapToLong(measure -> measure.end))
-        .max();
-
-    if (workflowStart.isPresent() && workflowEnd.isPresent()) {
-      var workflowDuration = Duration.ofMillis(workflowEnd.getAsLong() - workflowStart.getAsLong());
-      logger.info("  Duration: {}", formatDuration(workflowDuration));
-    } else {
-      logger.info("  Duration: unknown");
-    }
-
-    for (var stepMeasure : this.stepMeasures) {
-      var stepStart = stepMeasure.stepMeasures.stream()
-          .mapToLong(measure -> measure.start).min();
-      var stepEnd = stepMeasure.stepMeasures.stream()
-          .mapToLong(measure -> measure.end).max();
-
-      if (stepStart.isPresent() && stepEnd.isPresent()) {
-        var stepDuration = Duration.ofMillis(stepEnd.getAsLong() - stepStart.getAsLong());
-        logger.info("Step: {}, Duration: {} ms", stepMeasure.step.getId(),
-            formatDuration(stepDuration));
-      } else {
-        logger.info("Step: {}, Duration: unknown", stepMeasure.step.getId());
-      }
-
-      for (var taskMeasure : stepMeasure.stepMeasures) {
-        var taskDuration = Duration.ofMillis(taskMeasure.end - taskMeasure.start);
-        logger.info("  Task: {}", taskMeasure.task);
-        logger.info("    Duration: {}", formatDuration(taskDuration));
+    logger.info("  Duration: {}",
+        format(span(stepMeasures.stream().flatMap(step -> step.taskMeasures().stream()).toList())));
+    for (var stepMeasure : stepMeasures) {
+      logger.info("Step: {}, Duration: {}", stepMeasure.step().getId(),
+          format(span(stepMeasure.taskMeasures())));
+      for (var taskMeasure : stepMeasure.taskMeasures()) {
+        logger.info("  Task: {}", taskMeasure.task());
+        logger.info("    Duration: {}", format(span(List.of(taskMeasure))));
       }
     }
     logger.info("----------------------------------------");
   }
 
   /**
-   * Returns a string representation of the duration.
-   *
-   * @param duration the duration
-   * @return a string representation of the duration
+   * Returns the wall clock time the measures span, or empty when there is none to report. Steps run
+   * in parallel, so a group takes as long as its extent, not as long as the sum of its parts.
    */
-  private static String formatDuration(Duration duration) {
-    var builder = new StringBuilder();
-    var days = duration.toDays();
-    if (duration.isZero()) {
-      builder.append("0 ms");
-    } else {
-      if (days > 0) {
-        builder.append(days).append(" days ");
-      }
-      final long hrs = duration.toHours() - Duration.ofDays(duration.toDays()).toHours();
-      if (hrs > 0) {
-        builder.append(hrs).append(" hrs ");
-      }
-      final long min = duration.toMinutes() - Duration.ofHours(duration.toHours()).toMinutes();
-      if (min > 0) {
-        builder.append(min).append(" min ");
-      }
-      final long sec = duration.toSeconds() - Duration.ofMinutes(duration.toMinutes()).toSeconds();
-      if (sec > 0) {
-        builder.append(sec).append(" s ");
-      }
-      final long ms = duration.toMillis() - Duration.ofSeconds(duration.toSeconds()).toMillis();
-      if (ms > 0) {
-        builder.append(ms).append(" ms ");
+  private static Optional<Duration> span(List<TaskMeasure> measures) {
+    if (measures.isEmpty()) {
+      return Optional.empty();
+    }
+    var start = measures.stream().mapToLong(TaskMeasure::start).min().getAsLong();
+    var end = measures.stream().mapToLong(TaskMeasure::end).max().getAsLong();
+    return Optional.of(Duration.ofMillis(end - start));
+  }
+
+  /** Formats a duration in its non-zero units only, e.g. {@code "1 hrs 3 s"}. */
+  private static String format(Optional<Duration> duration) {
+    if (duration.isEmpty()) {
+      return "unknown";
+    }
+    var value = duration.get();
+    if (value.isZero()) {
+      return "0 ms";
+    }
+    var parts = new long[] {value.toDaysPart(), value.toHoursPart(), value.toMinutesPart(),
+        value.toSecondsPart(), value.toMillisPart()};
+    var units = new String[] {"days", "hrs", "min", "s", "ms"};
+    var formatted = new StringJoiner(" ");
+    for (int i = 0; i < parts.length; i++) {
+      if (parts[i] > 0) {
+        formatted.add(parts[i] + " " + units[i]);
       }
     }
-    return builder.toString();
+    return formatted.toString();
   }
 
   /**
@@ -306,7 +281,7 @@ public class WorkflowExecutor implements AutoCloseable {
     executorService.shutdown();
   }
 
-  record StepMeasure(Step step, List<TaskMeasure> stepMeasures) {
+  record StepMeasure(Step step, List<TaskMeasure> taskMeasures) {
   }
 
   record TaskMeasure(Task task, long start, long end) {

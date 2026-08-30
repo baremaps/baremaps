@@ -31,15 +31,12 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.store.FSDirectory;
 import org.locationtech.jts.geom.Coordinate;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Experimental feature.
  */
 public class CreateGeocoderOpenStreetMap implements Task {
 
-  private static final Logger logger = LoggerFactory.getLogger(CreateGeocoderOpenStreetMap.class);
 
   private Path file;
   private Path indexDirectory;

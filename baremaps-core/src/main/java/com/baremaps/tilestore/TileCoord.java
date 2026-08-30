@@ -34,9 +34,6 @@ public final class TileCoord implements Comparable<TileCoord> {
 
   private static final int[] sides = IntStream.range(0, 30).map(i -> IntMath.pow(2, i)).toArray();
 
-  private static final long[] squares =
-      LongStream.range(0, 30).map(i -> LongMath.pow(IntMath.pow(2, (int) i), 2)).toArray();
-
   private static final long[] offsets = LongStream.range(0, 30)
       .map(i -> LongStream.range(0, i).map(j -> LongMath.pow(IntMath.pow(2, (int) j), 2)).sum())
       .toArray();
@@ -46,26 +43,6 @@ public final class TileCoord implements Comparable<TileCoord> {
   private final int y;
 
   private final int z;
-
-  /**
-   * Constructs a tile coordinate from its index.
-   *
-   * @param index the index
-   */
-  public TileCoord(int index) {
-    int zoom = 0;
-    long offset = 0;
-    long count = 1;
-    while (index >= offset + count) {
-      zoom += 1;
-      offset += count;
-      count = squares[zoom];
-    }
-    long position = index - offset;
-    x = (int) position % sides[zoom];
-    y = (int) position / sides[zoom];
-    z = zoom;
-  }
 
   /**
    * Constructs a tile coordinate from its coordinates.
@@ -113,11 +90,11 @@ public final class TileCoord implements Comparable<TileCoord> {
    * @return the count
    */
   public static long count(Envelope envelope, int minzoom, int maxzoom) {
-    int count = 0;
+    long count = 0;
     for (int zoom = minzoom; zoom <= maxzoom; zoom++) {
       TileCoord min = min(envelope, zoom);
       TileCoord max = max(envelope, zoom);
-      count += (max.x() - min.x() + 1) * (max.y() - min.y() + 1);
+      count += (long) (max.x() - min.x() + 1) * (max.y() - min.y() + 1);
     }
     return count;
   }

@@ -16,7 +16,10 @@ package com.baremaps.tasks;
 
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -28,8 +31,6 @@ import java.util.zip.ZipFile;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Decompresses a file based on a given compression format. The supported formats are zip, targz,
@@ -37,7 +38,6 @@ import org.slf4j.LoggerFactory;
  */
 public class DecompressFile implements Task {
 
-  private static final Logger logger = LoggerFactory.getLogger(DecompressFile.class);
 
   /**
    * The compression format.
@@ -128,7 +128,7 @@ public class DecompressFile implements Task {
    * @throws IOException if an I/O error occurs
    */
   protected static void decompressTarGz(Path source, Path target) throws IOException {
-    Files.createDirectories(target.getParent());
+    Files.createDirectories(target);
     try (var bufferedInputStream = new BufferedInputStream(Files.newInputStream(source));
         var gzipInputStream = new GZIPInputStream(bufferedInputStream);
         var tarInputStream = new TarArchiveInputStream(gzipInputStream)) {
@@ -152,37 +152,29 @@ public class DecompressFile implements Task {
     }
   }
 
+  /**
+   * Extracts the entries of a tar archive into a directory.
+   *
+   * @param target the target directory
+   * @param tarInputStream the archive
+   * @throws IOException if an I/O error occurs
+   */
   public static void decompressTar(Path target, TarArchiveInputStream tarInputStream)
       throws IOException {
     TarArchiveEntry entry;
     while ((entry = tarInputStream.getNextEntry()) != null) {
-      File destination = target.resolve(entry.getName()).normalize().toFile();
-      String canonicalDestinationPath = destination.getCanonicalPath();
-      String canonicalTargetPath = target.toFile().getCanonicalPath();
-      if (!canonicalTargetPath.endsWith(File.separator)) {
-        canonicalTargetPath += File.separator;
-      }
-      if (canonicalDestinationPath.startsWith(canonicalTargetPath)) {
-        if (entry.isDirectory()) {
-          Files.createDirectories(destination.toPath());
-        } else {
-          Files.createDirectories(destination.toPath().getParent());
-          try (BufferedOutputStream outputStream =
-              new BufferedOutputStream(Files.newOutputStream(destination.toPath(),
-                  StandardOpenOption.CREATE,
-                  StandardOpenOption.TRUNCATE_EXISTING))) {
-            tarInputStream.transferTo(outputStream);
-          }
-        }
+      Path destination = resolveEntry(target, entry.getName());
+      if (entry.isDirectory()) {
+        Files.createDirectories(destination);
       } else {
-        throw new IOException("Entry is outside of the target directory");
+        writeEntry(tarInputStream, destination);
       }
     }
   }
 
   /**
-   * Decompresses a zip file.
-   * 
+   * Extracts the entries of a zip archive into a directory.
+   *
    * @param source the source file
    * @param target the target directory
    * @throws IOException if an I/O error occurs
@@ -193,29 +185,45 @@ public class DecompressFile implements Task {
       var entries = zipFile.entries();
       while (entries.hasMoreElements()) {
         ZipEntry entry = entries.nextElement();
-        File destination = target.resolve(entry.getName()).normalize().toFile();
-        String canonicalDestinationPath = destination.getCanonicalPath();
-        String canonicalTargetPath = target.toFile().getCanonicalPath();
-        if (!canonicalTargetPath.endsWith(File.separator)) {
-          canonicalTargetPath += File.separator;
-        }
-        if (canonicalDestinationPath.startsWith(canonicalTargetPath)) {
-          if (entry.isDirectory()) {
-            Files.createDirectories(destination.toPath());
-          } else {
-            Files.createDirectories(destination.toPath().getParent());
-            try (BufferedInputStream input = new BufferedInputStream(zipFile.getInputStream(entry));
-                BufferedOutputStream output =
-                    new BufferedOutputStream(Files.newOutputStream(destination.toPath(),
-                        StandardOpenOption.CREATE,
-                        StandardOpenOption.TRUNCATE_EXISTING))) {
-              input.transferTo(output);
-            }
-          }
+        Path destination = resolveEntry(target, entry.getName());
+        if (entry.isDirectory()) {
+          Files.createDirectories(destination);
         } else {
-          throw new IOException("Entry is outside of the target directory");
+          try (var input = new BufferedInputStream(zipFile.getInputStream(entry))) {
+            writeEntry(input, destination);
+          }
         }
       }
+    }
+  }
+
+  /**
+   * Resolves the name an archive entry declares against the target directory.
+   *
+   * <p>
+   * An archive is untrusted input: an entry naming {@code ../} would otherwise let it write
+   * anywhere on the file system, a flaw known as zip slip.
+   *
+   * @param target the target directory
+   * @param name the name declared by the entry
+   * @return the path to extract the entry to
+   * @throws IOException if the entry resolves outside of the target directory
+   */
+  private static Path resolveEntry(Path target, String name) throws IOException {
+    Path destination = target.resolve(name).normalize().toAbsolutePath();
+    if (!destination.startsWith(target.toAbsolutePath())) {
+      throw new IOException("Entry is outside of the target directory: " + name);
+    }
+    return destination;
+  }
+
+  /** Writes the content of an archive entry, creating the directories that lead to it. */
+  private static void writeEntry(InputStream inputStream, Path destination) throws IOException {
+    Files.createDirectories(destination.getParent());
+    try (var outputStream = new BufferedOutputStream(Files.newOutputStream(destination,
+        StandardOpenOption.CREATE,
+        StandardOpenOption.TRUNCATE_EXISTING))) {
+      inputStream.transferTo(outputStream);
     }
   }
 

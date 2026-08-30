@@ -39,15 +39,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 import org.locationtech.jts.geom.Coordinate;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Import an OSM OSC file into a database.
  */
 public class ImportOsmOsc implements Task {
 
-  private static final Logger logger = LoggerFactory.getLogger(ImportOsmOsc.class);
 
   private Path file;
   private Compression compression;

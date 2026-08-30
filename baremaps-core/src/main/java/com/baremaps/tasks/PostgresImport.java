@@ -83,6 +83,17 @@ public final class PostgresImport {
     return counts;
   }
 
+  /**
+   * Copies tables and logs how many rows each of them received.
+   *
+   * @see #copy(DataSource, Schema, Map, int)
+   */
+  public static void copyAndReport(DataSource dataSource, Schema source,
+      Map<String, String> tables, int srid) throws SQLException {
+    copy(dataSource, source, tables, srid)
+        .forEach((table, count) -> logger.info("Imported {} rows to table: {}", count, table));
+  }
+
   /** Returns a lower-case identifier safe to embed unquoted in SQL. */
   public static String tableName(String name) {
     return name.replaceAll("[^a-zA-Z0-9]", "_").toLowerCase(Locale.ROOT);

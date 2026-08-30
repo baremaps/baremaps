@@ -17,7 +17,6 @@ package com.baremaps.tasks;
 import com.baremaps.calcite.geoparquet.GeoParquetSchema;
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
-import com.baremaps.workflow.WorkflowException;
 import java.net.URI;
 import java.util.Map;
 import java.util.StringJoiner;
@@ -54,23 +53,13 @@ public class ImportGeoParquet implements Task {
 
   @Override
   public void execute(WorkflowContext context) throws Exception {
-    if (uri == null) {
-      throw new WorkflowException("GeoParquet URI cannot be null");
-    }
-    if (tableName == null || tableName.isEmpty()) {
-      throw new WorkflowException("Table name cannot be null or empty");
-    }
-    if (database == null) {
-      throw new WorkflowException("Database connection cannot be null");
-    }
-    if (databaseSrid == null) {
-      throw new WorkflowException("Target SRID cannot be null");
-    }
-    logger.info("Importing GeoParquet from: {}", uri);
+    logger.info("Importing GeoParquet from: {}", Task.required(uri, "uri"));
 
-    Map<String, Long> counts = PostgresImport.copy(context.getDataSource(database),
-        new GeoParquetSchema(uri), Map.of(GeoParquetSchema.TABLE_NAME, tableName), databaseSrid);
-    counts.forEach((table, count) -> logger.info("Imported {} rows to table: {}", count, table));
+    PostgresImport.copyAndReport(
+        context.getDataSource(Task.required(database, "database")),
+        new GeoParquetSchema(uri),
+        Map.of(GeoParquetSchema.TABLE_NAME, Task.required(tableName, "tableName")),
+        Task.required(databaseSrid, "databaseSrid"));
   }
 
   @Override

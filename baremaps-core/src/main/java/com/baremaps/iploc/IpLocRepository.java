@@ -27,11 +27,13 @@ import java.util.List;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
 import org.locationtech.jts.geom.Coordinate;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
- * A repository for {@link IpLocObject} objects.
+ * A repository for {@link IpLocObject} objects, backed by a SQLite database.
+ *
+ * <p>
+ * A failure is raised rather than logged: an index that silently comes out empty is worse than one
+ * that fails to build.
  */
 public final class IpLocRepository {
 
@@ -80,8 +82,6 @@ public final class IpLocRepository {
           ORDER BY ip_start DESC, ip_end ASC;
           """;
 
-  private static final Logger logger = LoggerFactory.getLogger(IpLocRepository.class);
-
   private final DataSource dataSource;
 
   /**
@@ -94,38 +94,20 @@ public final class IpLocRepository {
   }
 
   /**
-   * Drops the table.
+   * Drops whatever this repository holds and recreates it empty, ready to be filled from scratch.
    */
-  public void dropTable() {
-    try (var connection = dataSource.getConnection();
-        var statement = connection.prepareStatement(DROP_TABLE)) {
-      statement.execute();
-    } catch (SQLException e) {
-      logger.error("Unable to drop inetnum locations table", e);
-    }
+  public void initialize() {
+    execute(DROP_TABLE, "Unable to drop the inetnum locations table");
+    execute(CREATE_TABLE, "Unable to create the inetnum locations table");
+    execute(CREATE_INDEX, "Unable to create the inetnum locations index");
   }
 
-  /**
-   * Creates the table.
-   */
-  public void createTable() {
+  private void execute(String sql, String message) {
     try (var connection = dataSource.getConnection();
-        var statement = connection.prepareStatement(CREATE_TABLE)) {
+        var statement = connection.prepareStatement(sql)) {
       statement.execute();
     } catch (SQLException e) {
-      logger.error("Unable to create inetnum locations table", e);
-    }
-  }
-
-  /**
-   * Creates the index.
-   */
-  public void createIndex() {
-    try (var connection = dataSource.getConnection();
-        var statement = connection.prepareStatement(CREATE_INDEX)) {
-      statement.execute();
-    } catch (SQLException e) {
-      logger.error("Unable to create inetnum locations index", e);
+      throw new IpLocRepositoryException(message, e);
     }
   }
 
@@ -144,7 +126,7 @@ public final class IpLocRepository {
         results.add(resultSetToPojo(resultSet));
       }
     } catch (SQLException e) {
-      logger.error("Unable to select inetnum locations", e);
+      throw new IpLocRepositoryException("Unable to select the inetnum locations", e);
     }
     return results;
   }
@@ -182,7 +164,7 @@ public final class IpLocRepository {
         }
       }
     } catch (SQLException e) {
-      logger.error("Unable to select inetnum locations", e);
+      throw new IpLocRepositoryException("Unable to select the inetnum locations", e);
     }
     return ipLocObjects;
   }
@@ -194,7 +176,7 @@ public final class IpLocRepository {
    */
   public void save(List<IpLocObject> ipLocObjects) {
     try (var connection = dataSource.getConnection();
-        var statement = connection.prepareStatement(INSERT_SQL);) {
+        var statement = connection.prepareStatement(INSERT_SQL)) {
       connection.setAutoCommit(false);
       for (IpLocObject ipLocObject : ipLocObjects) {
         statement.setString(1, ipLocObject.geocoderInput());
@@ -211,7 +193,7 @@ public final class IpLocRepository {
       statement.executeBatch();
       connection.commit();
     } catch (SQLException e) {
-      logger.error("Unable to save data", e);
+      throw new IpLocRepositoryException("Unable to save the inetnum locations", e);
     }
   }
 

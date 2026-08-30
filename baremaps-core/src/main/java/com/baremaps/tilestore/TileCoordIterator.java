@@ -21,12 +21,13 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import org.locationtech.jts.geom.Envelope;
 
-/** An iterator over the tile coordinates that overlaps with an envelope. */
+/**
+ * An iterator over the tile coordinates that overlap with an envelope, walking each zoom level row
+ * by row before moving up to the next one.
+ */
 class TileCoordIterator implements Iterator<TileCoord> {
 
   private final Envelope envelope;
-
-  private final int minZoom;
 
   private final int maxZoom;
 
@@ -35,6 +36,13 @@ class TileCoordIterator implements Iterator<TileCoord> {
   private int x;
 
   private int y;
+
+  // The bounds of the zoom level being walked, refreshed once per level rather than per tile.
+  private int minX;
+
+  private int maxX;
+
+  private int maxY;
 
   /**
    * Constructs a {@code TileCoordIterator}.
@@ -45,11 +53,21 @@ class TileCoordIterator implements Iterator<TileCoord> {
    */
   public TileCoordIterator(Envelope envelope, int minZoom, int maxZoom) {
     this.envelope = envelope;
-    this.minZoom = minZoom;
     this.maxZoom = maxZoom;
+    enterZoom(minZoom);
+  }
 
-    this.z = this.minZoom;
-    TileCoord min = min(envelope, this.z);
+  /** Moves to the first tile of a zoom level and caches the bounds of that level. */
+  private void enterZoom(int zoom) {
+    this.z = zoom;
+    if (zoom > maxZoom) {
+      return;
+    }
+    TileCoord min = min(envelope, zoom);
+    TileCoord max = max(envelope, zoom);
+    this.minX = min.x();
+    this.maxX = max.x();
+    this.maxY = max.y();
     this.x = min.x();
     this.y = min.y();
   }
@@ -57,29 +75,23 @@ class TileCoordIterator implements Iterator<TileCoord> {
   /** {@inheritDoc} */
   @Override
   public boolean hasNext() {
-    TileCoord max = max(envelope, this.z);
-    return x <= max.x() && y <= max.y() && z <= maxZoom;
+    return z <= maxZoom && x <= maxX && y <= maxY;
   }
 
   /** {@inheritDoc} */
   @Override
   public TileCoord next() {
-    TileCoord tileCoord = new TileCoord(x, y, z);
-    TileCoord max = max(envelope, this.z);
-    if (z > max.z()) {
+    if (!hasNext()) {
       throw new NoSuchElementException();
     }
-    if (x < max.x()) {
+    TileCoord tileCoord = new TileCoord(x, y, z);
+    if (x < maxX) {
       x++;
-    } else if (y < max.y()) {
+    } else if (y < maxY) {
       y++;
-      TileCoord min = min(envelope, this.z);
-      x = min.x();
+      x = minX;
     } else {
-      z++;
-      TileCoord min = min(envelope, this.z);
-      x = min.x();
-      y = min.y();
+      enterZoom(z + 1);
     }
     return tileCoord;
   }

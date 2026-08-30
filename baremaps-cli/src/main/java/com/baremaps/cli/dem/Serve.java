@@ -16,7 +16,6 @@ package com.baremaps.cli.dem;
 
 import static com.baremaps.utils.ObjectMapperUtils.objectMapper;
 
-import com.baremaps.dem.ElevationUtils;
 import com.baremaps.server.BufferedImageResource;
 import com.baremaps.server.VectorTileResource;
 import com.baremaps.tilestore.raster.*;
@@ -54,9 +53,7 @@ public class Serve implements Callable<Integer> {
     var geoTiffReader = new GeoTiffReader(path);
     var rasterElevationTileStore = new TerrariumTileStore(geoTiffReader);
     var rasterHillshadeTileStore =
-        new RasterHillshadeTileStore(
-            geoTiffReader,
-            ElevationUtils::terrariumToElevation);
+        new RasterHillshadeTileStore(geoTiffReader);
     var vectorHillshadeTileStore =
         new VectorHillshadeTileStore(
             geoTiffReader);

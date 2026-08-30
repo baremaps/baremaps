@@ -17,7 +17,6 @@ package com.baremaps.tasks;
 import com.baremaps.calcite.shapefile.ShapefileSchema;
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
-import com.baremaps.workflow.WorkflowException;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.StringJoiner;
@@ -30,6 +29,8 @@ public class ImportShapefile implements Task {
   private static final Logger logger = LoggerFactory.getLogger(ImportShapefile.class);
 
   private Path file;
+  // Kept as part of the workflow schema, but not applied: the import copies geometries verbatim
+  // and labels the resulting columns with databaseSrid rather than reprojecting them.
   private Integer fileSrid;
   private Object database;
   private Integer databaseSrid;
@@ -41,7 +42,8 @@ public class ImportShapefile implements Task {
    * Constructs an {@code ImportShapefile}.
    *
    * @param file the shapefile file
-   * @param fileSrid the source SRID
+   * @param fileSrid the SRID of the shapefile, recorded but not yet applied: the import copies the
+   *        geometries as they are and labels them with {@code databaseSrid}
    * @param database the database
    * @param databaseSrid the target SRID
    */
@@ -54,26 +56,14 @@ public class ImportShapefile implements Task {
 
   @Override
   public void execute(WorkflowContext context) throws Exception {
-    if (file == null) {
-      throw new WorkflowException("Shapefile path cannot be null");
-    }
-    if (fileSrid == null) {
-      throw new WorkflowException("Source SRID cannot be null");
-    }
-    if (database == null) {
-      throw new WorkflowException("Database connection cannot be null");
-    }
-    if (databaseSrid == null) {
-      throw new WorkflowException("Target SRID cannot be null");
-    }
-    Path path = file.toAbsolutePath();
+    Path path = Task.required(file, "file").toAbsolutePath();
     logger.info("Importing shapefile from: {}", path);
 
-    ShapefileSchema schema = new ShapefileSchema(path.toFile());
+    var schema = new ShapefileSchema(path.toFile());
     String sourceName = schema.getTableNames().iterator().next();
-    Map<String, Long> counts = PostgresImport.copy(context.getDataSource(database), schema,
-        Map.of(sourceName, sourceName), databaseSrid);
-    counts.forEach((table, count) -> logger.info("Imported {} rows to table: {}", count, table));
+    PostgresImport.copyAndReport(
+        context.getDataSource(Task.required(database, "database")), schema,
+        Map.of(sourceName, sourceName), Task.required(databaseSrid, "databaseSrid"));
   }
 
   @Override

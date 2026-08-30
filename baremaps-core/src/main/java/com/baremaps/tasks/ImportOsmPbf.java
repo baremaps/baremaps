@@ -118,7 +118,7 @@ public class ImportOsmPbf implements Task {
    * @param wayRepository the way repository
    * @param relationRepository the relation repository
    * @param databaseSrid the database SRID
-   * @throws IOException
+   * @throws IOException if the file cannot be read
    */
   @SuppressWarnings("squid:S107")
   static void execute(

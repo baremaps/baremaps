@@ -96,9 +96,7 @@ class IpLocObjectTest {
 
   @BeforeEach
   public void beforeEach() {
-    iplocRepository.dropTable();
-    iplocRepository.createTable();
-    iplocRepository.createIndex();
+    iplocRepository.initialize();
   }
 
   @Test

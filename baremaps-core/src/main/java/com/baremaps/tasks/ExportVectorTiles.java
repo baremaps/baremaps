@@ -68,6 +68,11 @@ public class ExportVectorTiles implements Task {
 
   private Format format;
 
+  // The number of tiles read at once, and the number of tiles written per round trip.
+  private static final int BUFFER_SIZE = 1000;
+
+  private static final int BATCH_SIZE = 1000;
+
   /**
    * Constructs a {@code ExportVectorTiles}.
    */
@@ -96,74 +101,82 @@ public class ExportVectorTiles implements Task {
   public void execute(WorkflowContext context) throws Exception {
     var configReader = new ConfigReader();
     var objectMapper = objectMapper();
-
     var tilesetObject = objectMapper.readValue(configReader.read(this.tileset), Tileset.class);
     var styleObject = objectMapper.readValue(configReader.read(this.style), Style.class);
 
-    // Write the static files
-    var directory = switch (format) {
-      case FILE -> repository;
-      case MBTILES -> repository.getParent();
-      case PMTILES -> repository.getParent();
-    };
-    Files.createDirectories(directory);
-    try (var html = this.getClass().getResourceAsStream("/static/server.html")) {
-      Files.write(
-          directory.resolve("index.html"),
-          html.readAllBytes(),
-          StandardOpenOption.CREATE,
-          StandardOpenOption.TRUNCATE_EXISTING);
-    }
-    Files.write(
-        directory.resolve("tiles.json"),
-        objectMapper.writeValueAsBytes(tilesetObject),
-        StandardOpenOption.CREATE,
-        StandardOpenOption.TRUNCATE_EXISTING);
-    Files.write(
-        directory.resolve("style.json"),
-        objectMapper.writeValueAsBytes(styleObject),
-        StandardOpenOption.CREATE,
-        StandardOpenOption.TRUNCATE_EXISTING);
+    writeViewer(objectMapper, tilesetObject, styleObject);
 
     var datasource = context.getDataSource(tilesetObject.getDatabase());
-
     try (var sourceTileStore = sourceTileStore(tilesetObject, datasource);
         var targetTileStore = targetTileStore(tilesetObject)) {
-
-      var envelope = tilesetObject.getBounds().size() == 4
-          ? new Envelope(
-              tilesetObject.getBounds().get(0), tilesetObject.getBounds().get(2),
-              tilesetObject.getBounds().get(1), tilesetObject.getBounds().get(3))
-          : new Envelope(-180, 180, -85.0511, 85.0511);
-
-      var count = TileCoord.count(envelope, tilesetObject.getMinzoom(), tilesetObject.getMaxzoom());
-      var start = System.currentTimeMillis();
-
-      var tileCoordIterator =
-          TileCoord.iterator(envelope, tilesetObject.getMinzoom(), tilesetObject.getMaxzoom());
-      var tileCoordStream =
-          StreamUtils.stream(tileCoordIterator).peek(new ProgressLogger<>(count, 5000));
-
-      var bufferedTileEntryStream = StreamUtils.bufferInCompletionOrder(tileCoordStream, tile -> {
-        try {
-          return new TileEntry<>(tile, sourceTileStore.read(tile));
-        } catch (TileStoreException e) {
-          throw new WorkflowException(e);
-        }
-      }, 1000);
-
-      var partitionedTileEntryStream = StreamUtils.partition(bufferedTileEntryStream, 1000);
-      partitionedTileEntryStream.forEach(batch -> {
-        try {
-          targetTileStore.write(batch);
-        } catch (TileStoreException e) {
-          throw new WorkflowException(e);
-        }
-      });
-
-      var stop = System.currentTimeMillis();
-      logger.info("Exported {} tiles in {}s", count, (stop - start) / 1000);
+      copyTiles(tilesetObject, sourceTileStore, targetTileStore);
     }
+  }
+
+  /**
+   * Writes the files that let a browser display the exported tiles: the viewer itself, the tileset
+   * it points at, and the style it renders with.
+   */
+  private void writeViewer(ObjectMapper objectMapper, Tileset tileset, Style style)
+      throws IOException {
+    // A directory repository holds the tiles themselves; an archive is a file inside a directory.
+    var directory = format == Format.FILE ? repository : repository.getParent();
+    Files.createDirectories(directory);
+    try (var html = this.getClass().getResourceAsStream("/static/server.html")) {
+      write(directory.resolve("index.html"), html.readAllBytes());
+    }
+    write(directory.resolve("tiles.json"), objectMapper.writeValueAsBytes(tileset));
+    write(directory.resolve("style.json"), objectMapper.writeValueAsBytes(style));
+  }
+
+  private static void write(Path file, byte[] content) throws IOException {
+    Files.write(file, content, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+  }
+
+  /**
+   * Reads every tile of the tileset from the source and writes it to the target.
+   *
+   * <p>
+   * Reads are the slow part and are buffered so that many run at once, while the writes are
+   * batched: a tile store commits a batch in one round trip.
+   */
+  private void copyTiles(Tileset tileset, TileStore<ByteBuffer> source,
+      TileStore<ByteBuffer> target) {
+    var envelope = envelope(tileset);
+    var count = TileCoord.count(envelope, tileset.getMinzoom(), tileset.getMaxzoom());
+    var start = System.currentTimeMillis();
+
+    var tileCoords = StreamUtils.stream(
+        TileCoord.iterator(envelope, tileset.getMinzoom(), tileset.getMaxzoom()))
+        .peek(new ProgressLogger<>(count, 5000));
+
+    var entries = StreamUtils.bufferInCompletionOrder(tileCoords, tile -> {
+      try {
+        return new TileEntry<>(tile, source.read(tile));
+      } catch (TileStoreException e) {
+        throw new WorkflowException(e);
+      }
+    }, BUFFER_SIZE);
+
+    StreamUtils.partition(entries, BATCH_SIZE).forEach(batch -> {
+      try {
+        target.write(batch);
+      } catch (TileStoreException e) {
+        throw new WorkflowException(e);
+      }
+    });
+
+    var stop = System.currentTimeMillis();
+    logger.info("Exported {} tiles in {}s", count, (stop - start) / 1000);
+  }
+
+  /** Returns the bounds of the tileset, defaulting to the whole web mercator extent. */
+  private static Envelope envelope(Tileset tileset) {
+    var bounds = tileset.getBounds();
+    if (bounds == null || bounds.size() != 4) {
+      return new Envelope(-180, 180, -85.0511, 85.0511);
+    }
+    return new Envelope(bounds.get(0), bounds.get(2), bounds.get(1), bounds.get(3));
   }
 
   private TileStore<ByteBuffer> sourceTileStore(Tileset tileset, DataSource datasource)
@@ -174,22 +187,20 @@ public class ExportVectorTiles implements Task {
 
   private TileStore<ByteBuffer> targetTileStore(Tileset source)
       throws TileStoreException, IOException {
-    switch (format) {
-      case FILE:
-        return new FileTileStore(repository.resolve("tiles"));
-      case MBTILES:
+    return switch (format) {
+      case FILE -> new FileTileStore(repository.resolve("tiles"));
+      case MBTILES -> {
         Files.deleteIfExists(repository);
-        var dataSource = SqliteUtils.createDataSource(repository, false);
-        var tilesStore = new MBTilesStore(dataSource);
+        var tilesStore = new MBTilesStore(SqliteUtils.createDataSource(repository, false));
         tilesStore.initializeDatabase();
         tilesStore.writeMetadata(metadata(source));
-        return tilesStore;
-      case PMTILES:
+        yield tilesStore;
+      }
+      case PMTILES -> {
         Files.deleteIfExists(repository);
-        return new PMTilesStore(repository, source);
-      default:
-        throw new IllegalArgumentException("Unsupported format");
-    }
+        yield new PMTilesStore(repository, source);
+      }
+    };
   }
 
   private Map<String, String> metadata(Tileset tileset) throws JsonProcessingException {

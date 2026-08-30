@@ -16,26 +16,26 @@ package com.baremaps.tilestore.raster;
 
 import com.baremaps.dem.ContourTracer;
 import com.baremaps.maplibre.vectortile.Feature;
-import com.baremaps.maplibre.vectortile.Layer;
-import com.baremaps.maplibre.vectortile.Tile;
-import com.baremaps.maplibre.vectortile.VectorTileEncoder;
 import com.baremaps.tilestore.TileCoord;
-import com.baremaps.tilestore.TileStore;
 import com.baremaps.tilestore.TileStoreException;
-import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
-import java.util.zip.GZIPOutputStream;
 import org.locationtech.jts.geom.util.AffineTransformation;
 
 /**
  * A {@code TileStore} that calculates vector contour tiles from elevation tiles.
  */
-public class VectorContourTileStore implements TileStore<ByteBuffer> {
+public class VectorContourTileStore extends RasterTileStore<ByteBuffer> {
 
-  private final GeoTiffReader geoTiffReader;
+  // A contour that runs off the edge of a tile has to meet the one of the adjacent tile, so the
+  // grid is computed with a border that is then translated away.
+  private static final int TILE_BUFFER = 4;
+
+  // The lowest and highest elevations on earth, rounded outwards.
+  private static final int MIN_ELEVATION = -10000;
+
+  private static final int MAX_ELEVATION = 10000;
 
   /**
    * Constructs a {@code VectorContourTileStore} with the specified GeoTIFF reader.
@@ -43,7 +43,7 @@ public class VectorContourTileStore implements TileStore<ByteBuffer> {
    * @param geoTiffReader the geotiff reader
    */
   public VectorContourTileStore(GeoTiffReader geoTiffReader) {
-    this.geoTiffReader = geoTiffReader;
+    super(geoTiffReader);
   }
 
   /**
@@ -56,71 +56,45 @@ public class VectorContourTileStore implements TileStore<ByteBuffer> {
   @Override
   public ByteBuffer read(TileCoord tileCoord) throws TileStoreException {
     try {
-      var grid = geoTiffReader.read(tileCoord, 256, 4);
+      var gridSize = TILE_SIZE + 2 * TILE_BUFFER;
+      var grid = geoTiffReader.read(tileCoord, TILE_SIZE, TILE_BUFFER);
 
-      int increment = switch (tileCoord.z()) {
-        case 1 -> 2000;
-        case 2 -> 2000;
-        case 3 -> 1000;
-        case 4 -> 1000;
-        case 5 -> 1000;
-        case 6 -> 1000;
-        case 7 -> 1000;
-        case 8 -> 500;
-        case 9 -> 500;
-        case 10 -> 250;
-        case 11 -> 250;
-        case 12 -> 100;
-        case 13 -> 100;
-        case 14 -> 50;
-        default -> 10;
-      };
+      var tracer = new ContourTracer(grid, gridSize, gridSize);
+      // Move the border out of the way, then scale the grid to the extent of the vector tile.
+      var toTileExtent = AffineTransformation
+          .translationInstance(-TILE_BUFFER, -TILE_BUFFER)
+          .scale(4096 / TILE_SIZE, 4096 / TILE_SIZE);
 
-      var tracer = new ContourTracer(grid, 264, 264);
       var features = new ArrayList<Feature>();
-      for (int level = -10000; level < 10000; level += increment) {
+      for (int level = MIN_ELEVATION; level < MAX_ELEVATION; level += interval(tileCoord.z())) {
         for (var polygon : tracer.tracePolygons(level)) {
-          var contour = AffineTransformation
-              .translationInstance(-4, -4)
-              .scale(16, 16)
-              .transform(polygon);
-          features.add(new Feature(level, Map.of("level", String.valueOf(level)), contour));
+          features.add(new Feature(level, Map.of("level", String.valueOf(level)),
+              toTileExtent.transform(polygon)));
         }
       }
 
-      var layer = new Layer("contour", 4096, features);
-      var tile = new Tile(List.of(layer));
-      var vectorTile = new VectorTileEncoder().encodeTile(tile);
-      try (var baos = new ByteArrayOutputStream()) {
-        var gzip = new GZIPOutputStream(baos);
-        vectorTile.writeTo(gzip);
-        gzip.close();
-        return ByteBuffer.wrap(baos.toByteArray());
-      }
+      return encodeLayer("contour", features);
     } catch (Exception e) {
       throw new TileStoreException(e);
     }
   }
 
   /**
-   * Unsupported operation.
+   * Returns the elevation between two contours at a zoom level. A tile covers a smaller area as the
+   * zoom grows, so the contours can be drawn closer together without crowding it.
+   *
+   * @param zoom the zoom level
+   * @return the interval in meters
    */
-  @Override
-  public void write(TileCoord tileCoord, ByteBuffer blob) throws TileStoreException {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Unsupported operation.
-   */
-  @Override
-  public void delete(TileCoord tileCoord) throws TileStoreException {
-    throw new UnsupportedOperationException();
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public void close() throws Exception {
-    geoTiffReader.close();
+  private static int interval(int zoom) {
+    return switch (zoom) {
+      case 1, 2 -> 2000;
+      case 3, 4, 5, 6, 7 -> 1000;
+      case 8, 9 -> 500;
+      case 10, 11 -> 250;
+      case 12, 13 -> 100;
+      case 14 -> 50;
+      default -> 10;
+    };
   }
 }

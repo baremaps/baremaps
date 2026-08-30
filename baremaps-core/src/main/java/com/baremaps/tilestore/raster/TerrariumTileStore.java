@@ -16,25 +16,22 @@ package com.baremaps.tilestore.raster;
 
 import com.baremaps.dem.ElevationUtils;
 import com.baremaps.tilestore.TileCoord;
-import com.baremaps.tilestore.TileStore;
 import com.baremaps.tilestore.TileStoreException;
 import java.awt.image.BufferedImage;
 
 /**
- * A {@code TileStore} that reads elevation tiles from a GeoTIFF file and converts them to terrarium
- * tiles format.
+ * A {@code TileStore} that reads elevation tiles from a GeoTIFF file and converts them to the
+ * terrarium tile format.
  */
-public class TerrariumTileStore implements TileStore<BufferedImage> {
-
-  private final GeoTiffReader geoTiffReader;
+public class TerrariumTileStore extends RasterTileStore<BufferedImage> {
 
   /**
    * Constructs a {@code TerrariumTileStore} with the specified GeoTIFF reader.
    *
-   * @param geoTiffReader
+   * @param geoTiffReader the geotiff reader
    */
   public TerrariumTileStore(GeoTiffReader geoTiffReader) {
-    this.geoTiffReader = geoTiffReader;
+    super(geoTiffReader);
   }
 
   /**
@@ -47,43 +44,16 @@ public class TerrariumTileStore implements TileStore<BufferedImage> {
   @Override
   public BufferedImage read(TileCoord tileCoord) throws TileStoreException {
     try {
-      var size = 256;
-      var grid = geoTiffReader.read(tileCoord, size, 0);
-      var bufferedImage = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
-      for (int x = 0; x < size; x++) {
-        for (int y = 0; y < size; y++) {
-          double value = (int) grid[y * size + x];
-          int rgb = ElevationUtils.elevationToTerrarium(value);
-          bufferedImage.setRGB(x, y, rgb);
+      var grid = geoTiffReader.read(tileCoord, TILE_SIZE, 0);
+      var image = new BufferedImage(TILE_SIZE, TILE_SIZE, BufferedImage.TYPE_INT_RGB);
+      for (int x = 0; x < TILE_SIZE; x++) {
+        for (int y = 0; y < TILE_SIZE; y++) {
+          image.setRGB(x, y, ElevationUtils.elevationToTerrarium((int) grid[y * TILE_SIZE + x]));
         }
       }
-      return bufferedImage;
+      return image;
     } catch (Exception e) {
       throw new TileStoreException(e);
     }
-  }
-
-  /**
-   * Unsupported operation.
-   */
-  @Override
-  public void write(TileCoord tileCoord, BufferedImage blob) throws TileStoreException {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Unsupported operation.
-   */
-  @Override
-  public void delete(TileCoord tileCoord) throws TileStoreException {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Unsupported operation.
-   */
-  @Override
-  public void close() throws Exception {
-    this.geoTiffReader.close();
   }
 }

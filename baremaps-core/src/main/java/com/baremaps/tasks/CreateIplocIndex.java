@@ -78,9 +78,7 @@ public class CreateIplocIndex implements Task {
       dataSource.setUrl(jdbcUrl);
 
       var ipLocRepository = new IpLocRepository(dataSource);
-      ipLocRepository.dropTable();
-      ipLocRepository.createTable();
-      ipLocRepository.createIndex();
+      ipLocRepository.initialize();
 
       var ipLocReader = new IpLocReader(searcherManager);
       nicPaths.parallelStream().forEach(path -> {

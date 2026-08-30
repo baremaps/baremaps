@@ -17,26 +17,51 @@ package com.baremaps.tasks;
 import com.baremaps.postgres.refresh.MaterializedViewRefresher;
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
+import java.util.StringJoiner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Refresh the materialized views of a database.
+ */
 public class RefreshMaterializedViews implements Task {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(RefreshMaterializedViews.class);
+  private static final Logger logger = LoggerFactory.getLogger(RefreshMaterializedViews.class);
 
   private Object database;
 
+  /**
+   * Constructs a {@code RefreshMaterializedViews}.
+   */
   public RefreshMaterializedViews() {
     // Default constructor
   }
 
+  /**
+   * Constructs a {@code RefreshMaterializedViews}.
+   *
+   * @param database the database
+   */
   public RefreshMaterializedViews(Object database) {
     this.database = database;
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void execute(WorkflowContext context) throws Exception {
     new MaterializedViewRefresher(context.getDataSource(database)).refresh();
-    LOGGER.info("Done refreshing materialized views.");
+    logger.info("Done refreshing materialized views.");
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String toString() {
+    return new StringJoiner(", ", RefreshMaterializedViews.class.getSimpleName() + "[", "]")
+        .add("database=" + database)
+        .toString();
   }
 }

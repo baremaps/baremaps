@@ -26,6 +26,10 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 /**
  * A task is a unit of work executed in a step of a workflow.
+ *
+ * <p>
+ * Every implementation must be listed below: the type name is what a workflow file names, and a
+ * missing entry makes the workflow fail to parse rather than skip the step.
  */
 @JsonSerialize
 @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
@@ -33,8 +37,9 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 @JsonSubTypes({
     @Type(value = CleanContextCache.class, name = "CleanContextCache"),
     @Type(value = CleanContextData.class, name = "CleanContextData"),
-    // @Type(value = CreateGeonamesIndex.class, name = "CreateGeonamesIndex"),
-    // @Type(value = CreateIplocIndex.class, name = "CreateIplocIndex"),
+    @Type(value = CreateGeocoderOpenStreetMap.class, name = "CreateGeocoderOpenStreetMap"),
+    @Type(value = CreateGeonamesIndex.class, name = "CreateGeonamesIndex"),
+    @Type(value = CreateIplocIndex.class, name = "CreateIplocIndex"),
     @Type(value = DecompressFile.class, name = "DecompressFile"),
     @Type(value = DownloadUrl.class, name = "DownloadUrl"),
     @Type(value = ExecuteCommand.class, name = "ExecuteCommand"),
@@ -63,4 +68,19 @@ public interface Task {
   @SuppressWarnings("java:S112")
   void execute(WorkflowContext context) throws Exception;
 
+  /**
+   * Returns a parameter of a task, or fails when the workflow left it out. A task is configured by
+   * deserialization, which cannot itself enforce that a parameter is present.
+   *
+   * @param value the value of the parameter
+   * @param name the name of the parameter, as it appears in the workflow
+   * @return the value
+   * @throws WorkflowException if the parameter is missing or blank
+   */
+  static <T> T required(T value, String name) {
+    if (value == null || (value instanceof String string && string.isBlank())) {
+      throw new WorkflowException(String.format("The %s parameter is required", name));
+    }
+    return value;
+  }
 }

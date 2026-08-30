@@ -16,6 +16,7 @@ package com.baremaps.tasks;
 
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
+import com.baremaps.workflow.WorkflowException;
 import java.util.StringJoiner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +51,17 @@ public class ExecuteCommand implements Task {
    */
   @Override
   public void execute(WorkflowContext context) throws Exception {
-    new ProcessBuilder().command("/bin/sh", "-c", command).start().waitFor();
+    logger.info("Executing command: {}", command);
+    // The output of the command belongs in the log of the workflow that asked for it, and a
+    // non-zero status has to fail the step rather than let the next one run on missing data.
+    var exitCode = new ProcessBuilder("/bin/sh", "-c", command)
+        .inheritIO()
+        .start()
+        .waitFor();
+    if (exitCode != 0) {
+      throw new WorkflowException(
+          String.format("The command '%s' exited with code %d", command, exitCode));
+    }
   }
 
   /**

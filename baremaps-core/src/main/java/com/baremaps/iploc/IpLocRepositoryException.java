@@ -12,13 +12,24 @@
  * limitations under the License.
  */
 
-package com.baremaps.tilestore;
-
+package com.baremaps.iploc;
 
 /**
- * A tile coordinate paired with its content, used to write tiles in batches.
+ * Signals that an operation on an {@link IpLocRepository} failed.
  *
- * @param <T> the type of the content
+ * <p>
+ * Unchecked so that the repository can be used from the lambdas of a stream, which is how an index
+ * is built.
  */
-public record TileEntry<T> (TileCoord tileCoord, T tileValue) {
+public class IpLocRepositoryException extends RuntimeException {
+
+  /**
+   * Constructs an {@code IpLocRepositoryException} with the specified detail message and cause.
+   *
+   * @param message the message
+   * @param cause the cause
+   */
+  public IpLocRepositoryException(String message, Throwable cause) {
+    super(message, cause);
+  }
 }

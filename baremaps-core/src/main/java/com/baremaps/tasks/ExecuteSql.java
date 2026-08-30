@@ -34,6 +34,11 @@ public class ExecuteSql implements Task {
 
   private static final Logger logger = LoggerFactory.getLogger(ExecuteSql.class);
 
+  private static final Pattern SINGLE_LINE_COMMENT = Pattern.compile("--.*", Pattern.MULTILINE);
+
+  private static final Pattern MULTI_LINE_COMMENT =
+      Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
+
   private Object database;
 
   private Path file;
@@ -70,17 +75,18 @@ public class ExecuteSql implements Task {
     if (parallel) {
       queries = queries.parallel();
     }
-    queries.forEach(
-        query -> {
-          var dataSource = context.getDataSource(database);
-          try (var connection = dataSource.getConnection()) {
-            logger.info("Execute SQL query: {}", query.replaceAll("\\s+", " "));
-            connection.createStatement().execute(query);
-          } catch (SQLException e) {
-            logger.error("Failed to execute query: {}", query.replaceAll("\\s+", " "));
-            throw new WorkflowException(e);
-          }
-        });
+    var dataSource = context.getDataSource(database);
+    queries.forEach(query -> {
+      var oneLine = query.replaceAll("\\s+", " ");
+      try (var connection = dataSource.getConnection();
+          var statement = connection.createStatement()) {
+        logger.info("Execute SQL query: {}", oneLine);
+        statement.execute(query);
+      } catch (SQLException e) {
+        logger.error("Failed to execute query: {}", oneLine);
+        throw new WorkflowException(e);
+      }
+    });
   }
 
   /**
@@ -101,19 +107,8 @@ public class ExecuteSql implements Task {
    * @return The SQL string without comments.
    */
   public static String clean(String sql) {
-    var result = sql;
-
-    // remove single line comments
-    var singleLineCommentPattern = Pattern.compile("--.*", Pattern.MULTILINE);
-    var singleLineCommentMatcher = singleLineCommentPattern.matcher(result);
-    result = singleLineCommentMatcher.replaceAll("");
-
-    // remove multi line comments
-    var multiLineCommentPattern = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
-    var multiLineMatcher = multiLineCommentPattern.matcher(result);
-    result = multiLineMatcher.replaceAll("");
-
-    return result;
+    return MULTI_LINE_COMMENT.matcher(SINGLE_LINE_COMMENT.matcher(sql).replaceAll(""))
+        .replaceAll("");
   }
 
   /**

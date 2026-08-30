@@ -17,7 +17,6 @@ package com.baremaps.tasks;
 import com.baremaps.calcite.geopackage.GeoPackageSchema;
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
-import com.baremaps.workflow.WorkflowException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -31,6 +30,8 @@ public class ImportGeoPackage implements Task {
   private static final Logger logger = LoggerFactory.getLogger(ImportGeoPackage.class);
 
   private Path file;
+  // Kept as part of the workflow schema, but not applied: the import copies geometries verbatim
+  // and labels the resulting columns with databaseSrid rather than reprojecting them.
   private Integer fileSrid;
   private Object database;
   private Integer databaseSrid;
@@ -42,7 +43,8 @@ public class ImportGeoPackage implements Task {
    * Constructs an {@code ImportGeoPackage}.
    *
    * @param file the GeoPackage file
-   * @param fileSrid the source SRID
+   * @param fileSrid the SRID of the GeoPackage, recorded but not yet applied: the import copies the
+   *        geometries as they are and labels them with {@code databaseSrid}
    * @param database the database
    * @param databaseSrid the target SRID
    */
@@ -55,22 +57,10 @@ public class ImportGeoPackage implements Task {
 
   @Override
   public void execute(WorkflowContext context) throws Exception {
-    if (file == null) {
-      throw new WorkflowException("GeoPackage path cannot be null");
-    }
-    if (fileSrid == null) {
-      throw new WorkflowException("Source SRID cannot be null");
-    }
-    if (database == null) {
-      throw new WorkflowException("Database connection cannot be null");
-    }
-    if (databaseSrid == null) {
-      throw new WorkflowException("Target SRID cannot be null");
-    }
-    Path path = file.toAbsolutePath();
+    Path path = Task.required(file, "file").toAbsolutePath();
     logger.info("Importing GeoPackage from: {}", path);
 
-    GeoPackageSchema schema = new GeoPackageSchema(path.toFile());
+    var schema = new GeoPackageSchema(path.toFile());
     Map<String, String> tables = new LinkedHashMap<>();
     for (String table : schema.getTableNames()) {
       tables.put(table, table);
@@ -79,9 +69,9 @@ public class ImportGeoPackage implements Task {
       logger.warn("No tables found in GeoPackage: {}", path);
       return;
     }
-    Map<String, Long> counts =
-        PostgresImport.copy(context.getDataSource(database), schema, tables, databaseSrid);
-    counts.forEach((table, count) -> logger.info("Imported {} rows to table: {}", count, table));
+    PostgresImport.copyAndReport(
+        context.getDataSource(Task.required(database, "database")), schema, tables,
+        Task.required(databaseSrid, "databaseSrid"));
   }
 
   @Override

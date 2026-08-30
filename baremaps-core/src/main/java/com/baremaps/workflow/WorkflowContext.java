@@ -45,16 +45,25 @@ public class WorkflowContext {
 
   private final Path cacheDir;
 
+  // Steps run in parallel, so several tasks may ask for the same database at once; one pool per
+  // database is shared between them for the lifetime of the workflow.
+  private final Map<Object, DataSource> dataSources = new ConcurrentHashMap<>();
+
+  /** Constructs a context rooted at the default {@code ./data} and {@code ./cache} directories. */
   public WorkflowContext() {
     this(Paths.get("./data"), Paths.get("./cache"));
   }
 
+  /**
+   * Constructs a context.
+   *
+   * @param dataDir the directory holding the data a workflow produces
+   * @param cacheDir the directory holding the indexes a workflow reuses between runs
+   */
   public WorkflowContext(Path dataDir, Path cacheDir) {
     this.dataDir = dataDir;
     this.cacheDir = cacheDir;
   }
-
-  private Map<Object, DataSource> dataSources = new ConcurrentHashMap<>();
 
   /**
    * Returns the data source associated with the specified database.
@@ -95,10 +104,12 @@ public class WorkflowContext {
         Memory.mappedDirectory(dir.resolve("pages")));
   }
 
+  /** Deletes the indexes a workflow left in the cache directory. */
   public void cleanCache() throws IOException {
     FileUtils.deleteRecursively(cacheDir);
   }
 
+  /** Deletes the data a workflow produced. */
   public void cleanData() throws IOException {
     FileUtils.deleteRecursively(dataDir);
   }

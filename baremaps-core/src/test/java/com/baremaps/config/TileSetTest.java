@@ -24,7 +24,7 @@ import com.baremaps.utils.ObjectMapperUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Path;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class TileSetTest {
 

@@ -24,9 +24,11 @@ import com.google.common.net.InetAddresses;
 import java.io.IOException;
 import java.text.ParseException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import net.ripe.ipresource.IpResourceRange;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.SearcherManager;
@@ -40,6 +42,9 @@ public class IpLocMapper implements Function<RpslObject, Optional<IpLocObject>> 
   private static final Logger logger = LoggerFactory.getLogger(IpLocMapper.class);
 
   private static final float SCORE_THRESHOLD = 0.1f;
+
+  /** The attributes that describe a network well enough to hand to the geocoder. */
+  private static final List<String> SEARCHED_FIELDS = List.of("descr", "netname");
 
   private final SearcherManager searcherManager;
 
@@ -62,138 +67,98 @@ public class IpLocMapper implements Function<RpslObject, Optional<IpLocObject>> 
    *         {@code NicObject}
    */
   @Override
-  @SuppressWarnings({"squid:S3776", "squid:S1192"})
   public Optional<IpLocObject> apply(RpslObject rpslObject) {
+    if (rpslObject.attributes().isEmpty() || !RpslUtils.isInetnum(rpslObject)) {
+      return Optional.empty();
+    }
     try {
-      if (rpslObject.attributes().isEmpty()) {
-        return Optional.empty();
-      }
-
-      if (!RpslUtils.isInetnum(rpslObject)) {
-        return Optional.empty();
-      }
-
-      var inetnum = rpslObject.attributes().get(0);
-      var ipRange = IpResourceRange.parse(inetnum.value());
-      var start = InetAddresses.forString(ipRange.getStart().toString());
-      var end = InetAddresses.forString(ipRange.getEnd().toString());
-      var inetRange = new InetRange(start, end);
-
-      var attributes = rpslObject.asMap();
-
-      // Use a default name if there is no netname
-      var network = String.join(", ", attributes.getOrDefault("netname", List.of("unknown")));
-      var geoloc = attributes.containsKey("geoloc")
-          ? String.join(", ", attributes.getOrDefault("geoloc", List.of()))
-          : null;
-      var country = attributes.containsKey("country")
-          ? String.join(", ", attributes.getOrDefault("country", List.of()))
-          : null;
-      var source = attributes.containsKey("source")
-          ? String.join(", ", attributes.getOrDefault("source", List.of()))
-          : null;
-
-      // If there is a geoloc field, we use the latitude and longitude provided
-      if (attributes.containsKey("geoloc")) {
-        var location = stringToCoordinate(geoloc);
-        if (location.isPresent()) {
-          return Optional.of(new IpLocObject(
-              geoloc,
-              inetRange,
-              location.get(),
-              network,
-              country,
-              source,
-              IpLocPrecision.GEOLOC));
-        }
-      }
-
-      // If there is a country, we use that with a cherry-picked list of fields to query the
-      // geocoder with confidence to find a relevant precise location,
-      // in the worst case the error is within a country
-      List<String> searchedFields = List.of("descr", "netname");
-      // at least one of a searchedField is present and the country is present.
-      if (attributes.keySet().stream().anyMatch(searchedFields::contains)
-          && attributes.containsKey("country")) {
-        // build a query text string out of the cherry-picked fields
-        var queryTextBuilder = new StringBuilder();
-        for (String field : searchedFields) {
-          var value = attributes.containsKey(field)
-              ? String.join(", ", attributes.getOrDefault(field, List.of()))
-              : null;
-          if (!Strings.isNullOrEmpty(value)) {
-            queryTextBuilder.append(attributes.get(field)).append(" ");
-          }
-        }
-
-        String queryText = queryTextBuilder.toString();
-        var location = findLocationInCountry(queryText, country);
-        if (location.isPresent()) {
-          return Optional.of(new IpLocObject(
-              queryText,
-              inetRange,
-              location.get(),
-              network,
-              country,
-              source,
-              IpLocPrecision.GEOCODER));
-        }
-      }
-
-      // If there is a country get the location of country
-      if (attributes.containsKey("country")) {
-        var location = findCountryLocation(country);
-        if (location.isPresent()) {
-          return Optional.of(new IpLocObject(
-              country,
-              inetRange,
-              location.get(),
-              network,
-              country,
-              source,
-              IpLocPrecision.COUNTRY));
-        }
-      }
-
-      return Optional.of(new IpLocObject(
-          null,
-          inetRange,
-          new Coordinate(),
-          network,
-          null,
-          source,
-          IpLocPrecision.WORLD));
+      var ipRange = IpResourceRange.parse(rpslObject.attributes().get(0).value());
+      var inetRange = new InetRange(
+          InetAddresses.forString(ipRange.getStart().toString()),
+          InetAddresses.forString(ipRange.getEnd().toString()));
+      return Optional.of(locate(rpslObject.asMap(), inetRange));
     } catch (Exception e) {
-      logger.warn("Error while mapping RPSL object to IP loc object", e);
-      logger.warn("RPSL object attributes:");
-      rpslObject.attributes().forEach(attribute -> {
-        var name = attribute.name();
-        var value = attribute.value();
-        if (value.length() > 100) {
-          value = value.substring(0, 100).concat("...");
-        }
-        logger.warn("  {} = {}", name, value);
-      });
+      logUnmappable(rpslObject, e);
       return Optional.empty();
     }
   }
 
+  /**
+   * Locates an inetnum, from the most precise source of location to the least: the coordinates the
+   * object declares, then the geocoder narrowed down to the country it declares, then the country
+   * itself. An object that declares none of them is placed at the origin.
+   */
+  private IpLocObject locate(Map<String, List<String>> attributes, InetRange inetRange)
+      throws IOException, ParseException {
+    // Use a default name if there is no netname
+    var network = attribute(attributes, "netname", "unknown");
+    var country = attribute(attributes, "country", null);
+    var source = attribute(attributes, "source", null);
+
+    var geoloc = attribute(attributes, "geoloc", null);
+    if (geoloc != null) {
+      var location = stringToCoordinate(geoloc);
+      if (location.isPresent()) {
+        return new IpLocObject(geoloc, inetRange, location.get(), network, country, source,
+            IpLocPrecision.GEOLOC);
+      }
+    }
+
+    if (country != null) {
+      // Cherry-picked fields keep the geocoder query focused enough to trust its first hit; the
+      // country restricts the error to that country in the worst case.
+      var queryText = SEARCHED_FIELDS.stream()
+          .map(field -> attribute(attributes, field, null))
+          .filter(value -> !Strings.isNullOrEmpty(value))
+          .collect(Collectors.joining(" "));
+      if (!queryText.isBlank()) {
+        var location = findLocation(
+            new GeonamesQueryBuilder().queryText(queryText).countryCode(country).build());
+        if (location.isPresent()) {
+          return new IpLocObject(queryText, inetRange, location.get(), network, country, source,
+              IpLocPrecision.GEOCODER);
+        }
+      }
+
+      var location = findCountryLocation(country);
+      if (location.isPresent()) {
+        return new IpLocObject(country, inetRange, location.get(), network, country, source,
+            IpLocPrecision.COUNTRY);
+      }
+    }
+
+    return new IpLocObject(null, inetRange, new Coordinate(), network, null, source,
+        IpLocPrecision.WORLD);
+  }
+
+  /** Returns the values of an attribute joined by a comma, or {@code fallback} if it has none. */
+  private static String attribute(Map<String, List<String>> attributes, String name,
+      String fallback) {
+    var values = attributes.get(name);
+    return values == null || values.isEmpty() ? fallback : String.join(", ", values);
+  }
+
+  private static void logUnmappable(RpslObject rpslObject, Exception e) {
+    logger.warn("Error while mapping RPSL object to IP loc object", e);
+    logger.warn("RPSL object attributes:");
+    rpslObject.attributes().forEach(attribute -> {
+      var value = attribute.value();
+      if (value.length() > 100) {
+        value = value.substring(0, 100).concat("...");
+      }
+      logger.warn("  {} = {}", attribute.name(), value);
+    });
+  }
+
   private Optional<Coordinate> findCountryLocation(String country)
       throws IOException, ParseException {
-    GeonamesQueryBuilder geonamesQuery = new GeonamesQueryBuilder().featureCode("PCLI");
+    var geonamesQuery = new GeonamesQueryBuilder().featureCode("PCLI");
     if (IsoCountriesUtils.containsCountry(country.toUpperCase())) {
       geonamesQuery.countryCode(country.toUpperCase());
     } else {
-      geonamesQuery.queryText(country).build();
+      geonamesQuery.queryText(country);
     }
     return findLocation(geonamesQuery.build());
-  }
-
-  private Optional<Coordinate> findLocationInCountry(String terms, String countryCode)
-      throws IOException, ParseException {
-    var geonamesQuery =
-        new GeonamesQueryBuilder().queryText(terms).countryCode(countryCode).build();
-    return findLocation(geonamesQuery);
   }
 
   /**
@@ -202,25 +167,28 @@ public class IpLocMapper implements Function<RpslObject, Optional<IpLocObject>> 
    * @return an {@code Optional} containing the location of the search terms
    * @throws IOException if an I/O error occurs
    */
-  private Optional<Coordinate> findLocation(Query query)
-      throws IOException {
+  private Optional<Coordinate> findLocation(Query query) throws IOException {
     var indexSearcher = searcherManager.acquire();
+    try {
+      var topDocs = indexSearcher.search(query, 1);
+      if (topDocs.scoreDocs.length == 0) {
+        return Optional.empty();
+      }
 
-    var topDocs = indexSearcher.search(query, 1);
-    if (topDocs.scoreDocs.length == 0) {
-      return Optional.empty();
+      var scoreDoc = topDocs.scoreDocs[0];
+      if (scoreDoc.score < SCORE_THRESHOLD) {
+        return Optional.empty();
+      }
+
+      var document = indexSearcher.doc(scoreDoc.doc);
+      var longitude = document.getField("longitude").numericValue().doubleValue();
+      var latitude = document.getField("latitude").numericValue().doubleValue();
+
+      return Optional.of(new Coordinate(longitude, latitude));
+    } finally {
+      // The manager keeps the underlying reader open until every searcher it handed out is back.
+      searcherManager.release(indexSearcher);
     }
-
-    var scoreDoc = topDocs.scoreDocs[0];
-    if (scoreDoc.score < SCORE_THRESHOLD) {
-      return Optional.empty();
-    }
-
-    var document = indexSearcher.doc(scoreDoc.doc);
-    var longitude = document.getField("longitude").numericValue().doubleValue();
-    var latitude = document.getField("latitude").numericValue().doubleValue();
-
-    return Optional.of(new Coordinate(longitude, latitude));
   }
 
   /**

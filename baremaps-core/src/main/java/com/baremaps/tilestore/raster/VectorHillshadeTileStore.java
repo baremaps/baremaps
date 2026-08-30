@@ -18,26 +18,33 @@ import com.baremaps.dem.ContourTracer;
 import com.baremaps.dem.ElevationUtils;
 import com.baremaps.dem.HillshadeCalculator;
 import com.baremaps.maplibre.vectortile.Feature;
-import com.baremaps.maplibre.vectortile.Layer;
-import com.baremaps.maplibre.vectortile.Tile;
-import com.baremaps.maplibre.vectortile.VectorTileEncoder;
 import com.baremaps.tilestore.TileCoord;
-import com.baremaps.tilestore.TileStore;
 import com.baremaps.tilestore.TileStoreException;
-import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.zip.GZIPOutputStream;
 import org.locationtech.jts.geom.util.AffineTransformation;
 
 /**
  * A {@code TileStore} that calculates vector hillshade tiles from elevation data.
+ *
+ * <p>
+ * The shading is expressed as nested contours of the hillshade grid rather than as pixels, so that
+ * a client can style the levels itself.
  */
-public class VectorHillshadeTileStore implements TileStore<ByteBuffer> {
+public class VectorHillshadeTileStore extends RasterTileStore<ByteBuffer> {
 
-  private final GeoTiffReader geoTiffReader;
+  // Contours near the edge of a tile need the neighbouring elevations to line up with the contours
+  // of the adjacent tile, so the grid is computed with a wide border that is then translated away.
+  private static final int TILE_BUFFER = 16;
+
+  // The levels of the lit and of the shaded side, from the faintest to the strongest, paired with
+  // the category a client styles them by.
+  private static final int[][] LIT_LEVELS = {{255 - 16, 1}, {255 - 32, 2}};
+
+  private static final int[][] SHADED_LEVELS =
+      {{255 - 32, 6}, {255 - 64, 5}, {255 - 98, 4}, {255 - 128, 3}};
 
   /**
    * Constructs a {@code VectorHillshadeTileStore} with the specified geotiff reader.
@@ -45,7 +52,7 @@ public class VectorHillshadeTileStore implements TileStore<ByteBuffer> {
    * @param geoTiffReader the geotiff reader
    */
   public VectorHillshadeTileStore(GeoTiffReader geoTiffReader) {
-    this.geoTiffReader = geoTiffReader;
+    super(geoTiffReader);
   }
 
   /**
@@ -53,78 +60,45 @@ public class VectorHillshadeTileStore implements TileStore<ByteBuffer> {
    *
    * @param tileCoord the tile coordinate
    * @return the hillshade data
-   * @throws TileStoreException
+   * @throws TileStoreException if an error occurs
    */
   @Override
   public ByteBuffer read(TileCoord tileCoord) throws TileStoreException {
     try {
-      var size = 256;
+      var gridSize = TILE_SIZE + 2 * TILE_BUFFER;
 
-      // Read the elevation data
-      var features = new ArrayList<Feature>();
-
-      // Calculate the hillshade
-      var grid = geoTiffReader.read(tileCoord, size, 16);
+      var grid = geoTiffReader.read(tileCoord, TILE_SIZE, TILE_BUFFER);
       grid = ElevationUtils.clampGrid(grid, 0, 10000);
       grid = new HillshadeCalculator(
           grid,
-          size + 32, size + 32, HillshadeCalculator.getResolution(tileCoord.z()) / 2)
+          gridSize,
+          gridSize,
+          HillshadeCalculator.getResolution(tileCoord.z()) / 2)
               .calculate(45, 315);
 
-      contours(grid, 255 - 16, features, 1);
-      contours(grid, 255 - 32, features, 2);
+      var features = new ArrayList<Feature>();
+      addContours(grid, gridSize, LIT_LEVELS, features);
+      addContours(HillshadeCalculator.invert(grid), gridSize, SHADED_LEVELS, features);
 
-      grid = HillshadeCalculator.invert(grid);
-      contours(grid, 255 - 32, features, 6);
-      contours(grid, 255 - 64, features, 5);
-      contours(grid, 255 - 98, features, 4);
-      contours(grid, 255 - 128, features, 3);
-
-      var layer = new Layer("elevation", 4096, features);
-      var tile = new Tile(List.of(layer));
-      var vectorTile = new VectorTileEncoder().encodeTile(tile);
-      try (var baos = new ByteArrayOutputStream()) {
-        var gzip = new GZIPOutputStream(baos);
-        vectorTile.writeTo(gzip);
-        gzip.close();
-        return ByteBuffer.wrap(baos.toByteArray());
-      }
+      return encodeLayer("elevation", features);
     } catch (Exception e) {
       throw new TileStoreException(e);
     }
   }
 
-  private static void contours(double[] grid, int level, ArrayList<Feature> features,
-      int category) {
-    int size = (int) Math.sqrt(grid.length);
-    for (var polygon : new ContourTracer(grid, size, size).tracePolygons(level)) {
-      var contour = AffineTransformation
-          .translationInstance(-16, -16)
-          .scale(16, 16)
-          .transform(polygon);
-      features.add(new Feature(category, Map.of("level", String.valueOf(category)), contour));
+  private static void addContours(double[] grid, int gridSize, int[][] levels,
+      List<Feature> features) {
+    var tracer = new ContourTracer(grid, gridSize, gridSize);
+    // Move the border out of the way, then scale the grid to the extent of the vector tile.
+    var toTileExtent = AffineTransformation
+        .translationInstance(-TILE_BUFFER, -TILE_BUFFER)
+        .scale(4096 / TILE_SIZE, 4096 / TILE_SIZE);
+    for (int[] level : levels) {
+      var category = level[1];
+      for (var polygon : tracer.tracePolygons(level[0])) {
+        features.add(new Feature(category, Map.of("level", String.valueOf(category)),
+            toTileExtent.transform(polygon)));
+      }
     }
-  }
-
-  /**
-   * Unsupported operation.
-   */
-  @Override
-  public void write(TileCoord tileCoord, ByteBuffer blob) throws TileStoreException {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Unsupported operation.
-   */
-  @Override
-  public void delete(TileCoord tileCoord) throws TileStoreException {
-    throw new UnsupportedOperationException();
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public void close() throws Exception {
-    // Do nothing
   }
 }

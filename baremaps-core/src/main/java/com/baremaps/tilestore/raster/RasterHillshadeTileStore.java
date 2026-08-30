@@ -14,37 +14,29 @@
 
 package com.baremaps.tilestore.raster;
 
-
 import com.baremaps.dem.ElevationUtils;
 import com.baremaps.dem.HillshadeCalculator;
 import com.baremaps.tilestore.TileCoord;
-import com.baremaps.tilestore.TileStore;
 import com.baremaps.tilestore.TileStoreException;
-import java.awt.*;
+import java.awt.Color;
 import java.awt.image.BufferedImage;
-import java.util.function.IntToDoubleFunction;
 
 /**
  * A {@code TileStore} that calculates hillshade tiles from elevation tiles.
  */
-public class RasterHillshadeTileStore implements TileStore<BufferedImage> {
+public class RasterHillshadeTileStore extends RasterTileStore<BufferedImage> {
 
-  private final GeoTiffReader geoTiffReader;
-
-  private final IntToDoubleFunction pixelToElevation;
+  // The shade of a border pixel depends on its neighbours, so the tile is computed one pixel wider
+  // on every side and the border is cropped away before the tile is returned.
+  private static final int TILE_BUFFER = 1;
 
   /**
-   * Constructs a {@code RasterHillshadeTileStore} with the specified tile store and pixel to
-   * elevation function.
+   * Constructs a {@code RasterHillshadeTileStore} with the specified GeoTIFF reader.
    *
    * @param geoTiffReader the geotiff reader
-   * @param pixelToElevation the pixel to elevation function
    */
-  public RasterHillshadeTileStore(
-      GeoTiffReader geoTiffReader,
-      IntToDoubleFunction pixelToElevation) {
-    this.geoTiffReader = geoTiffReader;
-    this.pixelToElevation = pixelToElevation;
+  public RasterHillshadeTileStore(GeoTiffReader geoTiffReader) {
+    super(geoTiffReader);
   }
 
   /**
@@ -57,12 +49,9 @@ public class RasterHillshadeTileStore implements TileStore<BufferedImage> {
   @Override
   public BufferedImage read(TileCoord tileCoord) throws TileStoreException {
     try {
-      var tileSize = 256;
-      var tileBuffer = 1;
-      var imageSize = tileSize + tileBuffer + tileBuffer;
+      var imageSize = TILE_SIZE + 2 * TILE_BUFFER;
 
-      // Read the elevation data
-      var grid = geoTiffReader.read(tileCoord, tileSize, tileBuffer);
+      var grid = geoTiffReader.read(tileCoord, TILE_SIZE, TILE_BUFFER);
       grid = ElevationUtils.clampGrid(grid, 0, 10000);
       grid = new HillshadeCalculator(
           grid,
@@ -71,42 +60,17 @@ public class RasterHillshadeTileStore implements TileStore<BufferedImage> {
           HillshadeCalculator.getResolution(tileCoord.z()) / 2)
               .calculate(45, 315);
 
-      // Create the hillshade image
-      BufferedImage hillshadeImage =
-          new BufferedImage(imageSize, imageSize, BufferedImage.TYPE_BYTE_GRAY);
+      var image = new BufferedImage(imageSize, imageSize, BufferedImage.TYPE_BYTE_GRAY);
       for (int y = 0; y < imageSize; y++) {
         for (int x = 0; x < imageSize; x++) {
           int value = (int) grid[y * imageSize + x];
-          hillshadeImage.setRGB(x, y, new Color(value, value, value).getRGB());
+          image.setRGB(x, y, new Color(value, value, value).getRGB());
         }
       }
 
-      // Return the hillshade image without the buffer
-      return hillshadeImage.getSubimage(1, 1, tileSize, tileSize);
+      return image.getSubimage(TILE_BUFFER, TILE_BUFFER, TILE_SIZE, TILE_SIZE);
     } catch (Exception e) {
       throw new TileStoreException(e);
     }
-  }
-
-  /**
-   * Unsupported operation.
-   */
-  @Override
-  public void write(TileCoord tileCoord, BufferedImage blob) throws TileStoreException {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Unsupported operation.
-   */
-  @Override
-  public void delete(TileCoord tileCoord) throws TileStoreException {
-    throw new UnsupportedOperationException();
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public void close() throws Exception {
-    // Do nothing
   }
 }

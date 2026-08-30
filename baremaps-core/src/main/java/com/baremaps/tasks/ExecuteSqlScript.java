@@ -21,15 +21,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.StringJoiner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Execute a SQL script (multiple statements).
  */
 public class ExecuteSqlScript implements Task {
 
-  private static final Logger logger = LoggerFactory.getLogger(ExecuteSqlScript.class);
 
   private Object database;
 

@@ -72,7 +72,8 @@ public final class SqliteUtils {
    *
    * @param databaseUrl the JDBC url
    * @param resource the path of the resource file
-   * @throws SQLException
+   * @throws IOException if the resource cannot be read
+   * @throws SQLException if the queries cannot be executed
    */
   public static void executeResource(String databaseUrl, String resource)
       throws IOException, SQLException {

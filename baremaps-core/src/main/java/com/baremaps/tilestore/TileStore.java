@@ -27,7 +27,7 @@ public interface TileStore<T> extends AutoCloseable {
    *
    * @param tileCoord the tile coordinate
    * @return the content of the tile
-   * @throws TileStoreException
+   * @throws TileStoreException if the tiles cannot be accessed
    */
   T read(TileCoord tileCoord) throws TileStoreException;
 
@@ -36,7 +36,7 @@ public interface TileStore<T> extends AutoCloseable {
    *
    * @param tileCoords the tile coordinates
    * @return the content of the tiles
-   * @throws TileStoreException
+   * @throws TileStoreException if the tiles cannot be accessed
    */
   default List<T> read(List<TileCoord> tileCoords) throws TileStoreException {
     var blobs = new ArrayList<T>();
@@ -51,7 +51,7 @@ public interface TileStore<T> extends AutoCloseable {
    *
    * @param tileCoord the tile coordinate
    * @param blob the content of the tile
-   * @throws TileStoreException
+   * @throws TileStoreException if the tiles cannot be accessed
    */
   void write(TileCoord tileCoord, T blob) throws TileStoreException;
 
@@ -59,11 +59,11 @@ public interface TileStore<T> extends AutoCloseable {
    * Writes the content of a list of tiles.
    *
    * @param entries the tile entries
-   * @throws TileStoreException
+   * @throws TileStoreException if the tiles cannot be accessed
    */
   default void write(List<TileEntry<T>> entries) throws TileStoreException {
     for (var entry : entries) {
-      write(entry.getTileCoord(), entry.getTileValue());
+      write(entry.tileCoord(), entry.tileValue());
     }
   }
 
@@ -71,7 +71,7 @@ public interface TileStore<T> extends AutoCloseable {
    * Deletes the content of a tile.
    *
    * @param tileCoord the tile coordinate
-   * @throws TileStoreException
+   * @throws TileStoreException if the tiles cannot be accessed
    */
   void delete(TileCoord tileCoord) throws TileStoreException;
 
@@ -79,7 +79,7 @@ public interface TileStore<T> extends AutoCloseable {
    * Deletes the content of a list of tiles.
    *
    * @param tileCoords the tile coordinates
-   * @throws TileStoreException
+   * @throws TileStoreException if the tiles cannot be accessed
    */
   default void delete(List<TileCoord> tileCoords) throws TileStoreException {
     for (var tileCoord : tileCoords) {
