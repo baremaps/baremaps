@@ -15,16 +15,22 @@
 package com.baremaps.dem;
 
 import java.awt.image.BufferedImage;
-import java.util.function.DoubleToIntFunction;
 import java.util.function.IntToDoubleFunction;
 
 /**
- * Provides utility methods for processing raster images, particularly for elevation data.
+ * Converts elevations between the grids this module operates on and the pixel encodings terrain
+ * tiles are published in.
  */
 public class ElevationUtils {
 
-  private static final double ELEVATION_SCALE = 256.0 * 256.0;
-  private static final double ELEVATION_OFFSET = 10000.0;
+  /** Terrain-RGB stores decimeters above a datum 10000 meters below sea level. */
+  private static final double RGB_UNITS_PER_METER = 10.0;
+  private static final double RGB_OFFSET = 10000.0;
+
+  /**
+   * Terrarium stores meters above a datum 32768 meters below sea level, with the whole meters
+   * spread over the red and green bands and the fraction of a meter in the blue one.
+   */
   private static final double TERRARIUM_OFFSET = 32768.0;
 
   private ElevationUtils() {
@@ -32,161 +38,67 @@ public class ElevationUtils {
   }
 
   /**
-   * Converts a BufferedImage to a grid of elevation values.
+   * Decodes an image into a grid of elevation values, in row-major order.
    *
-   * @param image The input BufferedImage
-   * @return A double array representing the elevation grid
+   * @param image the image
+   * @param pixelToElevation the encoding of the image, such as {@link #rgbToElevation}
+   * @return the elevation grid
    */
-  public static double[] imageToGrid(BufferedImage image) {
-    validateImage(image);
+  public static double[] imageToGrid(BufferedImage image, IntToDoubleFunction pixelToElevation) {
     int width = image.getWidth();
     int height = image.getHeight();
     double[] grid = new double[width * height];
-    image.getRaster().getPixels(0, 0, width, height, grid);
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        grid[y * width + x] = pixelToElevation.applyAsDouble(image.getRGB(x, y));
+      }
+    }
     return grid;
   }
 
   /**
-   * Converts a BufferedImage to a grid of elevation values.
+   * Clamps the values of a grid to the specified range. Elevation models carry no-data markers and
+   * artefacts far outside the range of real elevations, which would otherwise dominate whatever is
+   * derived from the grid.
    *
-   * @param image The input BufferedImage
-   * @return A double array representing the elevation grid
-   */
-  public static double[] imageToGrid(BufferedImage image,
-      IntToDoubleFunction pixelToElevation) {
-    validateImage(image);
-    int width = image.getWidth();
-    int height = image.getHeight();
-    double[] grid = new double[width * height];
-
-    for (int y = 0; y < height; y++) {
-      for (int x = 0; x < width; x++) {
-        int rgb = image.getRGB(x, y);
-        grid[y * width + x] = pixelToElevation.applyAsDouble(rgb);
-      }
-    }
-
-    return grid;
-  }
-
-  /**
-   * Converts a grid of elevation values to a BufferedImage.
-   *
-   * @param grid The input elevation grid
-   * @param width The width of the grid
-   * @param height The height of the grid
-   * @return A BufferedImage representing the elevation data
-   */
-  public static BufferedImage gridToImage(double[] grid, int width, int height,
-      DoubleToIntFunction elevationToPixel) {
-    validateGrid(grid, width, height);
-    BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-
-    for (int y = 0; y < height; y++) {
-      for (int x = 0; x < width; x++) {
-        double elevation = grid[y * width + x];
-        image.setRGB(x, y, elevationToPixel.applyAsInt(elevation));
-      }
-    }
-
-    return image;
-  }
-
-  /**
-   * Validates the input image.
-   *
-   * @param image The input image
-   */
-  private static void validateImage(BufferedImage image) {
-    if (image == null) {
-      throw new IllegalArgumentException("Input image cannot be null");
-    }
-    if (image.getWidth() <= 0 || image.getHeight() <= 0) {
-      throw new IllegalArgumentException("Image dimensions must be positive");
-    }
-  }
-
-  /**
-   * Validates the input grid.
-   *
-   * @param grid The input grid
-   * @param width The width of the grid
-   * @param height The height of the grid
-   */
-  private static void validateGrid(double[] grid, int width, int height) {
-    if (grid == null || grid.length == 0) {
-      throw new IllegalArgumentException("Grid array cannot be null or empty");
-    }
-    if (width <= 0 || height <= 0) {
-      throw new IllegalArgumentException("Width and height must be positive");
-    }
-    if (grid.length != width * height) {
-      throw new IllegalArgumentException("Grid array length does not match width * height");
-    }
-  }
-
-  /**
-   * Inverts the values in the input grid.
-   *
-   * @param grid The input grid
-   * @return The inverted grid
-   */
-  public static double[] invertGrid(double[] grid) {
-    double[] invertedGrid = new double[grid.length];
-    for (int i = 0; i < grid.length; i++) {
-      invertedGrid[i] = 255.0 - grid[i];
-    }
-    return invertedGrid;
-  }
-
-  /**
-   * Clamps the values in the input grid to the specified range.
-   *
-   * @param grid The input grid
-   * @param min The minimum value
-   * @param max The maximum value
-   * @return The clamped grid
+   * @param grid the grid
+   * @param min the minimum value
+   * @param max the maximum value
+   * @return the clamped grid
    */
   public static double[] clampGrid(double[] grid, double min, double max) {
-    double[] clampedGrid = new double[grid.length];
+    double[] clamped = new double[grid.length];
     for (int i = 0; i < grid.length; i++) {
-      clampedGrid[i] = Math.max(min, Math.min(max, grid[i]));
+      clamped[i] = Math.clamp(grid[i], min, max);
     }
-    return clampedGrid;
+    return clamped;
   }
 
   /**
-   * Converts a pixel value to an elevation value using an rgb color scheme.
+   * Decodes a pixel of a Terrain-RGB tile into an elevation.
    *
-   * @param rgb The rgb pixel value
-   * @return The elevation value
+   * @param rgb the pixel value
+   * @return the elevation, in meters
    */
   public static double rgbToElevation(int rgb) {
-    int r = (rgb >> 16) & 0xFF;
-    int g = (rgb >> 8) & 0xFF;
-    int b = rgb & 0xFF;
-    return (r * ELEVATION_SCALE + g * 256.0 + b) / 10.0 - ELEVATION_OFFSET;
+    return (rgb & 0xFFFFFF) / RGB_UNITS_PER_METER - RGB_OFFSET;
   }
 
   /**
-   * Converts an elevation value to a pixel value using an rgb color scheme.
+   * Encodes an elevation into a pixel of a Terrain-RGB tile.
    *
-   * @param elevation The elevation value
-   * @return The rgb pixel value
+   * @param elevation the elevation, in meters
+   * @return the pixel value
    */
   public static int elevationToRgb(double elevation) {
-    int value = (int) ((elevation + ELEVATION_OFFSET) * 10.0);
-    int r = (value >> 16) & 0xFF;
-    int g = (value >> 8) & 0xFF;
-    int b = value & 0xFF;
-    return (r << 16) | (g << 8) | b;
+    return (int) ((elevation + RGB_OFFSET) * RGB_UNITS_PER_METER) & 0xFFFFFF;
   }
 
   /**
-   * Converts a pixel value to an elevation value using the Terrarium color scheme.
+   * Decodes a pixel of a Terrarium tile into an elevation.
    *
-   * @param rgb The input pixel value
-   * @return The elevation value
+   * @param rgb the pixel value
+   * @return the elevation, in meters
    */
   public static double terrariumToElevation(int rgb) {
     int r = (rgb >> 16) & 0xFF;
@@ -196,16 +108,15 @@ public class ElevationUtils {
   }
 
   /**
-   * Converts an elevation value to a pixel value using the Terrarium color scheme.
+   * Encodes an elevation into a pixel of a Terrarium tile.
    *
-   * @param elevation The input elevation value
-   * @return The pixel value
+   * @param elevation the elevation, in meters
+   * @return the pixel value
    */
   public static int elevationToTerrarium(double elevation) {
-    double adjustedElevation = elevation + TERRARIUM_OFFSET;
-    int r = (int) (adjustedElevation / 256.0);
-    int g = (int) (adjustedElevation % 256.0);
-    int b = (int) ((adjustedElevation - (r * 256.0) - g) * 256.0);
-    return (r << 16) | (g << 8) | b;
+    double value = elevation + TERRARIUM_OFFSET;
+    int meters = (int) value;
+    int fraction = (int) ((value - meters) * 256.0);
+    return ((meters >> 8) & 0xFF) << 16 | (meters & 0xFF) << 8 | (fraction & 0xFF);
   }
 }

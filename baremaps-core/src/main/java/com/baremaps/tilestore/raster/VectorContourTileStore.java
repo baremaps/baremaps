@@ -76,16 +76,14 @@ public class VectorContourTileStore implements TileStore<ByteBuffer> {
         default -> 10;
       };
 
+      var tracer = new ContourTracer(grid, 264, 264);
       var features = new ArrayList<Feature>();
       for (int level = -10000; level < 10000; level += increment) {
-        var contours =
-            new ContourTracer(grid, 264, 264, false, true)
-                .traceContours(level);
-        for (var contour : contours) {
-          contour = AffineTransformation
+        for (var polygon : tracer.tracePolygons(level)) {
+          var contour = AffineTransformation
               .translationInstance(-4, -4)
               .scale(16, 16)
-              .transform(contour);
+              .transform(polygon);
           features.add(new Feature(level, Map.of("level", String.valueOf(level)), contour));
         }
       }

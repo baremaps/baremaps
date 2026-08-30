@@ -15,14 +15,45 @@
 package com.baremaps.dem;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class MartiniTest {
+
+  /** A terrain that curves along the x axis, so that flat triangles do not approximate it. */
+  private static double[] curvedTerrain(int gridSize) {
+    var terrain = new double[gridSize * gridSize];
+    for (int i = 0; i < terrain.length; i++) {
+      int x = i % gridSize;
+      terrain[i] = x * x;
+    }
+    return terrain;
+  }
+
+  @Test
+  @DisplayName("A tile can be meshed more than once")
+  void meshTwice() {
+    var tile = new Martini(5).createTile(curvedTerrain(5));
+    var first = tile.getMesh(1);
+    var second = tile.getMesh(1);
+    assertArrayEquals(first.vertices(), second.vertices());
+    assertArrayEquals(first.triangles(), second.triangles());
+  }
+
+  @Test
+  @DisplayName("A smaller error yields a finer mesh")
+  void meshError() {
+    var tile = new Martini(5).createTile(curvedTerrain(5));
+    assertEquals(2 * 3, tile.getMesh(Double.MAX_VALUE).triangles().length);
+    assertTrue(tile.getMesh(0).triangles().length > tile.getMesh(1).triangles().length);
+  }
 
   @Test
   @Disabled("This test must be reworked as it relied on an unlicensed file")
@@ -40,7 +71,7 @@ class MartiniTest {
         0, 0, 0, 32, 32, 192, 192, 384, 384, 512, 256, 384, 256, 320, 320, 320, 256, 512, 512, 512,
         128, 448, 192, 384, 192, 128, 384, 256, 512, 256, 384, 0, 512, 128, 256, 64, 192, 0, 256,
         64, 128, 32, 96, 0, 128, 32, 64, 16, 48, 0, 64, 0, 32
-    }, mesh.getVertices());
+    }, mesh.vertices());
 
     assertArrayEquals(new int[] {
         0, 1, 2, 3, 0, 2, 4, 1, 0, 5, 6, 7, 7, 8, 9, 5, 7, 9, 1, 6, 5, 6, 10, 11, 11, 8, 7, 6, 11,
@@ -53,6 +84,6 @@ class MartiniTest {
         41, 39, 40, 16, 18, 39, 42, 21, 43, 44, 42, 43, 18, 21, 42, 21, 20, 45, 45, 44, 43, 21, 45,
         43, 44, 41, 40, 40, 18, 42, 44, 40, 42, 41, 38, 37, 37, 16, 39, 41, 37, 39, 38, 35, 32, 32,
         10, 36, 38, 32, 36
-    }, mesh.getTriangles());
+    }, mesh.triangles());
   }
 }

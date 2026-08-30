@@ -74,7 +74,7 @@ public class VectorHillshadeTileStore implements TileStore<ByteBuffer> {
       contours(grid, 255 - 16, features, 1);
       contours(grid, 255 - 32, features, 2);
 
-      grid = ElevationUtils.invertGrid(grid);
+      grid = HillshadeCalculator.invert(grid);
       contours(grid, 255 - 32, features, 6);
       contours(grid, 255 - 64, features, 5);
       contours(grid, 255 - 98, features, 4);
@@ -96,15 +96,12 @@ public class VectorHillshadeTileStore implements TileStore<ByteBuffer> {
 
   private static void contours(double[] grid, int level, ArrayList<Feature> features,
       int category) {
-    var contours =
-        new ContourTracer(grid, (int) Math.sqrt(grid.length), (int) Math.sqrt(grid.length), false,
-            true)
-                .traceContours(level);
-    for (var contour : contours) {
-      contour = AffineTransformation
+    int size = (int) Math.sqrt(grid.length);
+    for (var polygon : new ContourTracer(grid, size, size).tracePolygons(level)) {
+      var contour = AffineTransformation
           .translationInstance(-16, -16)
           .scale(16, 16)
-          .transform(contour);
+          .transform(polygon);
       features.add(new Feature(category, Map.of("level", String.valueOf(category)), contour));
     }
   }

@@ -104,21 +104,4 @@ public class MarchingSquareUtils {
       CASE_08, CASE_09, CASE_10, CASE_11,
       CASE_12, CASE_13, CASE_14, CASE_15);
 
-  public static final double[] buffer(double[] grid) {
-    return new double[] {
-        0, 0, 0, 0,
-        0, grid[0], grid[1], 0,
-        0, grid[2], grid[3], 0,
-        0, 0, 0, 0,
-    };
-  }
-
-  public static final List<double[]> BUFFERED_CASES = List.of(
-      buffer(CASE_00), buffer(CASE_01), buffer(CASE_02), buffer(CASE_03),
-      buffer(CASE_04), buffer(CASE_05), buffer(CASE_06), buffer(CASE_07),
-      buffer(CASE_08), buffer(CASE_09), buffer(CASE_10), buffer(CASE_11),
-      buffer(CASE_12), buffer(CASE_13), buffer(CASE_14), buffer(CASE_15));
-
-
-
 }

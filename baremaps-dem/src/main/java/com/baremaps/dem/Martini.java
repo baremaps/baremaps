@@ -18,13 +18,13 @@ import java.awt.image.BufferedImage;
 
 /**
  * The {@code Martini} class implements the MARTINI algorithm for generating 3D terrain meshes from
- * height data.
+ * height data. A grid is meshed by a hierarchy of right triangles, each of which may be split in
+ * two at the midpoint of its hypotenuse; the hierarchy only depends on the size of the grid, so it
+ * is built once here and shared by every tile of that size.
  *
  * @see <a href="https://github.com/mapbox/martini">Martini GitHub</a>
  */
 public class Martini {
-
-  private static final double ELEVATION_OFFSET = 10000.0;
 
   private final int gridSize;
   private final int numTriangles;
@@ -48,6 +48,10 @@ public class Martini {
     this.numTriangles = tileSize * tileSize * 2 - 2;
     this.numParentTriangles = this.numTriangles - tileSize * tileSize;
 
+    // Triangles are numbered breadth first from the two halves of the grid, so that the two
+    // children of triangle id are 2 * id and 2 * id + 1. Reading the bits of an id from the most
+    // significant one down therefore replays the sequence of splits that leads to it, which is how
+    // the two ends of its hypotenuse are recovered here.
     this.baseCoords = new int[this.numTriangles * 4];
     for (int i = 0; i < this.numTriangles; i++) {
       int id = i + 2;
@@ -89,28 +93,25 @@ public class Martini {
   }
 
   /**
-   * Creates a terrain grid from a BufferedImage.
+   * Decodes a Terrain-RGB image into a terrain grid one sample wider and taller than the image, as
+   * the mesh is built over the corners of the pixels rather than their centers.
    *
    * @param image the input image
    * @return a double array representing the terrain grid
    */
   public static double[] createGrid(BufferedImage image) {
-    int gridSize = image.getWidth() + 1;
+    int tileSize = image.getWidth();
+    int gridSize = tileSize + 1;
     double[] terrain = new double[gridSize * gridSize];
 
-    int tileSize = image.getWidth();
-
-    // decode terrain values
     for (int y = 0; y < tileSize; y++) {
       for (int x = 0; x < tileSize; x++) {
-        int r = (image.getRGB(x, y) >> 16) & 0xFF;
-        int g = (image.getRGB(x, y) >> 8) & 0xFF;
-        int b = image.getRGB(x, y) & 0xFF;
-        terrain[y * gridSize + x] = (r * 256 * 256 + g * 256.0f + b) / 10.0f - ELEVATION_OFFSET;
+        terrain[y * gridSize + x] = ElevationUtils.rgbToElevation(image.getRGB(x, y));
       }
     }
 
-    // backfill right and bottom borders
+    // Repeat the last row and column into the extra samples, so that the edge of the mesh follows
+    // the edge of the image instead of dropping to zero.
     for (int x = 0; x < gridSize - 1; x++) {
       terrain[gridSize * (gridSize - 1) + x] = terrain[gridSize * (gridSize - 2) + x];
     }
@@ -129,47 +130,35 @@ public class Martini {
    * @throws IllegalArgumentException if the terrain data is invalid
    */
   public Tile createTile(double[] terrain) {
-    return new Tile(terrain, gridSize, numTriangles, numParentTriangles, baseCoords);
+    return new Tile(terrain);
   }
 
   /**
-   * The {@code Tile} class represents a tile of terrain data.
+   * A tile of terrain data, holding for every possible vertex of the mesh the error that leaving it
+   * out would introduce.
    */
-  public static class Tile {
+  public class Tile {
 
-    private final int gridSize;
-    private final int[] indices;
     private final double[] errors;
 
-    private int numVertices;
-    private int numTriangles;
-
-    private int[] vertices;
-    private int[] triangles;
-    private int triIndex = 0;
-
-    private Tile(
-        double[] terrain,
-        int gridSize,
-        int numTriangles,
-        int numParentTriangles,
-        int[] coords) {
+    private Tile(double[] terrain) {
       if (terrain.length != gridSize * gridSize) {
         throw new IllegalArgumentException(
             "Expected terrain data of length " + (gridSize * gridSize) + " (" + gridSize + " x "
                 + gridSize + "), got " + terrain.length + ".");
       }
 
-      this.gridSize = gridSize;
-      this.indices = new int[this.gridSize * this.gridSize];
-
+      // Walking the triangles from the smallest to the largest lets the error of a triangle absorb
+      // the errors of its two children, which are already known by the time it is reached. A
+      // triangle may then be left unsplit as soon as its own error is acceptable, without having to
+      // look any deeper.
       this.errors = new double[terrain.length];
       for (int i = numTriangles - 1; i >= 0; i--) {
         int k = i * 4;
-        int ax = coords[k];
-        int ay = coords[k + 1];
-        int bx = coords[k + 2];
-        int by = coords[k + 3];
+        int ax = baseCoords[k];
+        int ay = baseCoords[k + 1];
+        int bx = baseCoords[k + 2];
+        int by = baseCoords[k + 3];
         int mx = (ax + bx) >> 1;
         int my = (ay + by) >> 1;
         int cx = mx + my - ay;
@@ -191,101 +180,118 @@ public class Martini {
     }
 
     /**
-     * Returns the mesh of the tile with the specified maximum error.
+     * Returns the coarsest mesh of the tile that stays within the specified error. The tile may be
+     * meshed again at a different error, each call starting from a clean slate.
      *
      * @param maxError the maximum error
      * @return the mesh
      */
     public Mesh getMesh(double maxError) {
-      int max = gridSize - 1;
-
-      numVertices = 0;
-      numTriangles = 0;
-      countElements(0, 0, max, max, max, 0, maxError);
-      countElements(max, max, 0, 0, 0, max, maxError);
-
-      vertices = new int[numVertices * 2];
-      triangles = new int[numTriangles * 3];
-      triIndex = 0;
-      processTriangle(0, 0, max, max, max, 0, maxError);
-      processTriangle(max, max, 0, 0, 0, max, maxError);
-
-      return new Mesh(vertices, triangles);
-    }
-
-    private void countElements(int ax, int ay, int bx, int by, int cx, int cy, double maxError) {
-      int mx = (ax + bx) >> 1;
-      int my = (ay + by) >> 1;
-
-      if (Math.abs(ax - cx) + Math.abs(ay - cy) > 1 && errors[my * gridSize + mx] > maxError) {
-        countElements(cx, cy, ax, ay, mx, my, maxError);
-        countElements(bx, by, cx, cy, mx, my, maxError);
-      } else {
-        indices[ay * gridSize + ax] =
-            indices[ay * gridSize + ax] != 0 ? indices[ay * gridSize + ax] : ++numVertices;
-        indices[by * gridSize + bx] =
-            indices[by * gridSize + bx] != 0 ? indices[by * gridSize + bx] : ++numVertices;
-        indices[cy * gridSize + cx] =
-            indices[cy * gridSize + cx] != 0 ? indices[cy * gridSize + cx] : ++numVertices;
-        numTriangles++;
-      }
-    }
-
-    private void processTriangle(int ax, int ay, int bx, int by, int cx, int cy, double maxError) {
-      int mx = (ax + bx) >> 1;
-      int my = (ay + by) >> 1;
-
-      if (Math.abs(ax - cx) + Math.abs(ay - cy) > 1 && errors[my * gridSize + mx] > maxError) {
-        processTriangle(cx, cy, ax, ay, mx, my, maxError);
-        processTriangle(bx, by, cx, cy, mx, my, maxError);
-      } else {
-        int a = indices[ay * gridSize + ax] - 1;
-        int b = indices[by * gridSize + bx] - 1;
-        int c = indices[cy * gridSize + cx] - 1;
-
-        vertices[2 * a] = ax;
-        vertices[2 * a + 1] = ay;
-        vertices[2 * b] = bx;
-        vertices[2 * b + 1] = by;
-        vertices[2 * c] = cx;
-        vertices[2 * c + 1] = cy;
-
-        triangles[triIndex++] = a;
-        triangles[triIndex++] = b;
-        triangles[triIndex++] = c;
-      }
+      return new MeshBuilder(errors, gridSize, maxError).build();
     }
   }
 
   /**
-   * The {@code Mesh} class represents a mesh of vertices and triangles.
+   * Builds one mesh out of the errors of a tile. The two halves of the grid are walked twice: once
+   * to count the vertices and triangles the walk yields, and once to fill the arrays sized from
+   * that count.
    */
-  public static class Mesh {
+  private static class MeshBuilder {
 
-    private final int[] vertices;
-    private final int[] triangles;
+    private final double[] errors;
+    private final int gridSize;
+    private final double maxError;
 
-    private Mesh(int[] vertices, int[] triangles) {
-      this.vertices = vertices;
-      this.triangles = triangles;
+    /** The one-based position of each vertex in the mesh, or zero for the vertices left out. */
+    private final int[] indices;
+
+    private int numVertices;
+    private int numTriangles;
+    private int[] vertices;
+    private int[] triangles;
+    private int triangleIndex;
+
+    private MeshBuilder(double[] errors, int gridSize, double maxError) {
+      this.errors = errors;
+      this.gridSize = gridSize;
+      this.maxError = maxError;
+      this.indices = new int[gridSize * gridSize];
+    }
+
+    private Mesh build() {
+      int max = gridSize - 1;
+
+      count(0, 0, max, max, max, 0);
+      count(max, max, 0, 0, 0, max);
+
+      vertices = new int[numVertices * 2];
+      triangles = new int[numTriangles * 3];
+      emit(0, 0, max, max, max, 0);
+      emit(max, max, 0, 0, 0, max);
+
+      return new Mesh(vertices, triangles);
     }
 
     /**
-     * Returns the vertices of the mesh.
-     *
-     * @return an array of vertex coordinates
+     * Tells whether the triangle {@code (a, b, c)} has to be split at the midpoint of its
+     * hypotenuse {@code (a, b)}, which is the case as long as it can still be split and the error
+     * at that midpoint is too large.
      */
-    public int[] getVertices() {
-      return vertices;
+    private boolean split(int ax, int ay, int bx, int by, int cx, int cy) {
+      return Math.abs(ax - cx) + Math.abs(ay - cy) > 1
+          && errors[((ay + by) >> 1) * gridSize + ((ax + bx) >> 1)] > maxError;
     }
 
-    /**
-     * Returns the triangles of the mesh.
-     *
-     * @return an array of triangle indices
-     */
-    public int[] getTriangles() {
-      return triangles;
+    private void count(int ax, int ay, int bx, int by, int cx, int cy) {
+      if (split(ax, ay, bx, by, cx, cy)) {
+        int mx = (ax + bx) >> 1;
+        int my = (ay + by) >> 1;
+        count(cx, cy, ax, ay, mx, my);
+        count(bx, by, cx, cy, mx, my);
+      } else {
+        index(ax, ay);
+        index(bx, by);
+        index(cx, cy);
+        numTriangles++;
+      }
     }
+
+    /** Assigns a position in the mesh to a vertex, unless it already has one. */
+    private void index(int x, int y) {
+      if (indices[y * gridSize + x] == 0) {
+        indices[y * gridSize + x] = ++numVertices;
+      }
+    }
+
+    private void emit(int ax, int ay, int bx, int by, int cx, int cy) {
+      if (split(ax, ay, bx, by, cx, cy)) {
+        int mx = (ax + bx) >> 1;
+        int my = (ay + by) >> 1;
+        emit(cx, cy, ax, ay, mx, my);
+        emit(bx, by, cx, cy, mx, my);
+      } else {
+        int a = vertex(ax, ay);
+        int b = vertex(bx, by);
+        int c = vertex(cx, cy);
+        triangles[triangleIndex++] = a;
+        triangles[triangleIndex++] = b;
+        triangles[triangleIndex++] = c;
+      }
+    }
+
+    /** Writes a vertex at the position assigned to it by {@link #count} and returns it. */
+    private int vertex(int x, int y) {
+      int index = indices[y * gridSize + x] - 1;
+      vertices[2 * index] = x;
+      vertices[2 * index + 1] = y;
+      return index;
+    }
+  }
+
+  /**
+   * A mesh of vertices and triangles. The vertices are the grid coordinates of the mesh points, two
+   * values per point; the triangles are indices into them, three per triangle.
+   */
+  public record Mesh(int[] vertices, int[] triangles) {
   }
 }

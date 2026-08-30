@@ -14,15 +14,18 @@
 
 package com.baremaps.dem;
 
-import org.locationtech.jts.geom.*;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.CoordinateSequence;
+import org.locationtech.jts.geom.CoordinateSequences;
+import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.impl.CoordinateArraySequence;
 import org.locationtech.jts.geom.util.GeometryTransformer;
 
 /**
- * A geometry transformer that applies the Chaikin smoothing algorithm to a geometry's coordinates.
- * This class extends the {@link GeometryTransformer} to provide a smoother version of the input
- * geometry by iteratively applying the Chaikin algorithm, which reduces sharp corners and refines
- * the shape of geometrical features.
+ * Rounds the corners of the geometries it transforms with Chaikin's algorithm: every pass replaces
+ * each vertex by two points placed along the segments that meet there, cutting the corner off.
+ * Rings are cut all the way around, while the endpoints of open lines are kept where they are so
+ * that adjacent lines stay joined.
  */
 public class ChaikinSmoother extends GeometryTransformer {
 
@@ -33,93 +36,64 @@ public class ChaikinSmoother extends GeometryTransformer {
   /**
    * Constructs a {@code ChaikinSmoother} with the specified number of iterations and factor.
    *
-   * @param iterations the number of iterations
-   * @param factor the smoothing factor
+   * @param iterations the number of passes; each one roughly doubles the number of vertices
+   * @param factor how far along each segment the cut points are placed, in {@code (0, 0.5]}; the
+   *        value Chaikin describes is 0.25
    */
   public ChaikinSmoother(int iterations, double factor) {
+    if (factor <= 0 || factor > 0.5) {
+      throw new IllegalArgumentException("Factor must be in (0, 0.5], got " + factor);
+    }
     this.iterations = iterations;
     this.factor = factor;
   }
 
-  /**
-   * Transforms the coordinates of a geometry using the Chaikin smoothing algorithm.
-   *
-   * @param coordinateSequence the coordinates to transform
-   * @param parent the parent geometry
-   * @return the transformed coordinates
-   */
+  /** {@inheritDoc} */
   @Override
   protected CoordinateSequence transformCoordinates(
       CoordinateSequence coordinateSequence,
       Geometry parent) {
-    return smooth(coordinateSequence, iterations, factor);
-  }
-
-  /**
-   * Smooths the coordinates of a coordinate sequence using the Chaikin algorithm. This method
-   * distinguishes between rings and lines and applies the algorithm accordingly.
-   *
-   * @param coordinateSequence the coordinates to smooth
-   * @param iterations the number of iterations
-   * @param factor the smoothing factor
-   * @return the smoothed coordinates
-   */
-  public static CoordinateSequence smooth(
-      CoordinateSequence coordinateSequence,
-      int iterations,
-      double factor) {
-    if (CoordinateSequences.isRing(coordinateSequence)) {
-      return new CoordinateArraySequence(chaikin(coordinateSequence.toCoordinateArray(), 2, 0.25));
-    } else {
-      Coordinate[] original = coordinateSequence.toCoordinateArray();
-      Coordinate[] smoothed = chaikin(original, iterations, factor);
-      int sumOfSquares = (iterations * (iterations + 1) * (2 * iterations + 1)) / 6;
-      int trimmedLength = smoothed.length - sumOfSquares;
-      Coordinate[] result = new Coordinate[trimmedLength + 2];
-      result[0] = original[0];
-      System.arraycopy(smoothed, 0, result, 1, trimmedLength);
-      result[trimmedLength + 1] = original[original.length - 1];
-      return new CoordinateArraySequence(result);
+    if (coordinateSequence.size() < 2) {
+      return coordinateSequence;
     }
-  }
-
-  /**
-   * Applies the Chaikin smoothing algorithm to the specified coordinates.
-   *
-   * @param coordinates the coordinates to smooth
-   * @param iterations the number of iterations
-   * @param factor the smoothing factor
-   * @return the smoothed coordinates
-   */
-  private static Coordinate[] chaikin(
-      Coordinate[] coordinates,
-      int iterations,
-      double factor) {
-    if (iterations <= 0) {
-      return coordinates;
-    }
-
+    boolean ring = CoordinateSequences.isRing(coordinateSequence);
+    Coordinate[] coordinates = coordinateSequence.toCoordinateArray();
     for (int i = 0; i < iterations; i++) {
-      int l = coordinates.length;
-      double f1 = 1 - factor;
-      double f2 = factor;
-
-      Coordinate[] smoothed = new Coordinate[l * 2];
-      for (int j = 0; j < l; j++) {
-        Coordinate c1 = coordinates[j];
-        Coordinate c2 = coordinates[(j + 1) % l];
-        smoothed[j * 2] = new Coordinate(
-            f1 * c1.getX() + f2 * c2.getX(),
-            f1 * c1.getY() + f2 * c2.getY());
-        smoothed[j * 2 + 1] = new Coordinate(
-            f2 * c1.getX() + f1 * c2.getX(),
-            f2 * c1.getY() + f1 * c2.getY());
-      }
-
-      coordinates = smoothed;
+      coordinates = ring ? cutRing(coordinates) : cutLine(coordinates);
     }
-
-    return coordinates;
+    return new CoordinateArraySequence(coordinates);
   }
 
+  /** Cuts every corner of a ring, whose last coordinate repeats its first. */
+  private Coordinate[] cutRing(Coordinate[] ring) {
+    int corners = ring.length - 1;
+    Coordinate[] cut = new Coordinate[corners * 2 + 1];
+    for (int i = 0; i < corners; i++) {
+      Coordinate from = ring[i];
+      Coordinate to = ring[(i + 1) % corners];
+      cut[i * 2] = along(from, to, factor);
+      cut[i * 2 + 1] = along(from, to, 1 - factor);
+    }
+    cut[corners * 2] = cut[0].copy();
+    return cut;
+  }
+
+  /** Cuts every corner of an open line, keeping its two endpoints. */
+  private Coordinate[] cutLine(Coordinate[] line) {
+    Coordinate[] cut = new Coordinate[line.length * 2];
+    cut[0] = line[0].copy();
+    for (int i = 0; i < line.length - 1; i++) {
+      cut[i * 2 + 1] = along(line[i], line[i + 1], factor);
+      cut[i * 2 + 2] = along(line[i], line[i + 1], 1 - factor);
+    }
+    cut[cut.length - 1] = line[line.length - 1].copy();
+    return cut;
+  }
+
+  /** Returns the point at the given fraction of the segment from one coordinate to another. */
+  private static Coordinate along(Coordinate from, Coordinate to, double fraction) {
+    return new Coordinate(
+        from.getX() + fraction * (to.getX() - from.getX()),
+        from.getY() + fraction * (to.getY() - from.getY()));
+  }
 }

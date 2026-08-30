@@ -14,8 +14,6 @@
 
 package com.baremaps.dem;
 
-import static com.baremaps.dem.ContourTracerPolygonTest.*;
-
 import java.awt.*;
 import java.util.List;
 import javax.swing.*;
@@ -41,8 +39,6 @@ public class MarchingSquareRenderer extends JPanel {
     super.paintComponent(g);
     Graphics2D g2d = (Graphics2D) g;
     g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-    g2d.drawRect(718 - 10, 790 - 10, 20, 20);
 
     for (Geometry geometry : geometries) {
       if (geometry instanceof Polygon) {
@@ -92,8 +88,10 @@ public class MarchingSquareRenderer extends JPanel {
     JPanel mainPanel = new JPanel(new GridLayout(4, 4));
     for (double[] c : MarchingSquareUtils.CASES) {
 
-      List<Geometry> geometries = trace(c)
+      int size = (int) Math.sqrt(c.length);
+      List<Geometry> geometries = new ContourTracer(c, size, size).tracePolygons(0.5)
           .stream()
+          .map(Geometry.class::cast)
           .map(AffineTransformation.scaleInstance(50, 50).translate(0, 0)::transform)
           .toList();
 

@@ -20,7 +20,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.Polygon;
 
 class ContourTracerPolygonTest {
@@ -153,9 +152,9 @@ class ContourTracerPolygonTest {
     assertGeometryEquals("POLYGON ((0 0, 0 1, 1 1, 1 0, 0 0))", polygons.get(0));
   }
 
-  public static List<Geometry> trace(double[] grid) {
+  public static List<Polygon> trace(double[] grid) {
     int size = (int) Math.sqrt(grid.length);
-    return new ContourTracer(grid, size, size, false, true).traceContours(0.5);
+    return new ContourTracer(grid, size, size).tracePolygons(0.5);
   }
 
   @Test
@@ -167,7 +166,7 @@ class ContourTracerPolygonTest {
         98.7659308960914, 104.55934526711907, 141.3071569592299, 151.71211629894563,
         139.87179431281479, 144.5483699607932, 171.74295402684095, 175.7901414451639
     };
-    var contours = new ContourTracer(grid, 4, 4, false, true).traceContours(99);
+    var contours = new ContourTracer(grid, 4, 4).tracePolygons(99);
     assertFalse(contours.isEmpty());
     assertTrue(contours.stream().allMatch(Polygon.class::isInstance));
   }
@@ -181,7 +180,7 @@ class ContourTracerPolygonTest {
         490.0, 495.0, 500.0, 497.0,
         499.0, 502.0, 505.0, 500.0,
     };
-    var contours = new ContourTracer(grid, 4, 4, false, true).traceContours(500);
+    var contours = new ContourTracer(grid, 4, 4).tracePolygons(500);
     assertFalse(contours.isEmpty());
     assertTrue(contours.stream().allMatch(Polygon.class::isInstance));
   }

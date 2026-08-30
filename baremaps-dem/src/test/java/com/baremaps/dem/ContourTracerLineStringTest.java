@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.LineString;
 
 class ContourTracerLineStringTest {
 
@@ -151,8 +151,8 @@ class ContourTracerLineStringTest {
     assertTrue(lines.isEmpty());
   }
 
-  List<Geometry> trace(double[] grid) {
-    return new ContourTracer(grid, 2, 2, false, false).traceContours(0.5);
+  List<LineString> trace(double[] grid) {
+    return new ContourTracer(grid, 2, 2).traceLines(0.5);
   }
 
 }

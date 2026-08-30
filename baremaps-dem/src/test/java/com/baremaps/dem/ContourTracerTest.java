@@ -24,21 +24,20 @@ import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.locationtech.jts.geom.Polygon;
 
 class ContourTracerTest {
 
   @Test
-  @DisplayName("Test grid normalization")
+  @DisplayName("Test contour closed along the edges of the grid")
   void testGrid1() {
     var grid = new double[] {
         0, 0, 0,
         0, 1, 0,
         0, 0, 0,
     };
-    var generatedContour = new ContourTracer(grid, 3, 3, true, true).traceContours(0).get(0);
+    var generatedContour = new ContourTracer(grid, 3, 3).tracePolygons(0).get(0);
     assertGeometryEquals(
-        "POLYGON ((0 1.3333333333333333, 0 2.6666666666666665, 1.3333333333333333 2.6666666666666665, 2.6666666666666665 2.6666666666666665, 2.6666666666666665 1.3333333333333333, 2.6666666666666665 0, 1.3333333333333333 0, 0 0, 0 1.3333333333333333))",
+        "POLYGON ((0 1, 0 2, 1 2, 2 2, 2 1, 2 0, 1 0, 0 0, 0 1))",
         generatedContour);
   }
 
@@ -50,8 +49,8 @@ class ContourTracerTest {
     var image = ImageIO.read(file);
     var grid = ElevationUtils.imageToGrid(image, ElevationUtils::rgbToElevation);
     var contours =
-        new ContourTracer(grid, image.getWidth(), image.getHeight(), false, true)
-            .traceContours(500);
+        new ContourTracer(grid, image.getWidth(), image.getHeight())
+            .tracePolygons(500);
     assertFalse(contours.isEmpty());
   }
 
@@ -65,9 +64,9 @@ class ContourTracerTest {
         1, 0, 0, 0, 1,
         1, 1, 1, 1, 1,
     };
-    var generatedContours = new ContourTracer(grid, 5, 5, false, true).traceContours(0.5);
+    var generatedContours = new ContourTracer(grid, 5, 5).tracePolygons(0.5);
     assertEquals(2, generatedContours.size());
-    var polygon1 = (Polygon) generatedContours.get(0);
+    var polygon1 = generatedContours.get(0);
     var exteriorRing = polygon1.getExteriorRing();
     var interiorRing = polygon1.getInteriorRingN(0);
     assertGeometryEquals(
@@ -76,7 +75,7 @@ class ContourTracerTest {
     assertGeometryEquals(
         "LINEARRING (0.5 1, 1 0.5, 2 0.5, 3 0.5, 3.5 1, 3.5 2, 3.5 3, 3 3.5, 2 3.5, 1 3.5, 0.5 3, 0.5 2, 0.5 1)",
         interiorRing);
-    var polygon2 = (Polygon) generatedContours.get(1);
+    var polygon2 = generatedContours.get(1);
     assertGeometryEquals("LINEARRING (1.5 2, 2 2.5, 2.5 2, 2 1.5, 1.5 2)",
         polygon2.getExteriorRing());
   }
