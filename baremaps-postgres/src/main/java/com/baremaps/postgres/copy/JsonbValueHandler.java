@@ -22,30 +22,45 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import de.bytefish.pgbulkinsert.pgsql.handlers.BaseValueHandler;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 
+/**
+ * Encodes a value as a Postgres {@code jsonb} field.
+ *
+ * <p>
+ * A {@code String} handed to this handler is written through as raw JSON rather than quoted as a
+ * JSON string, so callers pass documents they have already serialized. Quoting them again would
+ * store the document as a JSON string literal instead of the object it represents.
+ */
 public class JsonbValueHandler extends BaseValueHandler<Object> {
 
-  private static final ObjectMapper objectMapper;
+  /** The version byte that opens the jsonb wire format. Only version 1 has ever been defined. */
+  private static final int PROTOCOL_VERSION = 1;
 
-  static {
-    objectMapper = new ObjectMapper();
-    SimpleModule module = new SimpleModule();
-    module.addSerializer(String.class, new NoQuotesStringSerializer());
-    objectMapper.registerModule(module);
+  private static final ObjectMapper objectMapper = objectMapper();
+
+  private static ObjectMapper objectMapper() {
+    var mapper = new ObjectMapper();
+    var module = new SimpleModule();
+    module.addSerializer(String.class, new RawJsonSerializer());
+    mapper.registerModule(module);
+    return mapper;
   }
 
-  static class NoQuotesStringSerializer extends JsonSerializer<String> {
+  /** Writes a string as the JSON it already is, rather than as a quoted JSON string. */
+  static class RawJsonSerializer extends JsonSerializer<String> {
     @Override
-    public void serialize(String value, JsonGenerator gen, SerializerProvider serializers)
+    public void serialize(String value, JsonGenerator generator, SerializerProvider serializers)
         throws IOException {
-      gen.writeRawValue(value);
+      generator.writeRawValue(value);
     }
   }
 
   private final int jsonbProtocolVersion;
 
   public JsonbValueHandler() {
-    this(1);
+    this(PROTOCOL_VERSION);
   }
 
   public JsonbValueHandler(int jsonbProtocolVersion) {
@@ -53,29 +68,31 @@ public class JsonbValueHandler extends BaseValueHandler<Object> {
   }
 
   private static byte[] asJson(Object object) throws IOException {
-    try {
-      String value = objectMapper.writeValueAsString(object);
-      return value.getBytes("UTF-8");
-    } catch (Exception e) {
-      throw new IOException(e);
-    }
+    return objectMapper.writeValueAsString(object).getBytes(StandardCharsets.UTF_8);
   }
 
   @Override
   protected void internalHandle(DataOutputStream buffer, Object value) throws IOException {
-    byte[] utf8Bytes = asJson(value);
-    buffer.writeInt(utf8Bytes.length + 1);
+    byte[] json = asJson(value);
+    buffer.writeInt(json.length + 1);
     buffer.writeByte(jsonbProtocolVersion);
-    buffer.write(utf8Bytes);
+    buffer.write(json);
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>
+   * The length has to match what {@link #internalHandle} writes, version byte included. Only a
+   * {@code CollectionValueHandler} asks for it, to size the elements of an array; the copy path
+   * itself does not.
+   */
   @Override
   public int getLength(Object value) {
     try {
-      byte[] utf8Bytes = asJson(value);
-      return utf8Bytes.length;
+      return asJson(value).length + 1;
     } catch (IOException e) {
-      return 0;
+      throw new UncheckedIOException(e);
     }
   }
 }

@@ -12,11 +12,10 @@
  * limitations under the License.
  */
 
-package com.baremaps.postgres.metadata;
+package com.baremaps.postgres.utils;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.baremaps.postgres.utils.PostgresUtils;
 import com.baremaps.testing.PostgresContainerTest;
 import java.io.IOException;
 import java.sql.Connection;
@@ -27,7 +26,7 @@ import java.sql.SQLException;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-class PostgresMetadataTest extends PostgresContainerTest {
+class PostgresUtilsTest extends PostgresContainerTest {
 
   @Test
   @Tag("integration")

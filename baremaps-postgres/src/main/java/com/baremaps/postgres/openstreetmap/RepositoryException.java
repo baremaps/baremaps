@@ -14,7 +14,13 @@
 
 package com.baremaps.postgres.openstreetmap;
 
-/** Signals that an exception occurred in a {@code Repository}. */
+/**
+ * Signals that a repository could not read or write what it was asked to.
+ *
+ * <p>
+ * Checked, so that a caller has to decide what a failed write means for the import it is running
+ * rather than discover it at runtime.
+ */
 public class RepositoryException extends Exception {
 
   /** Constructs a {@code RepositoryException} with {@code null} as its error detail message. */

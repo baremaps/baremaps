@@ -19,8 +19,12 @@ import static com.baremaps.data.stream.ConsumerUtils.consumeThenReturn;
 import com.baremaps.openstreetmap.GeometryOptions;
 import com.baremaps.openstreetmap.function.ChangeEntitiesHandler;
 import com.baremaps.openstreetmap.model.Entity;
+import com.baremaps.openstreetmap.model.Node;
+import com.baremaps.openstreetmap.model.Relation;
+import com.baremaps.openstreetmap.model.Way;
 import com.baremaps.openstreetmap.xml.XmlChangeReader;
-import com.baremaps.postgres.openstreetmap.CopyChangeImporter;
+import com.baremaps.postgres.openstreetmap.ChangeImporter;
+import com.baremaps.postgres.openstreetmap.ChangeImporter.Mode;
 import com.baremaps.postgres.openstreetmap.NodeRepository;
 import com.baremaps.postgres.openstreetmap.RelationRepository;
 import com.baremaps.postgres.openstreetmap.WayRepository;
@@ -99,7 +103,11 @@ public class ImportOsmOsc implements Task {
     var geometryOptions = new GeometryOptions(coordinateMap, referenceMap, databaseSrid);
     var prepareChange = consumeThenReturn(
         new ChangeEntitiesHandler<>(Entity.class, geometryOptions.entityHandler()));
-    var importChange = new CopyChangeImporter(nodeRepository, wayRepository, relationRepository);
+    // One importer per entity type, applied in reference order: ways and relations read the nodes
+    // the earlier importers have already stored.
+    var importChange = new ChangeImporter<>(Node.class, nodeRepository, Mode.COPY)
+        .andThen(new ChangeImporter<>(Way.class, wayRepository, Mode.COPY))
+        .andThen(new ChangeImporter<>(Relation.class, relationRepository, Mode.COPY));
 
     try (var changeInputStream =
         new BufferedInputStream(compression.decompress(Files.newInputStream(path)))) {

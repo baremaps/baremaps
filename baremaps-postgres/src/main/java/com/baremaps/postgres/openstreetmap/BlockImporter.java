@@ -14,13 +14,24 @@
 
 package com.baremaps.postgres.openstreetmap;
 
-
-
 import com.baremaps.data.stream.StreamException;
-import com.baremaps.openstreetmap.model.*;
+import com.baremaps.openstreetmap.model.Block;
+import com.baremaps.openstreetmap.model.DataBlock;
+import com.baremaps.openstreetmap.model.Header;
+import com.baremaps.openstreetmap.model.HeaderBlock;
+import com.baremaps.openstreetmap.model.Node;
+import com.baremaps.openstreetmap.model.Relation;
+import com.baremaps.openstreetmap.model.Way;
 import java.util.function.Consumer;
 
-/** A consumer for importing OpenStreetMap blocks in a database. */
+/**
+ * Stores the blocks of an OpenStreetMap PBF file in a database.
+ *
+ * <p>
+ * A data block holds entities that have never been seen before, so its rows go in through the
+ * binary copy interface rather than through inserts that would check for a conflict on every one of
+ * them.
+ */
 public class BlockImporter implements Consumer<Block> {
 
   private final Repository<Long, Header> headerRepository;
@@ -29,12 +40,12 @@ public class BlockImporter implements Consumer<Block> {
   private final Repository<Long, Relation> relationRepository;
 
   /**
-   * Constructs a {@code SaveBlockConsumer}.
+   * Constructs a {@code BlockImporter}.
    *
-   * @param headerRepository the header table
-   * @param nodeRepository the node table
-   * @param wayRepository the way table
-   * @param relationRepository the relation table
+   * @param headerRepository the header repository
+   * @param nodeRepository the node repository
+   * @param wayRepository the way repository
+   * @param relationRepository the relation repository
    */
   public BlockImporter(
       Repository<Long, Header> headerRepository,
@@ -47,6 +58,11 @@ public class BlockImporter implements Consumer<Block> {
     this.relationRepository = relationRepository;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @throws StreamException if the block cannot be stored
+   */
   @Override
   public void accept(Block block) {
     try {
@@ -58,7 +74,7 @@ public class BlockImporter implements Consumer<Block> {
           relationRepository.copy(dataBlock.relations());
         }
       }
-    } catch (Exception e) {
+    } catch (RepositoryException e) {
       throw new StreamException(e);
     }
   }

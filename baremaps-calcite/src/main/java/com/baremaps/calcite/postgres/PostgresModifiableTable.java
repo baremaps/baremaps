@@ -234,7 +234,7 @@ public class PostgresModifiableTable extends AbstractTable
         return;
       }
       switch (field.getType().getSqlTypeName()) {
-        case GEOMETRY -> writer.write(CopyWriter.GEOMETRY_HANDLER, (Geometry) value);
+        case GEOMETRY -> writer.writeGeometry((Geometry) value);
         case BOOLEAN -> writer.writeBoolean((Boolean) value);
         case TINYINT -> writer.writeByte((Byte) value);
         case SMALLINT -> writer.writeShort((Short) value);
@@ -242,8 +242,8 @@ public class PostgresModifiableTable extends AbstractTable
         case BIGINT -> writer.writeLong((Long) value);
         case FLOAT, REAL -> writer.writeFloat((Float) value);
         case DOUBLE, DECIMAL -> writer.writeDouble(((Number) value).doubleValue());
-        case DATE -> writer.write(CopyWriter.LOCAL_DATE_HANDLER, (LocalDate) value);
-        case TIMESTAMP -> writer.write(CopyWriter.LOCAL_DATE_TIME_HANDLER, (LocalDateTime) value);
+        case DATE -> writer.writeLocalDate((LocalDate) value);
+        case TIMESTAMP -> writer.writeLocalDateTime((LocalDateTime) value);
         case OTHER -> writer.writeJsonb(value.toString());
         default -> writer.write(value.toString());
       }

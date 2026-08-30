@@ -14,12 +14,14 @@
 
 package com.baremaps.postgres.openstreetmap;
 
-
-
 import java.util.List;
 
 /**
- * Provides an interface to a repository.
+ * Reads and writes the values of a repository.
+ *
+ * <p>
+ * Creating and dropping the tables is the business of {@link OsmSchema}, so that this interface
+ * says one thing: how entities go in and come out.
  *
  * @param <K> The type of the keys
  * @param <V> The type of the values
@@ -27,32 +29,10 @@ import java.util.List;
 public interface Repository<K, V> {
 
   /**
-   * Creates the repository.
-   *
-   * @throws RepositoryException
-   */
-  void create() throws RepositoryException;
-
-  /**
-   * Drops the repository.
-   *
-   * @throws RepositoryException
-   */
-  void drop() throws RepositoryException;
-
-  /**
-   * Truncate the repository.
-   *
-   * @throws RepositoryException
-   */
-  void truncate() throws RepositoryException;
-
-  /**
    * Gets a value by its key.
    *
    * @param key the id of the value
    * @return the selected value if it exists, null otherwise
-   * @throws RepositoryException
    */
   V get(K key) throws RepositoryException;
 
@@ -60,24 +40,22 @@ public interface Repository<K, V> {
    * Gets a list of values by their keys.
    *
    * @param keys a list of keys
-   * @return a list of values
-   * @throws RepositoryException
+   * @return the value of each key, in the order asked for, with null for the absent ones
    */
   List<V> get(List<K> keys) throws RepositoryException;
 
   /**
-   * Puts a new value into the repository.
+   * Puts a value into the repository, replacing the one it already holds under that key.
    *
    * @param value the value to put
-   * @throws RepositoryException
    */
   void put(V value) throws RepositoryException;
 
   /**
-   * Puts a list of values into the repository.
+   * Puts a list of values into the repository, replacing the ones it already holds under those
+   * keys.
    *
    * @param values a list of the values to put
-   * @throws RepositoryException
    */
   void put(List<V> values) throws RepositoryException;
 
@@ -85,7 +63,6 @@ public interface Repository<K, V> {
    * Deletes a value by key.
    *
    * @param key the key of the value to delete
-   * @throws RepositoryException
    */
   void delete(K key) throws RepositoryException;
 
@@ -93,15 +70,14 @@ public interface Repository<K, V> {
    * Deletes a list of values in the repository.
    *
    * @param keys the list of keys
-   * @throws RepositoryException
    */
   void delete(List<K> keys) throws RepositoryException;
 
   /**
-   * Imports the given values into the repository using a fast copy interface.
+   * Imports the given values using the binary copy interface, which is faster than {@link #put} but
+   * does not replace the rows it collides with.
    *
    * @param values a list of the values to add
-   * @throws RepositoryException If an exception occurs while copying
    */
   void copy(List<V> values) throws RepositoryException;
 }

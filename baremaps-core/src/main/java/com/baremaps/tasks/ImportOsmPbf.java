@@ -82,26 +82,14 @@ public class ImportOsmPbf implements Task {
     var wayRepository = new WayRepository(datasource);
     var relationRepository = new RelationRepository(datasource);
 
-    // Drop the existing tables
+    // Replace or empty the tables the import is about to fill
+    var schema = new OsmSchema(datasource);
     if (TRUE.equals(replaceExisting)) {
-      headerRepository.drop();
-      nodeRepository.drop();
-      wayRepository.drop();
-      relationRepository.drop();
-
-      // Create the new tables
-      headerRepository.create();
-      nodeRepository.create();
-      wayRepository.create();
-      relationRepository.create();
+      schema.drop();
+      schema.create();
     }
-
-    // Truncate the existing tables
     if (TRUE.equals(truncateTables)) {
-      headerRepository.truncate();
-      nodeRepository.truncate();
-      wayRepository.truncate();
-      relationRepository.truncate();
+      schema.truncate();
     }
 
     // Closing the maps persists them in the cache directory for the updates that follow.

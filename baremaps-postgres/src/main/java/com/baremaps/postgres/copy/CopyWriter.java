@@ -24,25 +24,40 @@
 
 package com.baremaps.postgres.copy;
 
-
-import de.bytefish.pgbulkinsert.pgsql.handlers.*;
+import de.bytefish.pgbulkinsert.pgsql.handlers.BooleanValueHandler;
+import de.bytefish.pgbulkinsert.pgsql.handlers.ByteValueHandler;
+import de.bytefish.pgbulkinsert.pgsql.handlers.CollectionValueHandler;
+import de.bytefish.pgbulkinsert.pgsql.handlers.DoubleValueHandler;
+import de.bytefish.pgbulkinsert.pgsql.handlers.FloatValueHandler;
+import de.bytefish.pgbulkinsert.pgsql.handlers.IntegerValueHandler;
+import de.bytefish.pgbulkinsert.pgsql.handlers.LocalDateTimeValueHandler;
+import de.bytefish.pgbulkinsert.pgsql.handlers.LocalDateValueHandler;
+import de.bytefish.pgbulkinsert.pgsql.handlers.LongValueHandler;
+import de.bytefish.pgbulkinsert.pgsql.handlers.ShortValueHandler;
+import de.bytefish.pgbulkinsert.pgsql.handlers.StringValueHandler;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.Inet4Address;
-import java.net.Inet6Address;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
-import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Geometry;
 import org.postgresql.copy.PGCopyOutputStream;
 import org.postgresql.core.Oid;
 
 /**
- * A helper for writing in a {@code PGCopyOutputStream}.
+ * Writes rows in the binary format of the Postgres {@code COPY} command.
+ *
+ * <p>
+ * A caller writes the header once, then one {@link #startRow} and one {@code write} per column for
+ * each row, in the order the {@code COPY} statement named the columns. Passing {@code null} to any
+ * of the {@code write} methods writes an SQL null.
+ *
+ * <p>
+ * The value handlers that encode each type are an implementation detail and stay private: the module
+ * writes a fixed set of Postgres types, and a method per type is what keeps the column order at a
+ * call site readable against the statement it mirrors.
  *
  * <p>
  * This code has been adapted from
@@ -54,94 +69,58 @@ import org.postgresql.core.Oid;
  */
 public class CopyWriter implements AutoCloseable {
 
-  public static final StringValueHandler STRING_HANDLER =
-      new StringValueHandler();
+  private static final StringValueHandler STRING_HANDLER = new StringValueHandler();
 
-  public static final CollectionValueHandler<String, Collection<String>> STRING_COLLECTION_HANDLER =
+  private static final CollectionValueHandler<String, Collection<String>> STRING_COLLECTION_HANDLER =
       new CollectionValueHandler<>(Oid.TEXT, new StringValueHandler());
 
-  public static final BooleanValueHandler BOOLEAN_HANDLER =
-      new BooleanValueHandler();
+  private static final BooleanValueHandler BOOLEAN_HANDLER = new BooleanValueHandler();
 
-  public static final CollectionValueHandler<Boolean, Collection<Boolean>> BOOLEAN_COLLECTION_HANDLER =
-      new CollectionValueHandler<>(Oid.BOOL, new BooleanValueHandler());
+  private static final ByteValueHandler<Number> BYTE_HANDLER = new ByteValueHandler<>();
 
-  public static final ByteValueHandler<Number> BYTE_HANDLER =
-      new ByteValueHandler<>();
+  private static final ShortValueHandler<Number> SHORT_HANDLER = new ShortValueHandler<>();
 
-  public static final ByteArrayValueHandler BYTE_ARRAY_HANDLER =
-      new ByteArrayValueHandler();
+  private static final IntegerValueHandler<Number> INTEGER_HANDLER = new IntegerValueHandler<>();
 
-  public static final ShortValueHandler<Number> SHORT_HANDLER =
-      new ShortValueHandler<>();
-
-  public static final CollectionValueHandler<Short, Collection<Short>> SHORT_COLLECTION_HANDLER =
-      new CollectionValueHandler<>(Oid.INT2, new ShortValueHandler<>());
-
-  public static final IntegerValueHandler<Number> INTEGER_HANDLER =
-      new IntegerValueHandler<>();
-
-  public static final CollectionValueHandler<Integer, Collection<Integer>> INTEGER_COLLECTION_HANDLER =
+  private static final CollectionValueHandler<Integer, Collection<Integer>> INTEGER_COLLECTION_HANDLER =
       new CollectionValueHandler<>(Oid.INT4, new IntegerValueHandler<>());
 
-  public static final LongValueHandler<Number> LONG_HANDLER =
-      new LongValueHandler<>();
+  private static final LongValueHandler<Number> LONG_HANDLER = new LongValueHandler<>();
 
-  public static final CollectionValueHandler<Long, Collection<Long>> LONG_COLLECTION_HANDLER =
+  private static final CollectionValueHandler<Long, Collection<Long>> LONG_COLLECTION_HANDLER =
       new CollectionValueHandler<>(Oid.INT8, new LongValueHandler<>());
 
-  public static final FloatValueHandler<Number> FLOAT_HANDLER =
-      new FloatValueHandler<>();
+  private static final FloatValueHandler<Number> FLOAT_HANDLER = new FloatValueHandler<>();
 
-  public static final CollectionValueHandler<Float, Collection<Float>> FLOAT_COLLECTION_HANDLER =
-      new CollectionValueHandler<>(Oid.FLOAT4, new FloatValueHandler<>());
+  private static final DoubleValueHandler<Number> DOUBLE_HANDLER = new DoubleValueHandler<>();
 
-  public static final DoubleValueHandler<Number> DOUBLE_HANDLER =
-      new DoubleValueHandler<>();
+  private static final LocalDateValueHandler LOCAL_DATE_HANDLER = new LocalDateValueHandler();
 
-  public static final CollectionValueHandler<Double, Collection<Double>> DOUBLE_COLLECTION_HANDLER =
-      new CollectionValueHandler<>(Oid.FLOAT8, new DoubleValueHandler<>());
-
-  public static final LocalDateValueHandler LOCAL_DATE_HANDLER =
-      new LocalDateValueHandler();
-
-  public static final LocalDateTimeValueHandler LOCAL_DATE_TIME_HANDLER =
+  private static final LocalDateTimeValueHandler LOCAL_DATE_TIME_HANDLER =
       new LocalDateTimeValueHandler();
 
-  public static final Inet4AddressValueHandler INET_4_ADDRESS_HANDLER =
-      new Inet4AddressValueHandler();
+  private static final JsonbValueHandler JSONB_HANDLER = new JsonbValueHandler();
 
-  public static final Inet6AddressValueHandler INET_6_ADDRESS_HANDLER =
-      new Inet6AddressValueHandler();
+  private static final GeometryValueHandler GEOMETRY_HANDLER = new GeometryValueHandler();
 
-  public static final HstoreValueHandler HSTORE_HANDLER =
-      new HstoreValueHandler();
-
-  public static final JsonbValueHandler JSONB_HANDLER =
-      new JsonbValueHandler();
-
-  public static final GeometryValueHandler GEOMETRY_HANDLER =
-      new GeometryValueHandler();
-
-  public static final EnvelopeValueHandler ENVELOPE_HANDLER =
-      new EnvelopeValueHandler();
+  /**
+   * The copy stream sends whatever it is handed, so the rows are buffered into batches large enough
+   * to keep the round trips down during an import of hundreds of millions of entities.
+   */
+  private static final int BUFFER_SIZE = 65536;
 
   private final DataOutputStream data;
 
   /**
-   * Creates a new writer with the specified {@code PGCopyOutputStream}.
+   * Creates a new writer over the given copy stream.
    *
-   * @param data
+   * @param data the stream opened for the {@code COPY ... FROM STDIN BINARY} statement
    */
   public CopyWriter(PGCopyOutputStream data) {
-    this.data = new DataOutputStream(new BufferedOutputStream(data, 65536));
+    this.data = new DataOutputStream(new BufferedOutputStream(data, BUFFER_SIZE));
   }
 
-  /**
-   * Writes the header of the query.
-   *
-   * @throws IOException
-   */
+  /** Writes the file header, once, before the first row. */
   public void writeHeader() throws IOException {
     // 11 bytes required header
     data.writeBytes("PGCOPY\n\377\r\n\0");
@@ -152,259 +131,111 @@ public class CopyWriter implements AutoCloseable {
   }
 
   /**
-   * Writes the number of columns affected by the query.
+   * Starts a row.
    *
-   * @param columns
-   * @throws IOException
+   * @param columns the number of columns the row is about to write
    */
   public void startRow(int columns) throws IOException {
     data.writeShort(columns);
   }
 
-  /**
-   * Writes a null value.
-   *
-   * @throws IOException
-   */
+  /** Writes a null value. */
   public void writeNull() throws IOException {
     data.writeInt(-1);
   }
 
-  /**
-   * Writes a null value.
-   *
-   * @param handler the value handler
-   * @param value the value
-   */
-  public <T> void write(BaseValueHandler<T> handler, T value) {
-    handler.handle(data, value);
-  }
-
-  /**
-   * Writes a string value.
-   *
-   * @param value the value
-   */
+  /** Writes a text value. */
   public void write(String value) {
     STRING_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a list of string values.
-   *
-   * @param value the value
-   */
+  /** Writes an array of text values. */
   public void write(List<String> value) {
     STRING_COLLECTION_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a boolean value.
-   *
-   * @param value the value
-   */
+  /** Writes a boolean value. */
   public void writeBoolean(Boolean value) {
     BOOLEAN_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a list of boolean values.
-   *
-   * @param value the value
-   */
-  public void writeBooleanList(List<Boolean> value) {
-    BOOLEAN_COLLECTION_HANDLER.handle(data, value);
-  }
-
-  /**
-   * Writes a byte value.
-   *
-   * @param value the value
-   */
+  /** Writes a byte value. */
   public void writeByte(Byte value) {
     BYTE_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a byte array value.
-   *
-   * @param value the value
-   */
-  public void writeByteArray(byte[] value) {
-    BYTE_ARRAY_HANDLER.handle(data, value);
-  }
-
-  /**
-   * Writes a short value.
-   *
-   * @param value the value
-   */
+  /** Writes a short value. */
   public void writeShort(Short value) {
     SHORT_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a list of short values.
-   *
-   * @param value the value
-   */
-  public void writeShortList(List<Short> value) {
-    SHORT_COLLECTION_HANDLER.handle(data, value);
-  }
-
-  /**
-   * Writes an integer value.
-   *
-   * @param value the value
-   */
+  /** Writes an integer value. */
   public void writeInteger(Integer value) {
     INTEGER_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a list of integer values.
-   *
-   * @param value the value
-   */
+  /** Writes an array of integer values. */
   public void writeIntegerList(List<Integer> value) {
     INTEGER_COLLECTION_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a long value.
-   *
-   * @param value the value
-   */
+  /** Writes a long value. */
   public void writeLong(Long value) {
     LONG_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a list of long values.
-   *
-   * @param value the value
-   */
+  /** Writes an array of long values. */
   public void writeLongList(List<Long> value) {
     LONG_COLLECTION_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a float value.
-   *
-   * @param value the value
-   */
+  /** Writes a float value. */
   public void writeFloat(Float value) {
     FLOAT_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a list of float values.
-   *
-   * @param value the value
-   */
-  public void writeFloatList(List<Float> value) {
-    FLOAT_COLLECTION_HANDLER.handle(data, value);
-  }
-
-  /**
-   * Writes a double value.
-   *
-   * @param value the value
-   */
+  /** Writes a double value. */
   public void writeDouble(Double value) {
     DOUBLE_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a list of double values.
-   *
-   * @param value the value
-   */
-  public void writeDoubleArray(List<Double> value) {
-    DOUBLE_COLLECTION_HANDLER.handle(data, value);
-  }
-
-  /**
-   * Writes a date value.
-   *
-   * @param value the value
-   */
+  /** Writes a date value. */
   public void writeLocalDate(LocalDate value) {
     LOCAL_DATE_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a list of date values.
-   *
-   * @param value the value
-   */
+  /** Writes a timestamp value. */
   public void writeLocalDateTime(LocalDateTime value) {
     LOCAL_DATE_TIME_HANDLER.handle(data, value);
   }
 
   /**
-   * Writes an inet adress value.
+   * Writes a jsonb value.
    *
-   * @param value the value
-   */
-  public void writeInet4Adress(Inet4Address value) {
-    INET_4_ADDRESS_HANDLER.handle(data, value);
-  }
-
-  /**
-   * Writes a list of inet adress values.
-   *
-   * @param value the value
-   */
-  public void writeInet6Adress(Inet6Address value) {
-    INET_6_ADDRESS_HANDLER.handle(data, value);
-  }
-
-  /**
-   * Writes a map value.
-   *
-   * @param value the value
-   */
-  public void writeHstore(Map<String, String> value) {
-    HSTORE_HANDLER.handle(data, value);
-  }
-
-  /**
-   * Writes a jsonb array
-   *
-   * @param value the value
+   * @param value the value, already serialized as JSON; see {@link JsonbValueHandler}
    */
   public void writeJsonb(String value) {
     JSONB_HANDLER.handle(data, value);
   }
 
-  /**
-   * Writes a geometry value.
-   *
-   * @param value the value
-   */
+  /** Writes a geometry value, as EWKB. */
   public void writeGeometry(Geometry value) {
     GEOMETRY_HANDLER.handle(data, value);
   }
 
   /**
-   * Writes an envelope value.
+   * Writes the file trailer and closes the stream, ending the copy.
    *
-   * @param value the value
-   */
-  public void writeEnvelope(Envelope value) {
-    ENVELOPE_HANDLER.handle(data, value);
-  }
-
-  /**
-   * Writes the end of the row.
-   *
-   * @throws IOException
+   * <p>
+   * The trailer is written unconditionally, so a caller that abandons a copy part way through a
+   * try-with-resources still ends it, and the rows already flushed are committed. Callers of this
+   * class delete the rows they are about to copy first, which makes replaying the batch after such a
+   * failure produce the same table.
    */
   @Override
   public void close() throws IOException {
-    data.writeShort(-1);
-    data.flush();
-    data.close();
+    try (data) {
+      data.writeShort(-1);
+    }
   }
 }

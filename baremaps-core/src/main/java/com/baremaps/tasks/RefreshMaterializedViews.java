@@ -14,13 +14,9 @@
 
 package com.baremaps.tasks;
 
-import com.baremaps.postgres.refresh.DatabaseMetadataRetriever;
-import com.baremaps.postgres.refresh.DependencyGraphBuilder;
 import com.baremaps.postgres.refresh.MaterializedViewRefresher;
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
-import java.sql.SQLException;
-import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,31 +36,7 @@ public class RefreshMaterializedViews implements Task {
 
   @Override
   public void execute(WorkflowContext context) throws Exception {
-    DataSource dataSource = context.getDataSource(database);
-    try (var connection = dataSource.getConnection()) {
-      LOGGER.info("Connected to PostgreSQL database.");
-
-      // Get the schema of the database.
-      var schema = connection.getSchema();
-
-      // Retrieve database objects (tables, views, materialized views).
-      var objects = DatabaseMetadataRetriever.getObjects(connection, schema);
-
-      // Retrieve dependencies between database objects.
-      var dependencies = DatabaseMetadataRetriever.getDependencies(connection, schema, objects);
-
-      // Build a directed graph of dependencies between the database objects.
-      var graph = DependencyGraphBuilder.buildGraph(objects, dependencies);
-
-      // Perform a topological sort so that dependencies come before dependents.
-      var sorted = DependencyGraphBuilder.topologicalSort(graph);
-
-      // Refresh materialized views, dropping and recreating indexes if present.
-      MaterializedViewRefresher.refreshMaterializedViews(connection, sorted);
-
-      LOGGER.info("Done refreshing materialized views.");
-    } catch (SQLException ex) {
-      LOGGER.error("Database error", ex);
-    }
+    new MaterializedViewRefresher(context.getDataSource(database)).refresh();
+    LOGGER.info("Done refreshing materialized views.");
   }
 }

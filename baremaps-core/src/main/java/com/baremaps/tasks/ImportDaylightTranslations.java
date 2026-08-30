@@ -87,10 +87,8 @@ public class ImportDaylightTranslations implements Task {
     var wayRepository = new WayRepository(datasource);
     var relationRepository = new RelationRepository(datasource);
 
-    // Initialize the repositories
-    nodeRepository.create();
-    wayRepository.create();
-    relationRepository.create();
+    // Initialize the tables
+    new OsmSchema(datasource).create();
 
     // Process the file
     try (var lines = Files.lines(file)) {

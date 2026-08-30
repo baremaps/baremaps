@@ -14,74 +14,69 @@
 
 package com.baremaps.postgres.utils;
 
-
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Resources;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.io.IOException;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Map;
+import java.util.Properties;
 import javax.sql.DataSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A helper class for creating data sources and executing queries.
  */
 public final class PostgresUtils {
 
-  private static final Logger logger = LoggerFactory.getLogger(PostgresUtils.class);
+  /**
+   * How many times a statement is executed before pgjdbc promotes it to a server-side prepared
+   * statement. The default of 5 promotes the ad hoc queries of a tile server too eagerly, filling
+   * the server's statement cache with plans it will not reuse.
+   */
+  private static final String PREPARE_THRESHOLD = "100";
 
   private PostgresUtils() {}
 
   /**
-   * Creates a data source from an object, either a JDBC url or a json representation of a database.
+   * Creates a data source from a configuration, either a JDBC url or the object form of a
+   * {@link HikariConfig}.
    *
-   * @param database the database object, either a JDBC url or a json representation of a database
+   * @param database the JDBC url, or a map of Hikari properties such as {@code jdbcUrl} and
+   *        {@code maximumPoolSize}
    * @return the data source
    */
   public static DataSource createDataSourceFromObject(Object database) {
     if (database instanceof String url) {
       return createDataSource(url);
-    } else {
-      var json = new ObjectMapper().convertValue(database, Database.class);
-      return createDataSource(json);
     }
+    // Hikari already knows how to read its own settings from properties, and its property names are
+    // the ones the configuration files use, so there is nothing to translate.
+    var fields =
+        new ObjectMapper().convertValue(database, new TypeReference<Map<String, Object>>() {});
+    var properties = new Properties();
+    fields.forEach((name, value) -> {
+      if (value != null) {
+        properties.setProperty(name, String.valueOf(value));
+      }
+    });
+    return createDataSource(new HikariConfig(properties));
   }
 
   /**
-   * Creates a data source from parameters.
+   * Creates a data source from a JDBC url, sized for the machine it runs on.
    *
-   * @param host the host
-   * @param port the port
-   * @param database the database
-   * @param username the username
-   * @param password the password
+   * @param jdbcUrl the JDBC url
    * @return the data source
    */
-  public static DataSource createDataSource(
-      String host,
-      Integer port,
-      String database,
-      String username,
-      String password) {
-    return createDataSource(
-        String.format("jdbc:postgresql://%s:%s/%s?&user=%s&password=%s", host, port,
-            database, username, password));
-  }
-
-  /**
-   * Creates a data source from a JDBC url.
-   *
-   * @param database the JDBC url
-   * @return the data source
-   */
-  public static DataSource createDataSource(String database) {
-    return createDataSource(database, Runtime.getRuntime().availableProcessors() * 2);
+  public static DataSource createDataSource(String jdbcUrl) {
+    // The import and export tasks are IO bound on the database, so they keep more connections busy
+    // than the machine has cores.
+    return createDataSource(jdbcUrl, Runtime.getRuntime().availableProcessors() * 2);
   }
 
   /**
@@ -95,67 +90,14 @@ public final class PostgresUtils {
     if (poolSize < 1) {
       throw new IllegalArgumentException("PoolSize cannot be inferior to 1");
     }
-
     var config = new HikariConfig();
     config.setJdbcUrl(jdbcUrl);
     config.setMaximumPoolSize(poolSize);
-    config.addDataSourceProperty("allowMultiQueries", true);
-    config.addDataSourceProperty("prepareThreshold", 100);
-
-    return new HikariDataSource(config);
+    return createDataSource(config);
   }
 
-  /**
-   * Creates a data source from a json representation of a database.
-   *
-   * @param datasource the object representation of a database
-   * @return the data source
-   */
-  public static DataSource createDataSource(Database datasource) {
-    var config = new HikariConfig();
-    if (datasource.getDataSourceClassName() != null) {
-      config.setDataSourceClassName(datasource.getDataSourceClassName());
-    }
-    if (datasource.getJdbcUrl() != null) {
-      config.setJdbcUrl(datasource.getJdbcUrl());
-    }
-    if (datasource.getUsername() != null) {
-      config.setUsername(datasource.getUsername());
-    }
-    if (datasource.getPassword() != null) {
-      config.setPassword(datasource.getPassword());
-    }
-    if (datasource.getAutoCommit() != null) {
-      config.setAutoCommit(datasource.getAutoCommit());
-    }
-    if (datasource.getConnectionTimeout() != null) {
-      config.setConnectionTimeout(datasource.getConnectionTimeout());
-    }
-    if (datasource.getIdleTimeout() != null) {
-      config.setInitializationFailTimeout(datasource.getIdleTimeout());
-    }
-    if (datasource.getKeepAliveTime() != null) {
-      config.setKeepaliveTime(datasource.getKeepAliveTime());
-    }
-    if (datasource.getMaxLifetime() != null) {
-      config.setMaxLifetime(datasource.getMaxLifetime());
-    }
-    if (datasource.getMinimumIdle() != null) {
-      config.setMinimumIdle(datasource.getMinimumIdle());
-    }
-    if (datasource.getMaximumPoolSize() != null) {
-      config.setMaximumPoolSize(datasource.getMaximumPoolSize());
-    }
-    if (datasource.getPoolName() != null) {
-      config.setPoolName(datasource.getPoolName());
-    }
-    if (datasource.getReadOnly() != null) {
-      config.setReadOnly(datasource.getReadOnly());
-    }
-
-    config.addDataSourceProperty("allowMultiQueries", true);
-    config.addDataSourceProperty("prepareThreshold", 100);
-
+  private static DataSource createDataSource(HikariConfig config) {
+    config.addDataSourceProperty("prepareThreshold", PREPARE_THRESHOLD);
     return new HikariDataSource(config);
   }
 
@@ -169,18 +111,18 @@ public final class PostgresUtils {
    */
   public static void executeResource(Connection connection, String resource)
       throws IOException, SQLException {
-    URL resourceURL = Resources.getResource(resource);
-    String queries = Resources.toString(resourceURL, StandardCharsets.UTF_8);
+    var resourceUrl = Resources.getResource(resource);
+    var queries = Resources.toString(resourceUrl, StandardCharsets.UTF_8);
     try (Statement statement = connection.createStatement()) {
       statement.execute(queries);
     }
   }
 
   /**
-   * Gets the version of the Postgres database.
+   * Gets the major version of the Postgres database.
    *
    * @param datasource the data source
-   * @return the version of the Postgres database
+   * @return the major version of the Postgres database
    * @throws SQLException if a database access error occurs
    */
   public static int getPostgresVersion(DataSource datasource) throws SQLException {

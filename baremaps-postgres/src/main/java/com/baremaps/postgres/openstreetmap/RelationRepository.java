@@ -20,345 +20,121 @@ import com.baremaps.openstreetmap.model.Member;
 import com.baremaps.openstreetmap.model.Member.MemberType;
 import com.baremaps.openstreetmap.model.Relation;
 import com.baremaps.postgres.copy.CopyWriter;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import java.io.IOException;
-import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 import javax.sql.DataSource;
-import org.locationtech.jts.geom.Geometry;
-import org.postgresql.PGConnection;
-import org.postgresql.copy.PGCopyOutputStream;
 
-/** Provides an implementation of the {@code RelationRepository} baked by Postgres. */
-public class RelationRepository implements Repository<Long, Relation> {
+/**
+ * Stores OpenStreetMap relations in Postgres.
+ *
+ * <p>
+ * A member has a reference, a type and a role. Postgres has no array of records, so the members are
+ * stored as three parallel arrays, which the mappers below zip back together.
+ */
+public class RelationRepository extends AbstractRepository<Relation> {
 
-  private final DataSource dataSource;
+  private static final List<Column> COLUMNS = List.of(
+      Column.of("id", "int8"),
+      Column.of("version", "int"),
+      Column.of("uid", "int"),
+      Column.of("timestamp", "timestamp without time zone"),
+      Column.of("changeset", "int8"),
+      Column.jsonb("tags"),
+      Column.of("member_refs", "int8[]"),
+      Column.of("member_types", "int[]"),
+      Column.of("member_roles", "text[]"),
+      Column.geometry("geom", "geometry"));
 
-  private final String createTable;
-
-  private final String dropTable;
-
-  private final String truncateTable;
-
-  private final String select;
-
-  private final String selectIn;
-
-  private final String insert;
-
-  private final String delete;
-
-  private final String deleteIn;
-
-  private final String copy;
-
-  /**
-   * Constructs a {@code PostgresRelationRepository}.
-   *
-   * @param dataSource
-   */
+  /** Constructs a {@code RelationRepository} over the default relation table. */
   public RelationRepository(DataSource dataSource) {
-    this(
-        dataSource,
-        "public",
-        "osm_relation",
-        "id",
-        "version",
-        "uid",
-        "timestamp",
-        "changeset",
-        "tags",
-        "member_refs",
-        "member_types",
-        "member_roles",
-        "geom");
+    this(dataSource, "public", "osm_relation");
   }
 
-  /**
-   * Constructs a {@code PostgresRelationRepository} with custom parameters.
-   *
-   * @param dataSource
-   * @param schema
-   * @param table
-   * @param idColumn
-   * @param versionColumn
-   * @param uidColumn
-   * @param timestampColumn
-   * @param changesetColumn
-   * @param tagsColumn
-   * @param memberRefs
-   * @param memberTypes
-   * @param memberRoles
-   * @param geometryColumn
-   */
-  @SuppressWarnings("squid:S107")
-  public RelationRepository(
-      DataSource dataSource,
-      String schema,
-      String table,
-      String idColumn,
-      String versionColumn,
-      String uidColumn,
-      String timestampColumn,
-      String changesetColumn,
-      String tagsColumn,
-      String memberRefs,
-      String memberTypes,
-      String memberRoles,
-      String geometryColumn) {
-    var fullTableName = String.format("%1$s.%2$s", schema, table);
-    this.dataSource = dataSource;
-    this.createTable = String.format("""
-        CREATE TABLE IF NOT EXISTS %1$s (
-          %2$s bigint PRIMARY KEY,
-          %3$s int,
-          %4$s int,
-          %5$s timestamp without time zone,
-          %6$s bigint,
-          %7$s jsonb,
-          %8$s bigint[],
-          %9$s int[],
-          %10$s text[],
-          %11$s geometry
-        )""", fullTableName, idColumn, versionColumn, uidColumn, timestampColumn, changesetColumn,
-        tagsColumn, memberRefs, memberTypes, memberRoles, geometryColumn);
-    this.dropTable = String.format("DROP TABLE IF EXISTS %1$s CASCADE", fullTableName);
-    this.truncateTable = String.format("TRUNCATE TABLE %1$s", fullTableName);
-    this.select = String.format(
-        "SELECT %2$s, %3$s, %4$s, %5$s, %6$s, %7$s, %8$s, %9$s, %10$s, st_asewkb(%11$s) FROM %1$s WHERE %2$s = ?",
-        fullTableName, idColumn, versionColumn, uidColumn, timestampColumn, changesetColumn,
-        tagsColumn,
-        memberRefs, memberTypes, memberRoles, geometryColumn);
-    this.selectIn = String.format(
-        "SELECT %2$s, %3$s, %4$s, %5$s, %6$s, %7$s, %8$s, %9$s, %10$s, st_asewkb(%11$s) FROM %1$s WHERE %2$s = ANY (?)",
-        fullTableName, idColumn, versionColumn, uidColumn, timestampColumn, changesetColumn,
-        tagsColumn,
-        memberRefs, memberTypes, memberRoles, geometryColumn);
-    this.insert = String.format("""
-        INSERT INTO %1$s (%2$s, %3$s, %4$s, %5$s, %6$s, %7$s, %8$s, %9$s, %10$s, %11$s)
-        VALUES (?, ?, ?, ?, ?, cast (? AS jsonb), ?, ?, ?, ?)
-        ON CONFLICT (%2$s) DO UPDATE SET
-        %3$s = excluded.%3$s,
-        %4$s = excluded.%4$s,
-        %5$s = excluded.%5$s,
-        %6$s = excluded.%6$s,
-        %7$s = excluded.%7$s,
-        %8$s = excluded.%8$s,
-        %9$s = excluded.%9$s,
-        %10$s = excluded.%10$s,
-        %11$s = excluded.%11$s""", fullTableName, idColumn, versionColumn, uidColumn,
-        timestampColumn,
-        changesetColumn, tagsColumn, memberRefs, memberTypes, memberRoles, geometryColumn);
-    this.delete = String.format("DELETE FROM %1$s WHERE %2$s = ?", fullTableName, idColumn);
-    this.deleteIn = String.format("DELETE FROM %1$s WHERE %2$s = ANY (?)", fullTableName, idColumn);
-    this.copy = String.format(
-        "COPY %1$s (%2$s, %3$s, %4$s, %5$s, %6$s, %7$s, %8$s, %9$s, %10$s, %11$s) FROM STDIN BINARY",
-        fullTableName, idColumn, versionColumn, uidColumn, timestampColumn, changesetColumn,
-        tagsColumn,
-        memberRefs, memberTypes, memberRoles, geometryColumn);
+  /** Constructs a {@code RelationRepository} over the given relation table. */
+  public RelationRepository(DataSource dataSource, String schema, String table) {
+    super(dataSource, schema, table, COLUMNS);
   }
 
   /** {@inheritDoc} */
   @Override
-  public void create() throws RepositoryException {
-    try (Connection connection = dataSource.getConnection();
-        PreparedStatement statement = connection.prepareStatement(createTable)) {
-      statement.execute();
-    } catch (SQLException e) {
-      throw new RepositoryException(e);
-    }
+  protected Relation read(ResultSet row) throws SQLException, IOException {
+    var info = new Info(
+        row.getInt(2),
+        row.getObject(4, LocalDateTime.class),
+        row.getLong(5),
+        row.getInt(3));
+    return new Relation(
+        row.getLong(1),
+        info,
+        JsonbMapper.toMap(row.getString(6)),
+        readMembers(row),
+        GeometryUtils.deserialize(row.getBytes(10)));
   }
 
-  /** {@inheritDoc} */
-  @Override
-  public void drop() throws RepositoryException {
-    try (Connection connection = dataSource.getConnection();
-        PreparedStatement statement = connection.prepareStatement(dropTable)) {
-      statement.execute();
-    } catch (SQLException e) {
-      throw new RepositoryException(e);
-    }
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public void truncate() throws RepositoryException {
-    try (Connection connection = dataSource.getConnection();
-        PreparedStatement statement = connection.prepareStatement(truncateTable)) {
-      statement.execute();
-    } catch (SQLException e) {
-      throw new RepositoryException(e);
-    }
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public Relation get(Long key) throws RepositoryException {
-    try (Connection connection = dataSource.getConnection();
-        PreparedStatement statement = connection.prepareStatement(select)) {
-      statement.setObject(1, key);
-      try (ResultSet result = statement.executeQuery()) {
-        if (result.next()) {
-          return getValue(result);
-        } else {
-          return null;
-        }
-      }
-    } catch (SQLException | JsonProcessingException e) {
-      throw new RepositoryException(e);
-    }
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public List<Relation> get(List<Long> keys) throws RepositoryException {
-    if (keys.isEmpty()) {
+  private static List<Member> readMembers(ResultSet row) throws SQLException {
+    var refs = row.getArray(7);
+    var types = row.getArray(8);
+    var roles = row.getArray(9);
+    if (refs == null || types == null || roles == null) {
       return List.of();
     }
-    try (Connection connection = dataSource.getConnection();
-        PreparedStatement statement = connection.prepareStatement(selectIn)) {
-      statement.setArray(1, connection.createArrayOf("int8", keys.toArray()));
-      try (ResultSet result = statement.executeQuery()) {
-        Map<Long, Relation> values = new HashMap<>();
-        while (result.next()) {
-          Relation value = getValue(result);
-          values.put(value.getId(), value);
-        }
-        return keys.stream().map(values::get).toList();
-      }
-    } catch (SQLException | JsonProcessingException e) {
-      throw new RepositoryException(e);
+    var refValues = (Long[]) refs.getArray();
+    var typeValues = (Integer[]) types.getArray();
+    var roleValues = (String[]) roles.getArray();
+    var members = new ArrayList<Member>(refValues.length);
+    for (int index = 0; index < refValues.length; index++) {
+      members.add(new Member(refValues[index], MemberType.forNumber(typeValues[index]),
+          roleValues[index]));
     }
+    return members;
   }
 
   /** {@inheritDoc} */
   @Override
-  public void put(Relation value) throws RepositoryException {
-    try (Connection connection = dataSource.getConnection();
-        PreparedStatement statement = connection.prepareStatement(insert)) {
-      setValue(statement, value);
-      statement.execute();
-    } catch (SQLException | JsonProcessingException e) {
-      throw new RepositoryException(e);
-    }
+  protected void write(PreparedStatement statement, Relation relation)
+      throws SQLException, IOException {
+    var connection = statement.getConnection();
+    statement.setObject(1, relation.getId());
+    statement.setObject(2, relation.getInfo().version());
+    statement.setObject(3, relation.getInfo().uid());
+    statement.setObject(4, relation.getInfo().timestamp());
+    statement.setObject(5, relation.getInfo().changeset());
+    statement.setObject(6, JsonbMapper.toJson(relation.getTags()));
+    statement.setArray(7, connection.createArrayOf("int8", refs(relation).toArray()));
+    statement.setArray(8, connection.createArrayOf("int", types(relation).toArray()));
+    statement.setArray(9, connection.createArrayOf("text", roles(relation).toArray()));
+    statement.setBytes(10, GeometryUtils.serialize(relation.getGeometry()));
   }
 
   /** {@inheritDoc} */
   @Override
-  public void put(List<Relation> values) throws RepositoryException {
-    if (values.isEmpty()) {
-      return;
-    }
-    try (Connection connection = dataSource.getConnection();
-        PreparedStatement statement = connection.prepareStatement(insert)) {
-      for (Relation value : values) {
-        statement.clearParameters();
-        setValue(statement, value);
-        statement.addBatch();
-      }
-      statement.executeBatch();
-    } catch (SQLException | JsonProcessingException e) {
-      throw new RepositoryException(e);
-    }
+  protected void write(CopyWriter writer, Relation relation) throws IOException {
+    writer.writeLong(relation.getId());
+    writer.writeInteger(relation.getInfo().version());
+    writer.writeInteger(relation.getInfo().uid());
+    writer.writeLocalDateTime(relation.getInfo().timestamp());
+    writer.writeLong(relation.getInfo().changeset());
+    writer.writeJsonb(JsonbMapper.toJson(relation.getTags()));
+    writer.writeLongList(refs(relation));
+    writer.writeIntegerList(types(relation));
+    writer.write(roles(relation));
+    writer.writeGeometry(relation.getGeometry());
   }
 
-  /** {@inheritDoc} */
-  @Override
-  public void delete(Long key) throws RepositoryException {
-    try (Connection connection = dataSource.getConnection();
-        PreparedStatement statement = connection.prepareStatement(delete)) {
-      statement.setObject(1, key);
-      statement.execute();
-    } catch (SQLException e) {
-      throw new RepositoryException(e);
-    }
+  private static List<Long> refs(Relation relation) {
+    return relation.getMembers().stream().map(Member::ref).toList();
   }
 
-  /** {@inheritDoc} */
-  @Override
-  public void delete(List<Long> keys) throws RepositoryException {
-    if (keys.isEmpty()) {
-      return;
-    }
-    try (Connection connection = dataSource.getConnection();
-        PreparedStatement statement = connection.prepareStatement(deleteIn)) {
-      statement.setArray(1, connection.createArrayOf("int8", keys.toArray()));
-      statement.execute();
-    } catch (SQLException e) {
-      throw new RepositoryException(e);
-    }
+  private static List<Integer> types(Relation relation) {
+    return relation.getMembers().stream().map(Member::type).map(MemberType::ordinal).toList();
   }
 
-  /** {@inheritDoc} */
-  @Override
-  public void copy(List<Relation> values) throws RepositoryException {
-    if (values.isEmpty()) {
-      return;
-    }
-    try (Connection connection = dataSource.getConnection()) {
-      PGConnection pgConnection = connection.unwrap(PGConnection.class);
-      try (CopyWriter writer = new CopyWriter(new PGCopyOutputStream(pgConnection, copy))) {
-        writer.writeHeader();
-        for (Relation value : values) {
-          writer.startRow(10);
-          writer.writeLong(value.getId());
-          writer.writeInteger(value.getInfo().version());
-          writer.writeInteger(value.getInfo().uid());
-          writer.writeLocalDateTime(value.getInfo().timestamp());
-          writer.writeLong(value.getInfo().changeset());
-          writer.writeJsonb(JsonbMapper.toJson(value.getTags()));
-          writer.writeLongList(
-              value.getMembers().stream().map(Member::ref).toList());
-          writer.writeIntegerList(value.getMembers().stream().map(Member::type)
-              .map(MemberType::ordinal).toList());
-          writer
-              .write(value.getMembers().stream().map(Member::role).toList());
-          writer.writeGeometry(value.getGeometry());
-        }
-      }
-    } catch (IOException | SQLException ex) {
-      throw new RepositoryException(ex);
-    }
-  }
-
-  private Relation getValue(ResultSet resultSet) throws SQLException, JsonProcessingException {
-    long id = resultSet.getLong(1);
-    int version = resultSet.getInt(2);
-    int uid = resultSet.getInt(3);
-    LocalDateTime timestamp = resultSet.getObject(4, LocalDateTime.class);
-    long changeset = resultSet.getLong(5);
-    Map<String, Object> tags = JsonbMapper.toMap(resultSet.getString(6));
-    Long[] refs = (Long[]) resultSet.getArray(7).getArray();
-    Integer[] types = (Integer[]) resultSet.getArray(8).getArray();
-    String[] roles = (String[]) resultSet.getArray(9).getArray();
-    List<Member> members = new ArrayList<>();
-    for (int i = 0; i < refs.length; i++) {
-      members.add(new Member(refs[i], MemberType.forNumber(types[i]), roles[i]));
-    }
-    Geometry geometry = GeometryUtils.deserialize(resultSet.getBytes(10));
-    Info info = new Info(version, timestamp, changeset, uid);
-    return new Relation(id, info, tags, members, geometry);
-  }
-
-  private void setValue(PreparedStatement statement, Relation value)
-      throws SQLException, JsonProcessingException {
-    statement.setObject(1, value.getId());
-    statement.setObject(2, value.getInfo().version());
-    statement.setObject(3, value.getInfo().uid());
-    statement.setObject(4, value.getInfo().timestamp());
-    statement.setObject(5, value.getInfo().changeset());
-    statement.setObject(6, JsonbMapper.toJson(value.getTags()));
-    Object[] refs = value.getMembers().stream().map(Member::ref).toArray();
-    statement.setObject(7, statement.getConnection().createArrayOf("bigint", refs));
-    Object[] types =
-        value.getMembers().stream().map(Member::type).map(MemberType::ordinal).toArray();
-    statement.setObject(8, statement.getConnection().createArrayOf("int", types));
-    Object[] roles = value.getMembers().stream().map(Member::role).toArray();
-    statement.setObject(9, statement.getConnection().createArrayOf("varchar", roles));
-    statement.setBytes(10, GeometryUtils.serialize(value.getGeometry()));
+  private static List<String> roles(Relation relation) {
+    return relation.getMembers().stream().map(Member::role).toList();
   }
 }

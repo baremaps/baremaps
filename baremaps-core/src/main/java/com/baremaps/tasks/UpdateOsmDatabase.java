@@ -30,6 +30,7 @@ import com.baremaps.openstreetmap.model.Way;
 import com.baremaps.openstreetmap.state.StateReader;
 import com.baremaps.openstreetmap.xml.XmlChangeReader;
 import com.baremaps.postgres.openstreetmap.*;
+import com.baremaps.postgres.openstreetmap.ChangeImporter.Mode;
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
 import java.io.BufferedInputStream;
@@ -180,15 +181,15 @@ public class UpdateOsmDatabase implements Task {
 
     var prepareNodeGeometry = new ChangeEntitiesHandler<>(Node.class,
         new NodeGeometryBuilder().andThen(reproject));
-    var importNodes = new ChangeElementsImporter<>(Node.class, nodeRepository);
+    var importNodes = new ChangeImporter<>(Node.class, nodeRepository, Mode.PUT);
 
     var prepareWayGeometry = new ChangeEntitiesHandler<>(Way.class,
         new WayGeometryBuilder(coordinateMap).andThen(reproject));
-    var importWays = new ChangeElementsImporter<>(Way.class, wayRepository);
+    var importWays = new ChangeImporter<>(Way.class, wayRepository, Mode.PUT);
 
     var prepareRelationGeometry = new ChangeEntitiesHandler<>(Relation.class,
         new RelationGeometryBuilder(coordinateMap, referenceMap).andThen(reproject));
-    var importRelations = new ChangeElementsImporter<>(Relation.class, relationRepository);
+    var importRelations = new ChangeImporter<>(Relation.class, relationRepository, Mode.PUT);
 
     var entityProcessor = updateMaps
         .andThen(prepareNodeGeometry)

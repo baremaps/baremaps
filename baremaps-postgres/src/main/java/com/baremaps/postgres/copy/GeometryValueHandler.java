@@ -22,21 +22,36 @@ import java.io.IOException;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.io.WKBWriter;
 
+/**
+ * Encodes a JTS geometry as the EWKB a PostGIS geometry column reads.
+ *
+ * <p>
+ * The writer is created per call rather than shared: {@code WKBWriter} keeps a buffer between
+ * calls, and the repositories copy from several threads at once.
+ */
 public class GeometryValueHandler extends BaseValueHandler<Geometry> {
 
-  private static byte[] asWKB(Geometry geometry) {
+  /** Little endian, with the SRID included, which is what makes it EWKB rather than plain WKB. */
+  private static byte[] asEwkb(Geometry geometry) {
     return new WKBWriter(2, wkbNDR, true).write(geometry);
   }
 
   @Override
   protected void internalHandle(DataOutputStream buffer, Geometry value) throws IOException {
-    byte[] wkb = asWKB(value);
-    buffer.writeInt(wkb.length);
-    buffer.write(wkb, 0, wkb.length);
+    byte[] ewkb = asEwkb(value);
+    buffer.writeInt(ewkb.length);
+    buffer.write(ewkb, 0, ewkb.length);
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>
+   * Only a {@code CollectionValueHandler} asks for this, to size the elements of an array; the copy
+   * path itself does not, which is why encoding the geometry twice is acceptable here.
+   */
   @Override
   public int getLength(Geometry geometry) {
-    return asWKB(geometry).length + 4;
+    return asEwkb(geometry).length + 4;
   }
 }

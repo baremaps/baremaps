@@ -14,40 +14,38 @@
 
 package com.baremaps.postgres.openstreetmap;
 
-
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
 import java.util.Map;
 
+/** Converts between the tags of an entity and the {@code jsonb} column that holds them. */
 class JsonbMapper {
 
   private static final ObjectMapper mapper = new ObjectMapper();
 
+  private static final TypeReference<HashMap<String, Object>> TAGS = new TypeReference<>() {};
+
   private JsonbMapper() {}
 
   /**
-   * Convert a map into a json object
+   * Serializes the tags of an entity.
    *
-   * @param input a map with the entry of the object
-   * @return a Json string representing the object
-   * @throws JsonProcessingException
+   * @param tags the tags, indexed by key
+   * @return the JSON object holding them
    */
-  public static String toJson(Map<String, Object> input) throws JsonProcessingException {
-    return mapper.writeValueAsString(input);
+  public static String toJson(Map<String, Object> tags) throws JsonProcessingException {
+    return mapper.writeValueAsString(tags);
   }
 
   /**
-   * Convert a Json array into a map
+   * Deserializes the tags of an entity.
    *
-   * @param input a valid json object
-   * @return a map with the entry of the objects
-   * @throws JsonProcessingException
+   * @param json the JSON object read from the column
+   * @return the tags, indexed by key
    */
-  public static Map<String, Object> toMap(String input) throws JsonProcessingException {
-    TypeReference<HashMap<String, Object>> typeRef = new TypeReference<>() {};
-    return mapper.readValue(input, typeRef);
+  public static Map<String, Object> toMap(String json) throws JsonProcessingException {
+    return mapper.readValue(json, TAGS);
   }
 }
