@@ -14,124 +14,114 @@
 
 package com.baremaps.pmtiles;
 
-import com.google.common.io.LittleEndianDataInputStream;
 import java.io.ByteArrayInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 /**
- * Reads tile data and metadata from a PMTiles file.
+ * Reads tiles and metadata from a PMTiles archive.
  */
 public class PMTilesReader implements AutoCloseable {
 
-  private final Path path;
-  private final HeaderSerializer headerSerializer;
-  private final EntrySerializer entrySerializer;
+  /**
+   * Leaf directories may point to further leaf directories. Archives in practice nest one level
+   * deep; the bound only stops a corrupt archive from looping forever.
+   */
+  private static final int MAX_DIRECTORY_DEPTH = 4;
 
-  private Header header;
-  private List<Entry> rootEntries;
+  private final FileChannel channel;
+  private final Header header;
+  private final Directory rootDirectory;
 
   /**
-   * Creates a new PMTilesReader for the specified file.
+   * Opens a PMTiles archive.
    *
-   * @param path the path to the PMTiles file
+   * @param path the path of the archive
+   * @throws IOException if the archive cannot be opened or does not start with a valid header
    */
-  public PMTilesReader(Path path) {
-    this.path = path;
-    this.headerSerializer = new HeaderSerializer();
-    this.entrySerializer = new EntrySerializer();
+  public PMTilesReader(Path path) throws IOException {
+    this.channel = FileChannel.open(path);
+    try {
+      this.header = Header.readFrom(new ByteArrayInputStream(read(0, Header.LENGTH)));
+      this.rootDirectory =
+          readDirectory(header.rootDirectoryOffset(), header.rootDirectoryLength());
+    } catch (IOException e) {
+      channel.close();
+      throw e;
+    }
   }
 
   /**
-   * Gets the header of the PMTiles file.
+   * Returns the header of the archive.
    *
-   * @return the header of the PMTiles file
-   * @throws IOException if an I/O error occurs
+   * @return the header
    */
-  public Header getHeader() throws IOException {
-    if (header == null) {
-      try (var inputStream = Files.newInputStream(path)) {
-        header = headerSerializer.deserialize(inputStream);
-      }
-    }
+  public Header getHeader() {
     return header;
   }
 
   /**
-   * Gets the root directory of the PMTiles file.
-   *
-   * @return the root directory entries
-   * @throws IOException if an I/O error occurs
-   */
-  public List<Entry> getRootDirectory() throws IOException {
-    if (rootEntries == null) {
-      var header = getHeader();
-      rootEntries = getDirectory(header.getRootDirectoryOffset());
-    }
-    return rootEntries;
-  }
-
-  /**
-   * Gets a directory from the PMTiles file at the specified offset.
-   *
-   * @param offset the offset of the directory in the file
-   * @return the directory entries
-   * @throws IOException if an I/O error occurs
-   */
-  public List<Entry> getDirectory(long offset) throws IOException {
-    var header = getHeader();
-    try (var input = Files.newInputStream(path)) {
-      long skipped = 0;
-      while (skipped < offset) {
-        skipped += input.skip(offset - skipped);
-      }
-      try (var decompressed =
-          new LittleEndianDataInputStream(header.getInternalCompression().decompress(input))) {
-        return entrySerializer.deserialize(decompressed);
-      }
-    }
-  }
-
-  /**
-   * Gets a tile by its coordinates.
+   * Returns a tile of the archive, or {@code null} when the archive does not hold it.
+   * <p>
+   * The bytes are returned exactly as they are stored, so they are still compressed with
+   * {@link Header#tileCompression()}. Servers forward them unchanged, and decompressing here would
+   * only force them to compress again.
    *
    * @param z the zoom level
-   * @param x the x coordinate
-   * @param y the y coordinate
-   * @return the tile data as a ByteBuffer, or null if not found
+   * @param x the column
+   * @param y the row
+   * @return the stored tile, or {@code null}
    * @throws IOException if an I/O error occurs
    */
   public ByteBuffer getTile(int z, long x, long y) throws IOException {
     var tileId = TileIdConverter.zxyToTileId(z, x, y);
-    var fileHeader = getHeader();
-    var entries = getRootDirectory();
-    var entry = entrySerializer.findTile(entries, tileId);
-
-    if (entry == null) {
-      return null;
-    }
-
-    try (var channel = FileChannel.open(path)) {
-      var compressed = ByteBuffer.allocate((int) entry.getLength());
-      channel.position(fileHeader.getTileDataOffset() + entry.getOffset());
-      channel.read(compressed);
-      compressed.flip();
-      try (var tile = new ByteArrayInputStream(compressed.array())) {
-        return ByteBuffer.wrap(tile.readAllBytes());
+    var directory = rootDirectory;
+    for (var depth = 0; depth < MAX_DIRECTORY_DEPTH; depth++) {
+      var entry = directory.find(tileId);
+      if (entry == null) {
+        return null;
       }
+      if (entry.runLength() > 0) {
+        return ByteBuffer
+            .wrap(read(header.tileDataOffset() + entry.offset(), toLength(entry.length())));
+      }
+      directory = readDirectory(header.leafDirectoryOffset() + entry.offset(), entry.length());
     }
+    throw new IOException("Leaf directories nested more than " + MAX_DIRECTORY_DEPTH + " deep");
   }
 
-  /**
-   * Closes the PMTilesReader. No resources need to be closed as all I/O operations use
-   * try-with-resources.
-   */
+  /** Returns the root directory, which every lookup starts from. */
+  Directory getRootDirectory() {
+    return rootDirectory;
+  }
+
+  private Directory readDirectory(long offset, long length) throws IOException {
+    return Directory.fromBytes(read(offset, toLength(length)), header.internalCompression());
+  }
+
+  /** Reads exactly {@code length} bytes at {@code offset}, which a single channel read may not. */
+  private byte[] read(long offset, int length) throws IOException {
+    var buffer = ByteBuffer.allocate(length);
+    while (buffer.hasRemaining()) {
+      if (channel.read(buffer, offset + buffer.position()) < 0) {
+        throw new EOFException("Truncated PMTiles archive at offset " + offset);
+      }
+    }
+    return buffer.array();
+  }
+
+  private static int toLength(long length) throws IOException {
+    if (length < 0 || length > Integer.MAX_VALUE) {
+      throw new IOException("Invalid length in PMTiles archive: " + length);
+    }
+    return (int) length;
+  }
+
   @Override
-  public void close() {
-    // No resources to close at the class level since all I/O operations use try-with-resources
+  public void close() throws IOException {
+    channel.close();
   }
 }

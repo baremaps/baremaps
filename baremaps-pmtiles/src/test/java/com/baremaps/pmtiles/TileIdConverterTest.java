@@ -14,9 +14,9 @@
 
 package com.baremaps.pmtiles;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.google.common.math.LongMath;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -36,47 +36,50 @@ class TileIdConverterTest {
 
   @Test
   void tileIdToZxy() {
-    assertArrayEquals(new long[] {0, 0, 0}, TileIdConverter.tileIdToZxy(0));
-    assertArrayEquals(new long[] {1, 0, 0}, TileIdConverter.tileIdToZxy(1));
-    assertArrayEquals(new long[] {1, 0, 1}, TileIdConverter.tileIdToZxy(2));
-    assertArrayEquals(new long[] {1, 1, 1}, TileIdConverter.tileIdToZxy(3));
-    assertArrayEquals(new long[] {1, 1, 0}, TileIdConverter.tileIdToZxy(4));
-    assertArrayEquals(new long[] {2, 0, 0}, TileIdConverter.tileIdToZxy(5));
+    assertEquals(new TileCoord(0, 0, 0), TileIdConverter.tileIdToZxy(0));
+    assertEquals(new TileCoord(1, 0, 0), TileIdConverter.tileIdToZxy(1));
+    assertEquals(new TileCoord(1, 0, 1), TileIdConverter.tileIdToZxy(2));
+    assertEquals(new TileCoord(1, 1, 1), TileIdConverter.tileIdToZxy(3));
+    assertEquals(new TileCoord(1, 1, 0), TileIdConverter.tileIdToZxy(4));
+    assertEquals(new TileCoord(2, 0, 0), TileIdConverter.tileIdToZxy(5));
   }
 
   @Test
-  void aLotOfTiles() {
-    for (int z = 0; z < 9; z++) {
-      for (long x = 0; x < 1 << z; x++) {
-        for (long y = 0; y < 1 << z; y++) {
-          var result = TileIdConverter.tileIdToZxy(TileIdConverter.zxyToTileId(z, x, y));
-          if (result[0] != z || result[1] != x || result[2] != y) {
-            fail("roundtrip failed");
-          }
+  void roundTripEveryTileUpToZoomEight() {
+    for (var z = 0; z < 9; z++) {
+      for (var x = 0L; x < 1L << z; x++) {
+        for (var y = 0L; y < 1L << z; y++) {
+          assertEquals(new TileCoord(z, x, y),
+              TileIdConverter.tileIdToZxy(TileIdConverter.zxyToTileId(z, x, y)));
         }
       }
     }
   }
 
   @Test
-  void tileExtremes() {
-    for (var z = 0; z < 27; z++) {
-      var dim = LongMath.pow(2, z) - 1;
-      var tl = TileIdConverter.tileIdToZxy(TileIdConverter.zxyToTileId(z, 0, 0));
-      assertArrayEquals(new long[] {z, 0, 0}, tl);
-      var tr = TileIdConverter.tileIdToZxy(TileIdConverter.zxyToTileId(z, dim, 0));
-      assertArrayEquals(new long[] {z, dim, 0}, tr);
-      var bl = TileIdConverter.tileIdToZxy(TileIdConverter.zxyToTileId(z, 0, dim));
-      assertArrayEquals(new long[] {z, 0, dim}, bl);
-      var br = TileIdConverter.tileIdToZxy(TileIdConverter.zxyToTileId(z, dim, dim));
-      assertArrayEquals(new long[] {z, dim, dim}, br);
+  void roundTripCornersOfEveryZoom() {
+    for (var z = 0; z <= 26; z++) {
+      var last = (1L << z) - 1;
+      for (var corner : new long[][] {{0, 0}, {last, 0}, {0, last}, {last, last}}) {
+        var coord = new TileCoord(z, corner[0], corner[1]);
+        assertEquals(coord,
+            TileIdConverter.tileIdToZxy(TileIdConverter.zxyToTileId(z, coord.x(), coord.y())));
+      }
     }
   }
 
   @Test
-  void invalidTiles() {
-    assertThrows(RuntimeException.class, () -> TileIdConverter.tileIdToZxy(9007199254740991L));
-    assertThrows(RuntimeException.class, () -> TileIdConverter.zxyToTileId(27, 0, 0));
-    assertThrows(RuntimeException.class, () -> TileIdConverter.zxyToTileId(0, 1, 1));
+  void rejectCoordinatesOutsideTheirZoom() {
+    assertThrows(IllegalArgumentException.class, () -> TileIdConverter.zxyToTileId(27, 0, 0));
+    assertThrows(IllegalArgumentException.class, () -> TileIdConverter.zxyToTileId(-1, 0, 0));
+    assertThrows(IllegalArgumentException.class, () -> TileIdConverter.zxyToTileId(0, 1, 1));
+    assertThrows(IllegalArgumentException.class, () -> TileIdConverter.zxyToTileId(1, -1, 0));
+  }
+
+  @Test
+  void rejectTileIdsBeyondTheLastZoom() {
+    assertThrows(IllegalArgumentException.class, () -> TileIdConverter.tileIdToZxy(-1));
+    assertThrows(IllegalArgumentException.class,
+        () -> TileIdConverter.tileIdToZxy(9007199254740991L));
   }
 }

@@ -14,138 +14,84 @@
 
 package com.baremaps.pmtiles;
 
-import java.util.Arrays;
-import java.util.Objects;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * A class that represents directories in a PMTiles file.
+ * The serialized root and leaf directory sections of an archive.
+ *
+ * @param root the bytes of the root directory
+ * @param leaves the bytes of the concatenated leaf directories, empty when the root holds every
+ *        entry
  */
-public class Directories {
-
-  private final byte[] root;
-  private final byte[] leaves;
-  private final int numLeaves;
+record Directories(byte[] root, byte[] leaves) {
 
   /**
-   * Constructs a new Directories object.
+   * Above this many entries a single directory is assumed not to fit the root budget, and the cost
+   * of serializing it just to find out is not worth paying.
+   */
+  private static final int MAX_SINGLE_DIRECTORY_ENTRIES = 16384;
+
+  /** The number of root entries that fills the root budget once compressed. */
+  private static final int TARGET_ROOT_ENTRIES = 3500;
+
+  /** Leaves smaller than this cost more in extra requests than they save in root bytes. */
+  private static final int MIN_LEAF_ENTRIES = 4096;
+
+  /**
+   * Arranges entries into a root directory that fits within a byte budget, spilling into leaf
+   * directories when it does not.
+   * <p>
+   * A root that fits a single range request is what lets a reader open a remote archive without
+   * downloading it, so the budget is the constraint the whole layout is solved for.
    *
-   * @param root the root directory data
-   * @param leaves the leaf directory data
-   * @param numLeaves the number of leaves
+   * @param entries the entries of the archive, in ascending tile id order
+   * @param targetRootLength the largest acceptable root directory, in bytes
+   * @param compression the internal compression of the archive
+   * @return the root and leaf sections
+   * @throws IOException if no arrangement fits the budget
    */
-  private Directories(byte[] root, byte[] leaves, int numLeaves) {
-    this.root = root;
-    this.leaves = leaves;
-    this.numLeaves = numLeaves;
+  static Directories of(List<Entry> entries, int targetRootLength, Compression compression)
+      throws IOException {
+    if (entries.size() < MAX_SINGLE_DIRECTORY_ENTRIES) {
+      var root = new Directory(entries).toBytes(compression);
+      if (root.length <= targetRootLength) {
+        return new Directories(root, new byte[0]);
+      }
+    }
+
+    // Start from the leaf size that would leave about TARGET_ROOT_ENTRIES in the root, then grow
+    // the leaves until the root fits.
+    var leafSize = Math.max(entries.size() / TARGET_ROOT_ENTRIES, MIN_LEAF_ENTRIES);
+    while (true) {
+      var directories = split(entries, leafSize, compression);
+      if (directories.root().length <= targetRootLength) {
+        return directories;
+      }
+      if (leafSize >= entries.size()) {
+        throw new IOException(
+            "Could not fit the root directory within " + targetRootLength + " bytes");
+      }
+      leafSize += leafSize / 5;
+    }
   }
 
   /**
-   * Creates a new Directories object from a Builder.
-   *
-   * @param builder the builder to use
+   * Splits the entries into leaves of at most {@code leafSize} entries and a root pointing to them.
    */
-  private Directories(Builder builder) {
-    this.root = builder.root;
-    this.leaves = builder.leaves;
-    this.numLeaves = builder.numLeaves;
-  }
-
-  /**
-   * Creates a new Builder for Directories objects.
-   *
-   * @return a new builder
-   */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public byte[] getRoot() {
-    return root;
-  }
-
-  public byte[] getLeaves() {
-    return leaves;
-  }
-
-  public int getNumLeaves() {
-    return numLeaves;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o)
-      return true;
-    if (o == null || getClass() != o.getClass())
-      return false;
-    Directories that = (Directories) o;
-    return numLeaves == that.numLeaves &&
-        Arrays.equals(root, that.root) &&
-        Arrays.equals(leaves, that.leaves);
-  }
-
-  @Override
-  public int hashCode() {
-    int result = Objects.hash(numLeaves);
-    result = 31 * result + Arrays.hashCode(root);
-    result = 31 * result + Arrays.hashCode(leaves);
-    return result;
-  }
-
-  /**
-   * Builder for Directories objects.
-   */
-  public static class Builder {
-    private byte[] root = new byte[0];
-    private byte[] leaves = new byte[0];
-    private int numLeaves = 0;
-
-    /**
-     * Creates a new Builder with default values.
-     */
-    private Builder() {
-      // Use static factory method
+  private static Directories split(List<Entry> entries, int leafSize, Compression compression)
+      throws IOException {
+    var rootEntries = new ArrayList<Entry>();
+    var leaves = new ByteArrayOutputStream();
+    for (var i = 0; i < entries.size(); i += leafSize) {
+      var end = Math.min(i + leafSize, entries.size());
+      var leaf = new Directory(entries.subList(i, end)).toBytes(compression);
+      // A run length of zero marks the entry as a pointer to the leaf rather than to a tile.
+      rootEntries.add(new Entry(entries.get(i).tileId(), leaves.size(), leaf.length, 0));
+      leaves.writeBytes(leaf);
     }
-
-    /**
-     * Sets the root directory data.
-     *
-     * @param root the root directory data
-     * @return this builder
-     */
-    public Builder root(byte[] root) {
-      this.root = root;
-      return this;
-    }
-
-    /**
-     * Sets the leaf directory data.
-     *
-     * @param leaves the leaf directory data
-     * @return this builder
-     */
-    public Builder leaves(byte[] leaves) {
-      this.leaves = leaves;
-      return this;
-    }
-
-    /**
-     * Sets the number of leaves.
-     *
-     * @param numLeaves the number of leaves
-     * @return this builder
-     */
-    public Builder numLeaves(int numLeaves) {
-      this.numLeaves = numLeaves;
-      return this;
-    }
-
-    /**
-     * Builds a new Directories object.
-     *
-     * @return a new Directories object
-     */
-    public Directories build() {
-      return new Directories(this);
-    }
+    return new Directories(new Directory(rootEntries).toBytes(compression), leaves.toByteArray());
   }
 }

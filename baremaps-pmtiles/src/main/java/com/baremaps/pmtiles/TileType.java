@@ -14,14 +14,36 @@
 
 package com.baremaps.pmtiles;
 
+import java.io.IOException;
+
 /**
- * Enumeration of tile image formats supported by PMTiles.
+ * The formats a PMTiles archive can store its tiles in.
+ * <p>
+ * <strong>The ordinal of each constant is the value stored in the header.</strong> Reordering,
+ * inserting or removing a constant silently changes how every existing archive is interpreted, so
+ * new formats may only be appended.
  */
 public enum TileType {
+
   UNKNOWN,
   MVT,
   PNG,
   JPEG,
   WEBP,
-  AVIF,
+  AVIF;
+
+  /**
+   * Returns the tile type stored under the given header value.
+   *
+   * @param value the value read from the header
+   * @return the corresponding tile type
+   * @throws IOException if the value is not a known tile type
+   */
+  static TileType forHeaderValue(int value) throws IOException {
+    var values = values();
+    if (value < 0 || value >= values.length) {
+      throw new IOException("Unknown tile type value: " + value);
+    }
+    return values[value];
+  }
 }

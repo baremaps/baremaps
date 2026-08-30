@@ -14,111 +14,106 @@
 
 package com.baremaps.pmtiles;
 
-import com.google.common.math.LongMath;
+import java.util.Arrays;
 
 /**
- * Utility to convert between tile coordinates and tileIds.
+ * Converts between tile coordinates and the tile ids that order a PMTiles archive.
+ * <p>
+ * Tiles are numbered zoom level by zoom level, and within a level along a Hilbert curve. The curve
+ * keeps neighbouring tiles close in the ordering, so a viewport maps to few contiguous ranges of
+ * the archive.
  */
-class TileIdConverter {
+final class TileIdConverter {
 
-  private static final long[] TZ_VALUES = new long[] {
+  /**
+   * The highest zoom level a tile id fits in: the ids of zoom 27 would exceed the range the
+   * specification reserves for them.
+   */
+  private static final int MAX_ZOOM = 26;
+
+  /**
+   * The number of tiles at every zoom level below the index, that is {@code (4^z - 1) / 3}. It is
+   * tabulated rather than computed so that the zoom level of a tile id can be found by search.
+   */
+  private static final long[] ZOOM_OFFSETS = {
       0, 1, 5, 21, 85, 341, 1365, 5461, 21845, 87381, 349525, 1398101, 5592405,
       22369621, 89478485, 357913941, 1431655765, 5726623061L, 22906492245L,
       91625968981L, 366503875925L, 1466015503701L, 5864062014805L, 23456248059221L,
       93824992236885L, 375299968947541L, 1501199875790165L,
   };
 
-  /**
-   * Rotate coordinates using Hilbert curve rotation.
-   *
-   * @param n the size of the quadrant
-   * @param xy the coordinates to rotate
-   * @param rx the x transform
-   * @param ry the y transform
-   */
-  private static void rotate(long n, long[] xy, long rx, long ry) {
-    if (ry == 0) {
-      if (rx == 1) {
-        xy[0] = n - 1 - xy[0];
-        xy[1] = n - 1 - xy[1];
-      }
-      long t = xy[0];
-      xy[0] = xy[1];
-      xy[1] = t;
-    }
+  private TileIdConverter() {
+    // Static utility.
   }
 
   /**
-   * Convert a position to z, x, y coordinates.
+   * Converts tile coordinates to a tile id.
    *
    * @param z the zoom level
-   * @param pos the position
-   * @return the z, x, y coordinates
+   * @param x the column
+   * @param y the row
+   * @return the tile id
+   * @throws IllegalArgumentException if the coordinates fall outside the zoom level
    */
-  public static long[] idOnLevel(int z, long pos) {
-    long n = LongMath.pow(2, z);
-    long rx, ry, t = pos;
-    long[] xy = new long[] {0, 0};
-    long s = 1;
-    while (s < n) {
-      rx = 1 & (t / 2);
-      ry = 1 & (t ^ rx);
-      rotate(s, xy, rx, ry);
-      xy[0] += s * rx;
-      xy[1] += s * ry;
-      t = t / 4;
-      s *= 2;
+  static long zxyToTileId(int z, long x, long y) {
+    if (z < 0 || z > MAX_ZOOM) {
+      throw new IllegalArgumentException("Tile zoom level outside the range 0-" + MAX_ZOOM);
     }
-    return new long[] {z, xy[0], xy[1]};
+    var size = 1L << z;
+    if (x < 0 || y < 0 || x >= size || y >= size) {
+      throw new IllegalArgumentException("Tile x/y outside zoom level bounds");
+    }
+
+    var position = 0L;
+    var point = new Point(x, y);
+    for (var span = size / 2; span > 0; span /= 2) {
+      var rx = (point.x() & span) > 0 ? 1L : 0L;
+      var ry = (point.y() & span) > 0 ? 1L : 0L;
+      position += span * span * ((3 * rx) ^ ry);
+      point = rotate(span, point, rx, ry);
+    }
+    return ZOOM_OFFSETS[z] + position;
   }
 
   /**
-   * Convert z, x, y coordinates to a tileId.
+   * Converts a tile id back to tile coordinates.
    *
-   * @param z the zoom level
-   * @param x the x coordinate
-   * @param y the y coordinate
-   * @return the tileId
+   * @param tileId the tile id
+   * @return the coordinates of the tile
+   * @throws IllegalArgumentException if the tile id addresses no tile
    */
-  public static long zxyToTileId(int z, long x, long y) {
-    if (z > 26) {
-      throw new IllegalArgumentException("Tile zoom level exceeds max safe number limit (26)");
+  static TileCoord tileIdToZxy(long tileId) {
+    var index = Arrays.binarySearch(ZOOM_OFFSETS, tileId);
+    var z = index >= 0 ? index : -index - 2;
+    if (z < 0 || z > MAX_ZOOM || tileId - ZOOM_OFFSETS[z] >= (1L << z) * (1L << z)) {
+      throw new IllegalArgumentException("Tile id outside the range of zoom levels 0-" + MAX_ZOOM);
     }
-    if (x > Math.pow(2, z) - 1 || y > Math.pow(2, z) - 1) {
-      throw new IllegalArgumentException("tile x/y outside zoom level bounds");
+
+    var position = tileId - ZOOM_OFFSETS[z];
+    var size = 1L << z;
+    var point = new Point(0, 0);
+    for (var span = 1L; span < size; span *= 2) {
+      var rx = 1 & (position / 2);
+      var ry = 1 & (position ^ rx);
+      point = rotate(span, point, rx, ry);
+      point = new Point(point.x() + span * rx, point.y() + span * ry);
+      position /= 4;
     }
-    long acc = TZ_VALUES[z];
-    long n = LongMath.pow(2, z);
-    long rx = 0;
-    long ry = 0;
-    long d = 0;
-    long[] xy = new long[] {x, y};
-    long s = n / 2;
-    while (s > 0) {
-      rx = (xy[0] & s) > 0 ? 1 : 0;
-      ry = (xy[1] & s) > 0 ? 1 : 0;
-      d += s * s * ((3 * rx) ^ ry);
-      rotate(s, xy, rx, ry);
-      s = s / 2;
-    }
-    return acc + d;
+    return new TileCoord(z, point.x(), point.y());
   }
 
   /**
-   * Convert a tileId to z, x, y coordinates.
-   *
-   * @param i the tileId
-   * @return the z, x, y coordinates
+   * Reflects a point within its quadrant, the step that turns the four quadrants of a level into a
+   * single continuous Hilbert curve.
    */
-  public static long[] tileIdToZxy(long i) {
-    long acc = 0;
-    for (int z = 0; z < 27; z++) {
-      long numTiles = (0x1L << z) * (0x1L << z);
-      if (acc + numTiles > i) {
-        return idOnLevel(z, i - acc);
-      }
-      acc += numTiles;
+  private static Point rotate(long span, Point point, long rx, long ry) {
+    if (ry != 0) {
+      return point;
     }
-    throw new IllegalArgumentException("Tile zoom level exceeds max safe number limit (26)");
+    var reflected = rx == 1 ? new Point(span - 1 - point.x(), span - 1 - point.y()) : point;
+    return new Point(reflected.y(), reflected.x());
+  }
+
+  private record Point(long x, long y) {
   }
 }

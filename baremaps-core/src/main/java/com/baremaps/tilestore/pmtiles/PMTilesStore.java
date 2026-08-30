@@ -47,17 +47,9 @@ public class PMTilesStore implements TileStore<ByteBuffer> {
 
       writer = new PMTilesWriter(path);
       writer.setMetadata(metadata);
-      writer.setMinZoom(minZoom);
-      writer.setMaxZoom(maxZoom);
-      writer.setMinLon(bounds.get(0));
-      writer.setMinLat(bounds.get(1));
-      writer.setMaxLon(bounds.get(2));
-      writer.setMaxLat(bounds.get(3));
-      writer.setCenterLon(center.get(0));
-      writer.setCenterLat(center.get(1));
-      writer.setMinZoom(tileset.getMinzoom());
-      writer.setMaxZoom(tileset.getMaxzoom());
-
+      writer.setZoomRange(minZoom, maxZoom);
+      writer.setBounds(bounds.get(0), bounds.get(1), bounds.get(2), bounds.get(3));
+      writer.setCenter(center.get(2).intValue(), center.get(0), center.get(1));
     } catch (IOException e) {
       throw new TileStoreException(e);
     }

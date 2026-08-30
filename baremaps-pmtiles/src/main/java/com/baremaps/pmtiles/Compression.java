@@ -14,15 +14,22 @@
 
 package com.baremaps.pmtiles;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 /**
- * Enumeration of compression algorithms supported by PMTiles. Provides methods to compress and
- * decompress data streams.
+ * The compression algorithms a PMTiles archive can apply to its directories, its metadata and its
+ * tiles.
+ * <p>
+ * <strong>The ordinal of each constant is the value stored in the header.</strong> Reordering,
+ * inserting or removing a constant silently changes how every existing archive is interpreted, so
+ * new algorithms may only be appended.
  */
 public enum Compression {
+
   UNKNOWN,
   NONE,
   GZIP,
@@ -30,102 +37,49 @@ public enum Compression {
   ZSTD;
 
   /**
-   * Decompresses an input stream using the compression algorithm represented by this enum value.
+   * Wraps a stream so that it decompresses with this algorithm.
    *
-   * @param inputStream the input stream to decompress
-   * @return a new input stream that decompresses the given stream
+   * @param input the compressed stream
+   * @return a stream yielding the decompressed bytes
    * @throws IOException if an I/O error occurs
    */
-  InputStream decompress(InputStream inputStream) throws IOException {
+  InputStream decompress(InputStream input) throws IOException {
     return switch (this) {
-      case NONE -> inputStream;
-      case GZIP -> decompressGzip(inputStream);
-      case BROTLI -> decompressBrotli(inputStream);
-      case ZSTD -> decompressZstd(inputStream);
-      default -> throw new UnsupportedOperationException("Unknown compression format");
+      case NONE -> input;
+      case GZIP -> new GZIPInputStream(input);
+      default -> throw new UnsupportedOperationException(this + " decompression not implemented");
     };
   }
 
   /**
-   * Decompresses an input stream using GZIP.
+   * Wraps a stream so that it compresses with this algorithm.
+   * <p>
+   * The returned stream must be closed for the compressed data to be complete.
    *
-   * @param inputStream the input stream to decompress
-   * @return a new GZIP input stream
+   * @param output the stream to write the compressed bytes to
+   * @return a stream accepting the uncompressed bytes
    * @throws IOException if an I/O error occurs
    */
-  static InputStream decompressGzip(InputStream inputStream) throws IOException {
-    return new GZIPInputStream(inputStream);
-  }
-
-  /**
-   * Decompresses an input stream using Brotli.
-   *
-   * @param buffer the input stream to decompress
-   * @return a new Brotli input stream
-   * @throws UnsupportedOperationException as Brotli is not yet implemented
-   */
-  static InputStream decompressBrotli(InputStream buffer) {
-    throw new UnsupportedOperationException("Brotli compression not implemented");
-  }
-
-  /**
-   * Decompresses an input stream using Zstandard.
-   *
-   * @param buffer the input stream to decompress
-   * @return a new Zstandard input stream
-   * @throws UnsupportedOperationException as Zstandard is not yet implemented
-   */
-  static InputStream decompressZstd(InputStream buffer) {
-    throw new UnsupportedOperationException("Zstd compression not implemented");
-  }
-
-  /**
-   * Compresses an output stream using the compression algorithm represented by this enum value.
-   *
-   * @param outputStream the output stream to compress
-   * @return a new output stream that compresses to the given stream
-   * @throws IOException if an I/O error occurs
-   */
-  OutputStream compress(OutputStream outputStream) throws IOException {
+  OutputStream compress(OutputStream output) throws IOException {
     return switch (this) {
-      case NONE -> outputStream;
-      case GZIP -> compressGzip(outputStream);
-      case BROTLI -> compressBrotli(outputStream);
-      case ZSTD -> compressZstd(outputStream);
-      default -> throw new UnsupportedOperationException("Unknown compression format");
+      case NONE -> output;
+      case GZIP -> new GZIPOutputStream(output);
+      default -> throw new UnsupportedOperationException(this + " compression not implemented");
     };
   }
 
   /**
-   * Compresses an output stream using GZIP.
+   * Returns the compression stored under the given header value.
    *
-   * @param outputStream the output stream to compress
-   * @return a new GZIP output stream
-   * @throws IOException if an I/O error occurs
+   * @param value the value read from the header
+   * @return the corresponding compression
+   * @throws IOException if the value is not a known compression
    */
-  static OutputStream compressGzip(OutputStream outputStream) throws IOException {
-    return new GZIPOutputStream(outputStream);
-  }
-
-  /**
-   * Compresses an output stream using Brotli.
-   *
-   * @param outputStream the output stream to compress
-   * @return a new Brotli output stream
-   * @throws UnsupportedOperationException as Brotli is not yet implemented
-   */
-  static OutputStream compressBrotli(OutputStream outputStream) {
-    throw new UnsupportedOperationException("Brotli compression not implemented");
-  }
-
-  /**
-   * Compresses an output stream using Zstandard.
-   *
-   * @param outputStream the output stream to compress
-   * @return a new Zstandard output stream
-   * @throws UnsupportedOperationException as Zstandard is not yet implemented
-   */
-  static OutputStream compressZstd(OutputStream outputStream) {
-    throw new UnsupportedOperationException("Zstd compression not implemented");
+  static Compression forHeaderValue(int value) throws IOException {
+    var values = values();
+    if (value < 0 || value >= values.length) {
+      throw new IOException("Unknown compression value: " + value);
+    }
+    return values[value];
   }
 }
