@@ -89,69 +89,63 @@ CREATE
 -- dependent: the envelope of an axis-aligned line has zero area however long the line is, and among
 -- roads of equal length the area spans a factor of thirty. Twice the tolerance reproduces the
 -- density that filter happened to select, without depending on which way the line runs.
+
+-- The filtered and clustered stages are common table expressions: each was read exactly once, by
+-- the stage that followed it. Only the simplified result is materialized, because every zoom level
+-- below reads it.
 DROP
     MATERIALIZED VIEW IF EXISTS osm_route_filtered CASCADE;
 
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_route_filtered AS SELECT
-        tags -> 'route' AS route,
-        geom AS geom
-    FROM
-        osm_route
-    WHERE
-        tags ->> 'route' IN(
-            'road',
-            'bus',
-            'trolleybus',
-            'route',
-            'ferry',
-            'train',
-            'subway',
-            'light_rail',
-            'railway',
-            'tram',
-            'funicular'
-        );
-
--- No geometry index on this intermediate: its only reader scans it in full, and
--- ST_ClusterDBSCAN builds its own index rather than using one.
-DROP
-    INDEX IF EXISTS osm_route_filtered_geom;
-
 DROP
     MATERIALIZED VIEW IF EXISTS osm_route_clustered CASCADE;
-
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_route_clustered AS SELECT
-        route AS route,
-        geom AS geom,
-        ST_ClusterDBSCAN(
-            geom,
-            0,
-            1
-        ) OVER(
-            PARTITION BY route
-        ) AS cluster
-    FROM
-        osm_route_filtered;
-
--- No geometry index on this intermediate: its only reader scans it in full, and
--- ST_ClusterDBSCAN builds its own index rather than using one.
-DROP
-    INDEX IF EXISTS osm_route_clustered_geom;
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_route_simplified CASCADE;
 
 CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_route_simplified AS WITH merged AS(
+    MATERIALIZED VIEW IF NOT EXISTS osm_route_simplified AS WITH filtered AS(
+        SELECT
+            tags -> 'route' AS route,
+            geom AS geom
+        FROM
+            osm_route
+        WHERE
+            tags ->> 'route' IN(
+                'road',
+                'bus',
+                'trolleybus',
+                'route',
+                'ferry',
+                'train',
+                'subway',
+                'light_rail',
+                'railway',
+                'tram',
+                'funicular'
+            )
+    ),
+    clustered AS(
+        SELECT
+            route,
+            geom,
+            ST_ClusterDBSCAN(
+                geom,
+                0,
+                1
+            ) OVER(
+                PARTITION BY route
+            ) AS cluster
+        FROM
+            filtered
+    ),
+    merged AS(
         SELECT
             route AS route,
             ST_LineMerge(
                 ST_Collect(geom)
             ) AS geom
         FROM
-            osm_route_clustered
+            clustered
         GROUP BY
             route,
             cluster

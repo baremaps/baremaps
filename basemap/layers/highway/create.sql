@@ -105,70 +105,64 @@ CREATE
 -- dependent: the envelope of an axis-aligned line has zero area however long the line is, and among
 -- roads of equal length the area spans a factor of thirty. Twice the tolerance reproduces the
 -- density that filter happened to select, without depending on which way the line runs.
+
+-- The filtered and clustered stages are common table expressions: each was read exactly once, by
+-- the stage that followed it. Only the simplified result is materialized, because every zoom level
+-- below reads it.
 DROP
     MATERIALIZED VIEW IF EXISTS osm_highway_filtered CASCADE;
 
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_highway_filtered AS SELECT
-        tags -> 'highway' AS highway,
-        geom AS geom
-    FROM
-        osm_highway
-    WHERE
-        tags ->> 'highway' IN(
-            'motorway',
-            'motorway_link',
-            'trunk',
-            'trunk_link',
-            'primary',
-            'primary_link',
-            'secondary',
-            'secondary_link',
-            'tertiary',
-            'tertiary_link',
-            'unclassified',
-            'residential'
-        );
-
--- No geometry index on this intermediate: its only reader scans it in full, and
--- ST_ClusterDBSCAN builds its own index rather than using one.
-DROP
-    INDEX IF EXISTS osm_highway_filtered_geom;
-
 DROP
     MATERIALIZED VIEW IF EXISTS osm_highway_clustered CASCADE;
-
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_highway_clustered AS SELECT
-        highway AS highway,
-        geom AS geom,
-        ST_ClusterDBSCAN(
-            geom,
-            0,
-            1
-        ) OVER(
-            PARTITION BY highway
-        ) AS cluster
-    FROM
-        osm_highway_filtered;
-
--- No geometry index on this intermediate: its only reader scans it in full, and
--- ST_ClusterDBSCAN builds its own index rather than using one.
-DROP
-    INDEX IF EXISTS osm_highway_clustered_geom;
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_highway_simplified CASCADE;
 
 CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_highway_simplified AS WITH merged AS(
+    MATERIALIZED VIEW IF NOT EXISTS osm_highway_simplified AS WITH filtered AS(
+        SELECT
+            tags -> 'highway' AS highway,
+            geom AS geom
+        FROM
+            osm_highway
+        WHERE
+            tags ->> 'highway' IN(
+                'motorway',
+                'motorway_link',
+                'trunk',
+                'trunk_link',
+                'primary',
+                'primary_link',
+                'secondary',
+                'secondary_link',
+                'tertiary',
+                'tertiary_link',
+                'unclassified',
+                'residential'
+            )
+    ),
+    clustered AS(
+        SELECT
+            highway,
+            geom,
+            ST_ClusterDBSCAN(
+                geom,
+                0,
+                1
+            ) OVER(
+                PARTITION BY highway
+            ) AS cluster
+        FROM
+            filtered
+    ),
+    merged AS(
         SELECT
             highway AS highway,
             ST_LineMerge(
                 ST_Collect(geom)
             ) AS geom
         FROM
-            osm_highway_clustered
+            clustered
         GROUP BY
             highway,
             cluster

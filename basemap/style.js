@@ -37,6 +37,8 @@ import power_cable from "./layers/power/cable.js";
 import leisure_background from "./layers/leisure/background.js";
 import leisure_line from "./layers/leisure/line.js";
 import leisure_overlay from "./layers/leisure/overlay.js";
+import tourism_zoo_casing from "./layers/tourism/style_zoo_fill.js";
+import tourism_zoo from "./layers/tourism/style_zoo_line.js";
 import railway_tunnel from "./layers/railway/tunnel.js";
 import railway_line from "./layers/railway/line.js";
 
@@ -122,6 +124,8 @@ export default {
         natural_tree,
         natural_trunk,
         leisure_line,
+        tourism_zoo_casing,
+        tourism_zoo,
         boundary_line,
         waterway_label,
         //building_extrusion,

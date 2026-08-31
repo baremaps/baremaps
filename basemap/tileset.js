@@ -27,6 +27,7 @@ import landuse from "./layers/landuse/tileset.js";
 import ocean from "./layers/ocean/tileset.js";
 import railway from "./layers/railway/tileset.js";
 import route from "./layers/route/tileset.js";
+import tourism from "./layers/tourism/tileset.js";
 import man_made from "./layers/man_made/tileset.js";
 import power from "./layers/power/tileset.js";
 import point from "./layers/point/tileset.js";
@@ -61,6 +62,7 @@ export default {
     power,
     railway,
     route,
+    tourism,
     waterway,
   ]
 }

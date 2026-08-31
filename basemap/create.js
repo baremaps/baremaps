@@ -30,7 +30,6 @@ export default {
                 "layers/relation/create.sql",
                 "layers/member/create.sql",
                 "layers/linestring/create.sql",
-                "layers/polygon/create.sql",
                 "layers/aerialway/create.sql",
                 "layers/aeroway/create.sql",
                 "layers/amenity/create.sql",

@@ -30,10 +30,7 @@ CREATE
         )
 UNION SELECT
         id,
-        jsonb_build_object(
-            'amenity',
-            tags -> 'amenity'
-        ) AS tags,
+        tags,
         geom
     FROM
         osm_relation
@@ -104,84 +101,100 @@ CREATE
     FROM
         osm_amenity;
 
--- Zoom level 12
+-- Zoom levels 12 down to 4 generalize the level above them: nearby areas of the same value are
+-- dilated until they touch, merged, eroded back by the same amount, and simplified. Dilating and
+-- eroding by the same distance is a morphological closing, which keeps the result from drifting
+-- outwards as the chain descends.
+--
+-- The area threshold is applied twice on purpose: once on the input, to keep small areas out of the
+-- merge, and once on the result, to drop the slivers erosion leaves behind. Numbering the rows
+-- after st_dump rather than alongside it is what gives each part its own id; a window function in
+-- the same select list as a set-returning function is evaluated before the rows are expanded, so
+-- every part of a cluster would otherwise share one id.
+--
+-- The intermediate results are common table expressions rather than materialized views: each one is
+-- read exactly once, by the query that follows it.
+
+-- Superseded by the common table expressions below.
 DROP
     MATERIALIZED VIEW IF EXISTS osm_amenity_z12_filtered CASCADE;
 
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_amenity_z12_filtered AS SELECT
-        tags -> 'amenity' AS tag,
-        st_buffer(
-            st_simplifypreservetopology(
-                geom,
-                78270 / POWER( 2, 12 )
-            ),
-            78270 / POWER( 2, 12 )* 1.1,
-            'join=mitre'
-        ) AS geom
-    FROM
-        osm_amenity
-    WHERE
-        geom IS NOT NULL
-        AND NOT ST_IsEmpty(geom)
-        AND st_area(geom)> POWER( 78270 / POWER( 2, 12 ), 2 )* 32;
-
--- No geometry index on this intermediate: its only reader scans it in full, and
--- ST_ClusterDBSCAN builds its own index rather than using one.
 DROP
-    INDEX IF EXISTS osm_amenity_z12_filtered_geom_idx;
+    MATERIALIZED VIEW IF EXISTS osm_amenity_z11_filtered CASCADE;
 
 DROP
-    INDEX IF EXISTS osm_amenity_z12_filtered_tags_idx;
+    MATERIALIZED VIEW IF EXISTS osm_amenity_z10_filtered CASCADE;
 
-CREATE
-    INDEX IF NOT EXISTS osm_amenity_z12_filtered_tags_idx ON
-    osm_amenity_z12_filtered(tag);
-
+-- Zoom level 12
 DROP
     MATERIALIZED VIEW IF EXISTS osm_amenity_z12 CASCADE;
 
 CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_amenity_z12 AS WITH clustered AS(
+    MATERIALIZED VIEW IF NOT EXISTS osm_amenity_z12 AS WITH filtered AS(
+        SELECT
+            tags -> 'amenity' AS tag,
+            st_buffer(
+                st_simplifypreservetopology(
+                    geom,
+                    78270 / POWER( 2, 12 )
+                ),
+                78270 / POWER( 2, 12 )* 1.1,
+                'join=mitre'
+            ) AS geom
+        FROM
+            osm_amenity
+        WHERE
+            geom IS NOT NULL
+            AND NOT ST_IsEmpty(geom)
+            AND st_area(geom)> POWER( 78270 / POWER( 2, 12 ), 2 )* 32
+    ),
+    clustered AS(
         SELECT
             tag,
             geom,
             st_clusterdbscan(
                 geom,
                 0,
-                0
+                1
             ) OVER(
                 PARTITION BY tag
             ) AS cluster
         FROM
-            osm_amenity_z12_filtered
+            filtered
+    ),
+    merged AS(
+        SELECT
+            tag,
+            st_simplifypreservetopology(
+                (
+                    st_dump(
+                        st_buffer(
+                            st_collect(geom),
+                            - 78270 / POWER( 2, 12 )* 1.1,
+                            'join=mitre'
+                        )
+                    )
+                ).geom,
+                78270 / POWER( 2, 12 )
+            ) AS geom
+        FROM
+            clustered
+        GROUP BY
+            tag,
+            cluster
     ) SELECT
         ROW_NUMBER() OVER() AS id,
         jsonb_build_object(
             'amenity',
             tag
         ) AS tags,
-        st_simplifypreservetopology(
-            (
-                st_dump(
-                    st_buffer(
-                        st_collect(geom),
-                        - 78270 / POWER( 2, 12 ),
-                        'join=mitre'
-                    )
-                )
-            ).geom,
-            78270 / POWER( 2, 12 )
-        ) AS geom
+        geom
     FROM
-        clustered
+        merged
     WHERE
         geom IS NOT NULL
         AND NOT ST_IsEmpty(geom)
-        AND st_area(geom)> POWER( 78270 / POWER( 2, 12 ), 2 )* 32
-    GROUP BY
-        tag,
-        cluster;
+        AND st_area(geom)> POWER( 78270 / POWER( 2, 12 ), 2 )* 32;
 
 DROP
     INDEX IF EXISTS osm_amenity_z12_geom_idx;
@@ -201,82 +214,74 @@ CREATE
 
 -- Zoom level 11
 DROP
-    MATERIALIZED VIEW IF EXISTS osm_amenity_z11_filtered CASCADE;
-
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_amenity_z11_filtered AS SELECT
-        tags -> 'amenity' AS tag,
-        st_buffer(
-            st_simplifypreservetopology(
-                geom,
-                78270 / POWER( 2, 11 )
-            ),
-            78270 / POWER( 2, 11 )* 1.1,
-            'join=mitre'
-        ) AS geom
-    FROM
-        osm_amenity_z12
-    WHERE
-        geom IS NOT NULL
-        AND NOT ST_IsEmpty(geom)
-        AND st_area(geom)> POWER( 78270 / POWER( 2, 11 ), 2 )* 32;
-
--- No geometry index on this intermediate: its only reader scans it in full, and
--- ST_ClusterDBSCAN builds its own index rather than using one.
-DROP
-    INDEX IF EXISTS osm_amenity_z11_filtered_geom_idx;
-
-DROP
-    INDEX IF EXISTS osm_amenity_z11_filtered_tags_idx;
-
-CREATE
-    INDEX IF NOT EXISTS osm_amenity_z11_filtered_tags_idx ON
-    osm_amenity_z11_filtered(tag);
-
-DROP
     MATERIALIZED VIEW IF EXISTS osm_amenity_z11 CASCADE;
 
 CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_amenity_z11 AS WITH clustered AS(
+    MATERIALIZED VIEW IF NOT EXISTS osm_amenity_z11 AS WITH filtered AS(
+        SELECT
+            tags -> 'amenity' AS tag,
+            st_buffer(
+                st_simplifypreservetopology(
+                    geom,
+                    78270 / POWER( 2, 11 )
+                ),
+                78270 / POWER( 2, 11 )* 1.1,
+                'join=mitre'
+            ) AS geom
+        FROM
+            osm_amenity_z12
+        WHERE
+            geom IS NOT NULL
+            AND NOT ST_IsEmpty(geom)
+            AND st_area(geom)> POWER( 78270 / POWER( 2, 11 ), 2 )* 32
+    ),
+    clustered AS(
         SELECT
             tag,
             geom,
             st_clusterdbscan(
                 geom,
                 0,
-                0
+                1
             ) OVER(
                 PARTITION BY tag
             ) AS cluster
         FROM
-            osm_amenity_z11_filtered
+            filtered
+    ),
+    merged AS(
+        SELECT
+            tag,
+            st_simplifypreservetopology(
+                (
+                    st_dump(
+                        st_buffer(
+                            st_collect(geom),
+                            - 78270 / POWER( 2, 11 )* 1.1,
+                            'join=mitre'
+                        )
+                    )
+                ).geom,
+                78270 / POWER( 2, 11 )
+            ) AS geom
+        FROM
+            clustered
+        GROUP BY
+            tag,
+            cluster
     ) SELECT
         ROW_NUMBER() OVER() AS id,
         jsonb_build_object(
             'amenity',
             tag
         ) AS tags,
-        st_simplifypreservetopology(
-            (
-                st_dump(
-                    st_buffer(
-                        st_collect(geom),
-                        - 78270 / POWER( 2, 11 ),
-                        'join=mitre'
-                    )
-                )
-            ).geom,
-            78270 / POWER( 2, 11 )
-        ) AS geom
+        geom
     FROM
-        clustered
+        merged
     WHERE
         geom IS NOT NULL
         AND NOT ST_IsEmpty(geom)
-        AND st_area(geom)> POWER( 78270 / POWER( 2, 11 ), 2 )* 32
-    GROUP BY
-        tag,
-        cluster;
+        AND st_area(geom)> POWER( 78270 / POWER( 2, 11 ), 2 )* 32;
 
 DROP
     INDEX IF EXISTS osm_amenity_z11_geom_idx;
@@ -296,82 +301,74 @@ CREATE
 
 -- Zoom level 10
 DROP
-    MATERIALIZED VIEW IF EXISTS osm_amenity_z10_filtered CASCADE;
-
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_amenity_z10_filtered AS SELECT
-        tags -> 'amenity' AS tag,
-        st_buffer(
-            st_simplifypreservetopology(
-                geom,
-                78270 / POWER( 2, 10 )
-            ),
-            78270 / POWER( 2, 10 )* 1.1,
-            'join=mitre'
-        ) AS geom
-    FROM
-        osm_amenity_z11
-    WHERE
-        geom IS NOT NULL
-        AND NOT ST_IsEmpty(geom)
-        AND st_area(geom)> POWER( 78270 / POWER( 2, 10 ), 2 )* 32;
-
--- No geometry index on this intermediate: its only reader scans it in full, and
--- ST_ClusterDBSCAN builds its own index rather than using one.
-DROP
-    INDEX IF EXISTS osm_amenity_z10_filtered_geom_idx;
-
-DROP
-    INDEX IF EXISTS osm_amenity_z10_filtered_tags_idx;
-
-CREATE
-    INDEX IF NOT EXISTS osm_amenity_z10_filtered_tags_idx ON
-    osm_amenity_z10_filtered(tag);
-
-DROP
     MATERIALIZED VIEW IF EXISTS osm_amenity_z10 CASCADE;
 
 CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_amenity_z10 AS WITH clustered AS(
+    MATERIALIZED VIEW IF NOT EXISTS osm_amenity_z10 AS WITH filtered AS(
+        SELECT
+            tags -> 'amenity' AS tag,
+            st_buffer(
+                st_simplifypreservetopology(
+                    geom,
+                    78270 / POWER( 2, 10 )
+                ),
+                78270 / POWER( 2, 10 )* 1.1,
+                'join=mitre'
+            ) AS geom
+        FROM
+            osm_amenity_z11
+        WHERE
+            geom IS NOT NULL
+            AND NOT ST_IsEmpty(geom)
+            AND st_area(geom)> POWER( 78270 / POWER( 2, 10 ), 2 )* 32
+    ),
+    clustered AS(
         SELECT
             tag,
             geom,
             st_clusterdbscan(
                 geom,
                 0,
-                0
+                1
             ) OVER(
                 PARTITION BY tag
             ) AS cluster
         FROM
-            osm_amenity_z10_filtered
+            filtered
+    ),
+    merged AS(
+        SELECT
+            tag,
+            st_simplifypreservetopology(
+                (
+                    st_dump(
+                        st_buffer(
+                            st_collect(geom),
+                            - 78270 / POWER( 2, 10 )* 1.1,
+                            'join=mitre'
+                        )
+                    )
+                ).geom,
+                78270 / POWER( 2, 10 )
+            ) AS geom
+        FROM
+            clustered
+        GROUP BY
+            tag,
+            cluster
     ) SELECT
         ROW_NUMBER() OVER() AS id,
         jsonb_build_object(
             'amenity',
             tag
         ) AS tags,
-        st_simplifypreservetopology(
-            (
-                st_dump(
-                    st_buffer(
-                        st_collect(geom),
-                        - 78270 / POWER( 2, 10 ),
-                        'join=mitre'
-                    )
-                )
-            ).geom,
-            78270 / POWER( 2, 10 )
-        ) AS geom
+        geom
     FROM
-        clustered
+        merged
     WHERE
         geom IS NOT NULL
         AND NOT ST_IsEmpty(geom)
-        AND st_area(geom)> POWER( 78270 / POWER( 2, 10 ), 2 )* 32
-    GROUP BY
-        tag,
-        cluster;
+        AND st_area(geom)> POWER( 78270 / POWER( 2, 10 ), 2 )* 32;
 
 DROP
     INDEX IF EXISTS osm_amenity_z10_geom_idx;
@@ -419,39 +416,46 @@ CREATE
             st_clusterdbscan(
                 geom,
                 0,
-                0
+                1
             ) OVER(
                 PARTITION BY tag
             ) AS cluster
         FROM
             filtered
+    ),
+    merged AS(
+        SELECT
+            tag,
+            st_simplifypreservetopology(
+                (
+                    st_dump(
+                        st_buffer(
+                            st_collect(geom),
+                            - 78270 / POWER( 2, 9 )* 1.1,
+                            'join=mitre'
+                        )
+                    )
+                ).geom,
+                78270 / POWER( 2, 9 )
+            ) AS geom
+        FROM
+            clustered
+        GROUP BY
+            tag,
+            cluster
     ) SELECT
         ROW_NUMBER() OVER() AS id,
         jsonb_build_object(
             'amenity',
             tag
         ) AS tags,
-        st_simplifypreservetopology(
-            (
-                st_dump(
-                    st_buffer(
-                        st_collect(geom),
-                        - 78270 / POWER( 2, 9 ),
-                        'join=mitre'
-                    )
-                )
-            ).geom,
-            78270 / POWER( 2, 9 )
-        ) AS geom
+        geom
     FROM
-        clustered
+        merged
     WHERE
         geom IS NOT NULL
         AND NOT ST_IsEmpty(geom)
-        AND st_area(geom)> POWER( 78270 / POWER( 2, 9 ), 2 )* 32
-    GROUP BY
-        tag,
-        cluster;
+        AND st_area(geom)> POWER( 78270 / POWER( 2, 9 ), 2 )* 32;
 
 DROP
     INDEX IF EXISTS osm_amenity_z9_geom_idx;
@@ -499,39 +503,46 @@ CREATE
             st_clusterdbscan(
                 geom,
                 0,
-                0
+                1
             ) OVER(
                 PARTITION BY tag
             ) AS cluster
         FROM
             filtered
+    ),
+    merged AS(
+        SELECT
+            tag,
+            st_simplifypreservetopology(
+                (
+                    st_dump(
+                        st_buffer(
+                            st_collect(geom),
+                            - 78270 / POWER( 2, 8 )* 1.1,
+                            'join=mitre'
+                        )
+                    )
+                ).geom,
+                78270 / POWER( 2, 8 )
+            ) AS geom
+        FROM
+            clustered
+        GROUP BY
+            tag,
+            cluster
     ) SELECT
         ROW_NUMBER() OVER() AS id,
         jsonb_build_object(
             'amenity',
             tag
         ) AS tags,
-        st_simplifypreservetopology(
-            (
-                st_dump(
-                    st_buffer(
-                        st_collect(geom),
-                        - 78270 / POWER( 2, 8 ),
-                        'join=mitre'
-                    )
-                )
-            ).geom,
-            78270 / POWER( 2, 8 )
-        ) AS geom
+        geom
     FROM
-        clustered
+        merged
     WHERE
         geom IS NOT NULL
         AND NOT ST_IsEmpty(geom)
-        AND st_area(geom)> POWER( 78270 / POWER( 2, 8 ), 2 )* 32
-    GROUP BY
-        tag,
-        cluster;
+        AND st_area(geom)> POWER( 78270 / POWER( 2, 8 ), 2 )* 32;
 
 DROP
     INDEX IF EXISTS osm_amenity_z8_geom_idx;
@@ -579,39 +590,46 @@ CREATE
             st_clusterdbscan(
                 geom,
                 0,
-                0
+                1
             ) OVER(
                 PARTITION BY tag
             ) AS cluster
         FROM
             filtered
+    ),
+    merged AS(
+        SELECT
+            tag,
+            st_simplifypreservetopology(
+                (
+                    st_dump(
+                        st_buffer(
+                            st_collect(geom),
+                            - 78270 / POWER( 2, 7 )* 1.1,
+                            'join=mitre'
+                        )
+                    )
+                ).geom,
+                78270 / POWER( 2, 7 )
+            ) AS geom
+        FROM
+            clustered
+        GROUP BY
+            tag,
+            cluster
     ) SELECT
         ROW_NUMBER() OVER() AS id,
         jsonb_build_object(
             'amenity',
             tag
         ) AS tags,
-        st_simplifypreservetopology(
-            (
-                st_dump(
-                    st_buffer(
-                        st_collect(geom),
-                        - 78270 / POWER( 2, 7 ),
-                        'join=mitre'
-                    )
-                )
-            ).geom,
-            78270 / POWER( 2, 7 )
-        ) AS geom
+        geom
     FROM
-        clustered
+        merged
     WHERE
         geom IS NOT NULL
         AND NOT ST_IsEmpty(geom)
-        AND st_area(geom)> POWER( 78270 / POWER( 2, 7 ), 2 )* 32
-    GROUP BY
-        tag,
-        cluster;
+        AND st_area(geom)> POWER( 78270 / POWER( 2, 7 ), 2 )* 32;
 
 DROP
     INDEX IF EXISTS osm_amenity_z7_geom_idx;
@@ -659,39 +677,46 @@ CREATE
             st_clusterdbscan(
                 geom,
                 0,
-                0
+                1
             ) OVER(
                 PARTITION BY tag
             ) AS cluster
         FROM
             filtered
+    ),
+    merged AS(
+        SELECT
+            tag,
+            st_simplifypreservetopology(
+                (
+                    st_dump(
+                        st_buffer(
+                            st_collect(geom),
+                            - 78270 / POWER( 2, 6 )* 1.1,
+                            'join=mitre'
+                        )
+                    )
+                ).geom,
+                78270 / POWER( 2, 6 )
+            ) AS geom
+        FROM
+            clustered
+        GROUP BY
+            tag,
+            cluster
     ) SELECT
         ROW_NUMBER() OVER() AS id,
         jsonb_build_object(
             'amenity',
             tag
         ) AS tags,
-        st_simplifypreservetopology(
-            (
-                st_dump(
-                    st_buffer(
-                        st_collect(geom),
-                        - 78270 / POWER( 2, 6 ),
-                        'join=mitre'
-                    )
-                )
-            ).geom,
-            78270 / POWER( 2, 6 )
-        ) AS geom
+        geom
     FROM
-        clustered
+        merged
     WHERE
         geom IS NOT NULL
         AND NOT ST_IsEmpty(geom)
-        AND st_area(geom)> POWER( 78270 / POWER( 2, 6 ), 2 )* 32
-    GROUP BY
-        tag,
-        cluster;
+        AND st_area(geom)> POWER( 78270 / POWER( 2, 6 ), 2 )* 32;
 
 DROP
     INDEX IF EXISTS osm_amenity_z6_geom_idx;
@@ -739,39 +764,46 @@ CREATE
             st_clusterdbscan(
                 geom,
                 0,
-                0
+                1
             ) OVER(
                 PARTITION BY tag
             ) AS cluster
         FROM
             filtered
+    ),
+    merged AS(
+        SELECT
+            tag,
+            st_simplifypreservetopology(
+                (
+                    st_dump(
+                        st_buffer(
+                            st_collect(geom),
+                            - 78270 / POWER( 2, 5 )* 1.1,
+                            'join=mitre'
+                        )
+                    )
+                ).geom,
+                78270 / POWER( 2, 5 )
+            ) AS geom
+        FROM
+            clustered
+        GROUP BY
+            tag,
+            cluster
     ) SELECT
         ROW_NUMBER() OVER() AS id,
         jsonb_build_object(
             'amenity',
             tag
         ) AS tags,
-        st_simplifypreservetopology(
-            (
-                st_dump(
-                    st_buffer(
-                        st_collect(geom),
-                        - 78270 / POWER( 2, 5 ),
-                        'join=mitre'
-                    )
-                )
-            ).geom,
-            78270 / POWER( 2, 5 )
-        ) AS geom
+        geom
     FROM
-        clustered
+        merged
     WHERE
         geom IS NOT NULL
         AND NOT ST_IsEmpty(geom)
-        AND st_area(geom)> POWER( 78270 / POWER( 2, 5 ), 2 )* 32
-    GROUP BY
-        tag,
-        cluster;
+        AND st_area(geom)> POWER( 78270 / POWER( 2, 5 ), 2 )* 32;
 
 DROP
     INDEX IF EXISTS osm_amenity_z5_geom_idx;
@@ -819,39 +851,46 @@ CREATE
             st_clusterdbscan(
                 geom,
                 0,
-                0
+                1
             ) OVER(
                 PARTITION BY tag
             ) AS cluster
         FROM
             filtered
+    ),
+    merged AS(
+        SELECT
+            tag,
+            st_simplifypreservetopology(
+                (
+                    st_dump(
+                        st_buffer(
+                            st_collect(geom),
+                            - 78270 / POWER( 2, 4 )* 1.1,
+                            'join=mitre'
+                        )
+                    )
+                ).geom,
+                78270 / POWER( 2, 4 )
+            ) AS geom
+        FROM
+            clustered
+        GROUP BY
+            tag,
+            cluster
     ) SELECT
         ROW_NUMBER() OVER() AS id,
         jsonb_build_object(
             'amenity',
             tag
         ) AS tags,
-        st_simplifypreservetopology(
-            (
-                st_dump(
-                    st_buffer(
-                        st_collect(geom),
-                        - 78270 / POWER( 2, 4 ),
-                        'join=mitre'
-                    )
-                )
-            ).geom,
-            78270 / POWER( 2, 4 )
-        ) AS geom
+        geom
     FROM
-        clustered
+        merged
     WHERE
         geom IS NOT NULL
         AND NOT ST_IsEmpty(geom)
-        AND st_area(geom)> POWER( 78270 / POWER( 2, 4 ), 2 )* 32
-    GROUP BY
-        tag,
-        cluster;
+        AND st_area(geom)> POWER( 78270 / POWER( 2, 4 ), 2 )* 32;
 
 DROP
     INDEX IF EXISTS osm_amenity_z4_geom_idx;
@@ -868,6 +907,10 @@ CREATE
     INDEX IF NOT EXISTS osm_amenity_z4_tags_idx ON
     osm_amenity_z4
         USING GIN(tags);
+
+-- Zoom levels 3 down to 1 relax the area threshold from 32 to 16 tolerances squared. At these
+-- scales 32 tolerances squared is larger than most countries, so the stricter threshold used above
+-- would leave these levels empty on anything short of a planet import.
 
 -- Zoom level 3
 DROP
@@ -917,7 +960,7 @@ CREATE
             78270 / POWER( 2, 2 )
         ) AS geom
     FROM
-        osm_amenity_z4
+        osm_amenity_z3
     WHERE
         geom IS NOT NULL
         AND NOT ST_IsEmpty(geom)
@@ -952,7 +995,7 @@ CREATE
             78270 / POWER( 2, 1 )
         ) AS geom
     FROM
-        osm_amenity_z4
+        osm_amenity_z2
     WHERE
         geom IS NOT NULL
         AND NOT ST_IsEmpty(geom)

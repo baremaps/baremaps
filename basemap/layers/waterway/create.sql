@@ -89,64 +89,58 @@ CREATE
 -- dependent: the envelope of an axis-aligned line has zero area however long the line is, and among
 -- roads of equal length the area spans a factor of thirty. Twice the tolerance reproduces the
 -- density that filter happened to select, without depending on which way the line runs.
+
+-- The filtered and clustered stages are common table expressions: each was read exactly once, by
+-- the stage that followed it. Only the simplified result is materialized, because every zoom level
+-- below reads it.
 DROP
     MATERIALIZED VIEW IF EXISTS osm_waterway_filtered CASCADE;
 
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_waterway_filtered AS SELECT
-        tags -> 'waterway' AS waterway,
-        geom AS geom
-    FROM
-        osm_waterway
-    WHERE
-        tags ->> 'waterway' IN(
-            'river',
-            'stream',
-            'canal',
-            'drain',
-            'ditch'
-        )
-        AND NOT tags ? 'intermittent';
-
--- No geometry index on this intermediate: its only reader scans it in full, and
--- ST_ClusterDBSCAN builds its own index rather than using one.
-DROP
-    INDEX IF EXISTS osm_waterway_filtered_geom;
-
 DROP
     MATERIALIZED VIEW IF EXISTS osm_waterway_clustered CASCADE;
-
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_waterway_clustered AS SELECT
-        waterway AS waterway,
-        geom AS geom,
-        ST_ClusterDBSCAN(
-            geom,
-            0,
-            1
-        ) OVER(
-            PARTITION BY waterway
-        ) AS cluster
-    FROM
-        osm_waterway_filtered;
-
--- No geometry index on this intermediate: its only reader scans it in full, and
--- ST_ClusterDBSCAN builds its own index rather than using one.
-DROP
-    INDEX IF EXISTS osm_waterway_clustered_geom;
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_waterway_simplified CASCADE;
 
 CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_waterway_simplified AS WITH merged AS(
+    MATERIALIZED VIEW IF NOT EXISTS osm_waterway_simplified AS WITH filtered AS(
+        SELECT
+            tags -> 'waterway' AS waterway,
+            geom AS geom
+        FROM
+            osm_waterway
+        WHERE
+            tags ->> 'waterway' IN(
+                'river',
+                'stream',
+                'canal',
+                'drain',
+                'ditch'
+            )
+            AND NOT tags ? 'intermittent'
+    ),
+    clustered AS(
+        SELECT
+            waterway,
+            geom,
+            ST_ClusterDBSCAN(
+                geom,
+                0,
+                1
+            ) OVER(
+                PARTITION BY waterway
+            ) AS cluster
+        FROM
+            filtered
+    ),
+    merged AS(
         SELECT
             waterway AS waterway,
             ST_LineMerge(
                 ST_Collect(geom)
             ) AS geom
         FROM
-            osm_waterway_clustered
+            clustered
         GROUP BY
             waterway,
             cluster

@@ -88,64 +88,58 @@ CREATE
 -- dependent: the envelope of an axis-aligned line has zero area however long the line is, and among
 -- roads of equal length the area spans a factor of thirty. Twice the tolerance reproduces the
 -- density that filter happened to select, without depending on which way the line runs.
+
+-- The filtered and clustered stages are common table expressions: each was read exactly once, by
+-- the stage that followed it. Only the simplified result is materialized, because every zoom level
+-- below reads it.
 DROP
     MATERIALIZED VIEW IF EXISTS osm_railway_filtered CASCADE;
 
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_railway_filtered AS SELECT
-        tags -> 'railway' AS railway,
-        geom AS geom
-    FROM
-        osm_railway
-    WHERE
-        tags ->> 'railway' IN(
-            'light_rail',
-            'monorail',
-            'rail',
-            'subway',
-            'tram'
-        )
-        AND NOT tags ? 'service';
-
--- No geometry index on this intermediate: its only reader scans it in full, and
--- ST_ClusterDBSCAN builds its own index rather than using one.
-DROP
-    INDEX IF EXISTS osm_railway_filtered_geom;
-
 DROP
     MATERIALIZED VIEW IF EXISTS osm_railway_clustered CASCADE;
-
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_railway_clustered AS SELECT
-        railway AS railway,
-        geom AS geom,
-        ST_ClusterDBSCAN(
-            geom,
-            0,
-            1
-        ) OVER(
-            PARTITION BY railway
-        ) AS cluster
-    FROM
-        osm_railway_filtered;
-
--- No geometry index on this intermediate: its only reader scans it in full, and
--- ST_ClusterDBSCAN builds its own index rather than using one.
-DROP
-    INDEX IF EXISTS osm_railway_clustered_geom;
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_railway_simplified CASCADE;
 
 CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_railway_simplified AS WITH merged AS(
+    MATERIALIZED VIEW IF NOT EXISTS osm_railway_simplified AS WITH filtered AS(
+        SELECT
+            tags -> 'railway' AS railway,
+            geom AS geom
+        FROM
+            osm_railway
+        WHERE
+            tags ->> 'railway' IN(
+                'light_rail',
+                'monorail',
+                'rail',
+                'subway',
+                'tram'
+            )
+            AND NOT tags ? 'service'
+    ),
+    clustered AS(
+        SELECT
+            railway,
+            geom,
+            ST_ClusterDBSCAN(
+                geom,
+                0,
+                1
+            ) OVER(
+                PARTITION BY railway
+            ) AS cluster
+        FROM
+            filtered
+    ),
+    merged AS(
         SELECT
             railway AS railway,
             ST_LineMerge(
                 ST_Collect(geom)
             ) AS geom
         FROM
-            osm_railway_clustered
+            clustered
         GROUP BY
             railway,
             cluster

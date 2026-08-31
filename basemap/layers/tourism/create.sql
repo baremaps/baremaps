@@ -15,6 +15,15 @@ CREATE
         tags,
         geom
     FROM
+        osm_way
+    WHERE
+        geom IS NOT NULL
+        AND tags ? 'tourism'
+UNION SELECT
+        id,
+        tags,
+        geom
+    FROM
         osm_relation
     WHERE
         geom IS NOT NULL
