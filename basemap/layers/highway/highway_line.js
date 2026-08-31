@@ -30,11 +30,6 @@ let directives = [
         'line-width-stops': theme.highwayMinorLineWidth,
     },
     {
-        filter: ['==', ['get', 'highway'], 'busway'],
-        'line-color': theme.highwayBuswayDashColor,
-        'line-width-stops': theme.highwayMinorLineWidth,
-    },
-    {
         filter: [
             'any',
             ['==', ['get', 'highway'], 'cycleway'],

@@ -26,7 +26,7 @@ let directives = [
         'line-width-stops': theme.barrierWallLineWidth,
     },
     {
-        filter: ['==', ['get', 'barrier'], 'wall'],
+        filter: ['==', ['get', 'barrier'], 'fence'],
         'line-color': theme.barrierFenceLineColor,
         'line-width-stops': theme.barrierFenceLineWidth,
     },

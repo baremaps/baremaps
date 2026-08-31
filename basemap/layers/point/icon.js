@@ -23,7 +23,7 @@ let directives = [
     // Gastronomy
     {
         'filter': [
-            'all',
+            'any',
             ['==', ['get', 'amenity'], 'restaurant'],
             ['==', ['get', 'amenity'], 'food_court']
         ],
@@ -359,8 +359,8 @@ let directives = [
     {
         'filter': ['==', ['get', 'amenity'], 'public_bath'],
         'icon-image': 'public_bath',
-        'icon-color': theme.pointIconPublicBathIconColor,
-        'text-color': theme.pointIconPublicBathTextColor
+        'icon-color': theme.amenityPublicBathIconColor,
+        'text-color': theme.amenityPublicBathTextColor
     },
     {
         'filter': ['==', ['get', 'leisure'], 'miniature_golf'],
@@ -2055,9 +2055,9 @@ export default asLayerObject(withSortKeys(directives), {
     paint: {
         'icon-opacity': 1,
         'icon-translate-anchor': 'map',
-        'icon-halo-color': theme.pointIconLayerIconHaloColor,
+        'icon-halo-color': theme.pointIconHaloColor,
         'icon-halo-width': 1,
         'text-halo-width': 1,
-        'text-halo-color': theme.pointIconLayerTextHaloColor,
+        'text-halo-color': theme.pointTextHaloColor,
     },
 });

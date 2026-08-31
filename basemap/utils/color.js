@@ -178,11 +178,20 @@ class RGB extends Color {
         return new HSL(h, s, l, this.a);
     }
 
+    /**
+     * Channels are rounded and clamped so that the result parses back through
+     * `fromString`, whose pattern only accepts integers. Without this a theme
+     * derived from another derived theme silently copies its parent, because
+     * the colour-blindness matrices produce fractional channels and the failed
+     * parse is indistinguishable from a value that is not a colour at all.
+     */
     toString() {
+        const channel = (value) => Math.min(255, Math.max(0, Math.round(value)));
+        const r = channel(this.r), g = channel(this.g), b = channel(this.b);
         if (this.a == 1) {
-            return `rgb(${this.r},${this.g},${this.b})`;
+            return `rgb(${r},${g},${b})`;
         } else {
-            return `rgba(${this.r},${this.g},${this.b},${this.a})`;
+            return `rgba(${r},${g},${b},${this.a})`;
         }
     }
 }

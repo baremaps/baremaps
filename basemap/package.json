@@ -1,0 +1,14 @@
+{
+  "name": "baremaps-basemap",
+  "version": "0.0.1",
+  "description": "Tileset and style configuration for the OpenStreetMap basemap",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "validate": "node validate.js"
+  },
+  "devDependencies": {
+    "@maplibre/maplibre-gl-style-spec": "^26.4.1"
+  }
+}

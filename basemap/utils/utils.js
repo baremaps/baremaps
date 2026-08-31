@@ -201,8 +201,39 @@ function textSizeStops(directives) {
     return interpolateStops(directives, 'text-size-stops', 'text-size', 1)
 }
 
+/**
+ * Determine the zoom levels at which the merged curve changes slope.
+ *
+ * Every stop carries a copy of the whole filter set, so emitting one per zoom
+ * level makes the filters, rather than the values, the bulk of the style. The
+ * curve produced by `interpolate` is piecewise linear, so only the zoom levels
+ * where it bends need a stop; the rest are reproduced exactly by the linear
+ * interpolation between them.
+ *
+ * A curve bends at each of its breakpoints, at the zoom just below the first
+ * breakpoint (below which the value is flat at zero), and at every integer zoom
+ * past the last breakpoint, where the value doubles rather than growing linearly.
+ */
+function interpolationZooms(activeDirectives, property) {
+    const zooms = new Set([0, 22]);
+    for (const directive of activeDirectives) {
+        const stops = directive[property];
+        if (stops[0] - 1 >= 0) {
+            zooms.add(stops[0] - 1);
+        }
+        for (let i = 0; i < stops.length; i += 2) {
+            zooms.add(stops[i]);
+        }
+        for (let zoom = stops[stops.length - 2] + 1; zoom <= 22; zoom++) {
+            zooms.add(zoom);
+        }
+    }
+    return [...zooms].filter((zoom) => zoom >= 0 && zoom <= 22).sort((a, b) => a - b);
+}
+
 function interpolateStops(directives, property, alias, value) {
-    if (directives.filter((directive) => directive[property]).length == 0) {
+    const activeDirectives = directives.filter((directive) => directive[property]);
+    if (activeDirectives.length == 0) {
         return {};
     }
     var mergedDirective = [
@@ -210,16 +241,12 @@ function interpolateStops(directives, property, alias, value) {
         ['linear'],
         ['zoom'],
     ];
-    for (let zoom = 0; zoom <= 22; zoom++) {
+    for (let zoom of interpolationZooms(activeDirectives, property)) {
         mergedDirective.push(zoom);
         let cases = ['case']
-        for (let directive of directives) {
-            if (directive[property]) {
-                let filter = directive['filter'];
-                let value = interpolate(zoom, directive[property]);
-                cases.push(filter);
-                cases.push(value);
-            }
+        for (let directive of activeDirectives) {
+            cases.push(directive['filter']);
+            cases.push(interpolate(zoom, directive[property]));
         }
         cases.push(value);
         mergedDirective.push(cases);

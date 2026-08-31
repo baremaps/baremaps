@@ -22,7 +22,7 @@ let directives = [
             ['==', ['get', 'highway'], 'construction'],
             ['!', ['has', 'construction']],
         ],
-        'line-color': theme.constructionDefaultLineColor,
+        'line-color': theme.highwayDefaultConstructionLineColor,
         'line-width-stops': theme.highwayConstructionLineWidth,
     },
     {
@@ -34,7 +34,7 @@ let directives = [
                 ['==', ['get', 'construction'], 'motorway_link'],
             ]
         ],
-        'line-color': theme.constructionMotorwayLineColor,
+        'line-color': theme.highwayMotorwayConstructionLineColor,
         'line-width-stops': theme.highwayConstructionLineWidth,
     },
     {
@@ -46,7 +46,7 @@ let directives = [
                 ['==', ['get', 'construction'], 'trunk_link'],
             ]
         ],
-        'line-color': theme.constructionTrunkLineColor,
+        'line-color': theme.highwayTrunkConstructionLineColor,
         'line-width-stops': theme.highwayConstructionLineWidth,
     },
     {
@@ -58,7 +58,7 @@ let directives = [
                 ['==', ['get', 'construction'], 'primary_link'],
             ]
         ],
-        'line-color': theme.constructionPrimaryLineColor,
+        'line-color': theme.highwayPrimaryConstructionLineColor,
         'line-width-stops': theme.highwayConstructionLineWidth,
     },
     {
@@ -70,7 +70,7 @@ let directives = [
                 ['==', ['get', 'construction'], 'secondary_link'],
             ]
         ],
-        'line-color': theme.constructionSecondaryLineColor,
+        'line-color': theme.highwaySecondaryConstructionLineColor,
         'line-width-stops': theme.highwayConstructionLineWidth,
     },
     {
@@ -82,7 +82,7 @@ let directives = [
                 ['==', ['get', 'construction'], 'tertiary_link'],
             ]
         ],
-        'line-color': theme.constructionTertiaryLineColor,
+        'line-color': theme.highwayTertiaryConstructionLineColor,
         'line-width-stops': theme.highwayConstructionLineWidth,
     },
     {
@@ -91,7 +91,7 @@ let directives = [
             ['==', ['get', 'highway'], 'construction'],
             ['==', ['get', 'construction'], 'unclassified'],
         ],
-        'line-color': theme.constructionUnclassifiedLineColor,
+        'line-color': theme.highwayUnclassifiedConstructionLineColor,
         'line-width-stops': theme.highwayConstructionLineWidth,
     },
     {
@@ -100,7 +100,7 @@ let directives = [
             ['==', ['get', 'highway'], 'construction'],
             ['==', ['get', 'construction'], 'residential'],
         ],
-        'line-color': theme.constructionResidentialLineColor,
+        'line-color': theme.highwayResidentialConstructionLineColor,
         'line-width-stops': theme.highwayConstructionLineWidth,
     },
     {
@@ -109,7 +109,7 @@ let directives = [
             ['==', ['get', 'highway'], 'construction'],
             ['==', ['get', 'construction'], 'living_street'],
         ],
-        'line-color': theme.constructionLivingStreetLineColor,
+        'line-color': theme.highwayLivingStreetConstructionLineColor,
         'line-width-stops': theme.highwayConstructionLineWidth,
     },
     {
@@ -118,7 +118,7 @@ let directives = [
             ['==', ['get', 'highway'], 'construction'],
             ['==', ['get', 'construction'], 'service'],
         ],
-        'line-color': theme.constructionServiceLineColor,
+        'line-color': theme.highwayServiceConstructionLineColor,
         'line-width-stops': theme.highwayConstructionLineWidth,
     },
     {
@@ -127,7 +127,7 @@ let directives = [
             ['==', ['get', 'highway'], 'construction'],
             ['==', ['get', 'construction'], 'raceway'],
         ],
-        'line-color': theme.constructionRacewayLineColor,
+        'line-color': theme.highwayRacewayConstructionLineColor,
         'line-width-stops': theme.highwayConstructionLineWidth,
     },
 ]

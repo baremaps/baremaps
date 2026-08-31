@@ -117,12 +117,82 @@ Simply put, it adds in the ability to describe the `vector_tiles` and their cont
 
 The configuration format used in the `style.js` file follows the [Mapbox style specification](https://github.com/mapbox/mapbox-gl-js).
 
+## Selecting a theme
+
+The colours of the style are held in `themes/`, separately from the rules that use
+them. `themes/default.js` lists every colour; the others are derived from it by a
+transform, so `themes/dark.js` is the light theme inverted and the colour-vision
+themes apply the corresponding confusion matrix. Deriving them means a colour
+added to the default theme appears in all of them.
+
+`BAREMAPS_THEME` selects the one the style is built with, naming a file in
+`themes/` without its extension. It defaults to `default`, and an unknown name
+fails with the list of valid ones.
+
+```
+BAREMAPS_THEME=dark baremaps map dev \
+  --tileset 'tileset.js' \
+  --style 'style.js'
+```
+
 ## JavaScript as a configuration language
 
 All the configuration files are written in JavaScript instead of JSON.
 This allows for more flexibility and the use of JavaScript functions to generate the configuration.
 Additionally, it allows for imports and comments, which are not supported in JSON.
 As the configuration files got bigger and more complex, this choice became more and more beneficial.
+
+## Validating the configuration
+
+Because the configuration is plain JavaScript, a mistyped theme key is not an error:
+it evaluates to `undefined`, the property is dropped from the generated layer, and
+MapLibre falls back to its own default, which is black for a line or fill colour.
+The following command checks for that and for the other mistakes the language does
+not catch on its own.
+
+```
+node validate.js
+```
+
+It reports as errors:
+
+* a `theme.*` key that is read by a layer but not defined,
+* a theme value that is neither a colour nor a `[zoom, value, ...]` stop array,
+  or a colour that does not survive a round-trip through `utils/color.js` and so
+  would be silently dropped by any theme derived from it,
+* a filter that can never match, such as an `all` requiring one tag to hold two
+  different values,
+* a directive whose filter repeats an earlier one in the same layer, which a
+  `case` expression can never reach,
+* a duplicate layer id,
+* anything the [MapLibre style specification](https://maplibre.org/maplibre-style-spec/)
+  rejects.
+
+It reports as warnings a theme key that nothing references, a layer module that
+neither `style.js` nor `tileset.js` imports, and any divergence between the layer
+groups listed in `parityGroups`.
+
+That last check is worth explaining. The road, tunnel and bridge layers repeat
+their directive lists rather than sharing a generated one, so that a single road
+class can be adjusted without disturbing the others. The cost of that choice is
+that the lists drift apart unnoticed. Rather than remove the duplication, the
+check reports a feature class that some members of a group style and others do
+not, and a divergence that is intended can be recorded in the group's `accept`
+list so that the decision stays visible.
+
+The MapLibre check needs its dependency; the rest run without one.
+
+```
+npm install
+```
+
+`BAREMAPS_THEME` applies here too, so a theme can be checked before it is used.
+The theme values themselves are checked for every theme on every run, since a
+derived theme silently keeps its parent's value for any colour it cannot parse.
+
+```
+BAREMAPS_THEME=dark node validate.js
+```
 
 ## Tools
 
