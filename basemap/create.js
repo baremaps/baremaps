@@ -49,7 +49,6 @@ export default {
                 "layers/route/create.sql",
                 "layers/tourism/create.sql",
                 "layers/waterway/create.sql",
-                "layers/ocean/create.sql",
             ].map(file => {
                 return {
                     "type": "ExecuteSqlScript",

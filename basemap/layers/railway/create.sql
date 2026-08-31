@@ -83,6 +83,11 @@ CREATE
     FROM
         osm_railway;
 
+-- Features are dropped below a length of twice the simplification tolerance. The test used to
+-- compare the area of the envelope against the square of the tolerance, which is orientation
+-- dependent: the envelope of an axis-aligned line has zero area however long the line is, and among
+-- roads of equal length the area spans a factor of thirty. Twice the tolerance reproduces the
+-- density that filter happened to select, without depending on which way the line runs.
 DROP
     MATERIALIZED VIEW IF EXISTS osm_railway_filtered CASCADE;
 
@@ -102,13 +107,10 @@ CREATE
         )
         AND NOT tags ? 'service';
 
+-- No geometry index on this intermediate: its only reader scans it in full, and
+-- ST_ClusterDBSCAN builds its own index rather than using one.
 DROP
     INDEX IF EXISTS osm_railway_filtered_geom;
-
-CREATE
-    INDEX IF NOT EXISTS osm_railway_filtered_geom ON
-    osm_railway_filtered
-        USING GIST(geom);
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_railway_clustered CASCADE;
@@ -127,13 +129,10 @@ CREATE
     FROM
         osm_railway_filtered;
 
+-- No geometry index on this intermediate: its only reader scans it in full, and
+-- ST_ClusterDBSCAN builds its own index rather than using one.
 DROP
     INDEX IF EXISTS osm_railway_clustered_geom;
-
-CREATE
-    INDEX IF NOT EXISTS osm_railway_clustered_geom ON
-    osm_railway_clustered
-        USING GIST(geom);
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_railway_simplified CASCADE;
@@ -192,11 +191,7 @@ CREATE
         osm_railway_simplified
     WHERE
         geom IS NOT NULL
-        AND(
-            st_area(
-                st_envelope(geom)
-            )> POWER(( 78270 / POWER( 2, 12 )), 2 )
-        );
+        AND st_length(geom)> 78270 / POWER( 2, 12 )* 2;
 
 DROP
     INDEX IF EXISTS osm_railway_z12_geom_idx;
@@ -221,11 +216,7 @@ CREATE
         osm_railway_simplified
     WHERE
         geom IS NOT NULL
-        AND(
-            st_area(
-                st_envelope(geom)
-            )> POWER(( 78270 / POWER( 2, 11 )), 2 )
-        );
+        AND st_length(geom)> 78270 / POWER( 2, 11 )* 2;
 
 DROP
     INDEX IF EXISTS osm_railway_z11_geom_idx;
@@ -250,11 +241,7 @@ CREATE
         osm_railway_simplified
     WHERE
         geom IS NOT NULL
-        AND(
-            st_area(
-                st_envelope(geom)
-            )> POWER(( 78270 / POWER( 2, 10 )), 2 )
-        );
+        AND st_length(geom)> 78270 / POWER( 2, 10 )* 2;
 
 DROP
     INDEX IF EXISTS osm_railway_z10_geom_idx;
@@ -279,11 +266,7 @@ CREATE
         osm_railway_simplified
     WHERE
         geom IS NOT NULL
-        AND(
-            st_area(
-                st_envelope(geom)
-            )> POWER(( 78270 / POWER( 2, 9 )), 2 )
-        );
+        AND st_length(geom)> 78270 / POWER( 2, 9 )* 2;
 
 DROP
     INDEX IF EXISTS osm_railway_z9_geom_idx;
@@ -308,11 +291,7 @@ CREATE
         osm_railway_simplified
     WHERE
         geom IS NOT NULL
-        AND(
-            st_area(
-                st_envelope(geom)
-            )> POWER(( 78270 / POWER( 2, 8 )), 2 )
-        );
+        AND st_length(geom)> 78270 / POWER( 2, 8 )* 2;
 
 DROP
     INDEX IF EXISTS osm_railway_z8_geom_idx;
@@ -337,11 +316,7 @@ CREATE
         osm_railway_simplified
     WHERE
         geom IS NOT NULL
-        AND(
-            st_area(
-                st_envelope(geom)
-            )> POWER(( 78270 / POWER( 2, 7 )), 2 )
-        );
+        AND st_length(geom)> 78270 / POWER( 2, 7 )* 2;
 
 DROP
     INDEX IF EXISTS osm_railway_z7_geom_idx;
@@ -351,176 +326,23 @@ CREATE
     osm_railway_z7
         USING GIST(geom);
 
+-- Zoom levels below 7 are not queried: layers/railway/tileset.js serves this layer from
+-- zoom 7 up. The views are only dropped, so a database created before this change sheds
+-- them instead of refreshing views nothing reads.
 DROP
     MATERIALIZED VIEW IF EXISTS osm_railway_z6 CASCADE;
-
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_railway_z6 AS SELECT
-        id,
-        tags,
-        st_simplifypreservetopology(
-            geom,
-            78270 / POWER( 2, 6 )
-        ) AS geom
-    FROM
-        osm_railway_simplified
-    WHERE
-        geom IS NOT NULL
-        AND(
-            st_area(
-                st_envelope(geom)
-            )> POWER(( 78270 / POWER( 2, 6 )), 2 )
-        );
-
-DROP
-    INDEX IF EXISTS osm_railway_z6_geom_idx;
-
-CREATE
-    INDEX IF NOT EXISTS osm_railway_z6_geom_idx ON
-    osm_railway_z6
-        USING GIST(geom);
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_railway_z5 CASCADE;
 
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_railway_z5 AS SELECT
-        id,
-        tags,
-        st_simplifypreservetopology(
-            geom,
-            78270 / POWER( 2, 5 )
-        ) AS geom
-    FROM
-        osm_railway_simplified
-    WHERE
-        geom IS NOT NULL
-        AND(
-            st_area(
-                st_envelope(geom)
-            )> POWER(( 78270 / POWER( 2, 5 )), 2 )
-        );
-
-DROP
-    INDEX IF EXISTS osm_railway_z5_geom_idx;
-
-CREATE
-    INDEX IF NOT EXISTS osm_railway_z5_geom_idx ON
-    osm_railway_z5
-        USING GIST(geom);
-
 DROP
     MATERIALIZED VIEW IF EXISTS osm_railway_z4 CASCADE;
-
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_railway_z4 AS SELECT
-        id,
-        tags,
-        st_simplifypreservetopology(
-            geom,
-            78270 / POWER( 2, 4 )
-        ) AS geom
-    FROM
-        osm_railway_simplified
-    WHERE
-        geom IS NOT NULL
-        AND(
-            st_area(
-                st_envelope(geom)
-            )> POWER(( 78270 / POWER( 2, 4 )), 2 )
-        );
-
-DROP
-    INDEX IF EXISTS osm_railway_z4_geom_idx;
-
-CREATE
-    INDEX IF NOT EXISTS osm_railway_z4_geom_idx ON
-    osm_railway_z4
-        USING GIST(geom);
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_railway_z3 CASCADE;
 
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_railway_z3 AS SELECT
-        id,
-        tags,
-        st_simplifypreservetopology(
-            geom,
-            78270 / POWER( 2, 3 )
-        ) AS geom
-    FROM
-        osm_railway_simplified
-    WHERE
-        geom IS NOT NULL
-        AND(
-            st_area(
-                st_envelope(geom)
-            )> POWER(( 78270 / POWER( 2, 3 )), 2 )
-        );
-
-DROP
-    INDEX IF EXISTS osm_railway_z3_geom_idx;
-
-CREATE
-    INDEX IF NOT EXISTS osm_railway_z3_geom_idx ON
-    osm_railway_z3
-        USING GIST(geom);
-
 DROP
     MATERIALIZED VIEW IF EXISTS osm_railway_z2 CASCADE;
 
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_railway_z2 AS SELECT
-        id,
-        tags,
-        st_simplifypreservetopology(
-            geom,
-            78270 / POWER( 2, 2 )
-        ) AS geom
-    FROM
-        osm_railway_simplified
-    WHERE
-        geom IS NOT NULL
-        AND(
-            st_area(
-                st_envelope(geom)
-            )> POWER(( 78270 / POWER( 2, 2 )), 2 )
-        );
-
-DROP
-    INDEX IF EXISTS osm_railway_z2_geom_idx;
-
-CREATE
-    INDEX IF NOT EXISTS osm_railway_z2_geom_idx ON
-    osm_railway_z2
-        USING GIST(geom);
-
 DROP
     MATERIALIZED VIEW IF EXISTS osm_railway_z1 CASCADE;
-
-CREATE
-    MATERIALIZED VIEW IF NOT EXISTS osm_railway_z1 AS SELECT
-        id,
-        tags,
-        st_simplifypreservetopology(
-            geom,
-            78270 / POWER( 2, 1 )
-        ) AS geom
-    FROM
-        osm_railway_simplified
-    WHERE
-        geom IS NOT NULL
-        AND(
-            st_area(
-                st_envelope(geom)
-            )> POWER(( 78270 / POWER( 2, 1 )), 2 )
-        );
-
-DROP
-    INDEX IF EXISTS osm_railway_z1_geom_idx;
-
-CREATE
-    INDEX IF NOT EXISTS osm_railway_z1_geom_idx ON
-    osm_railway_z1
-        USING GIST(geom);

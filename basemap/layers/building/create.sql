@@ -54,6 +54,18 @@ CREATE
             tags ? 'building'
             OR tags ? 'building:part'
         )
+        AND NOT EXISTS(
+            SELECT
+                1
+            FROM
+                osm_member_tag
+            WHERE
+                member_ref = osm_way.id
+                AND tag_key IN(
+                    'building',
+                    'building:part'
+                )
+        )
         AND(
             (
                 NOT tags ? 'layer'

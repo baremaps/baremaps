@@ -28,13 +28,13 @@ limitations under the License.
 
 ## 📖 How do I use Baremaps?
 
-You can find a [getting started](https://baremaps.com/documentation/getting-started/) and [additional examples] on the project's [website](https://baremaps.com/).
+You can find a [getting started](https://www.baremaps.com/documentation/getting-started/) and [additional examples] on the project's [website](https://www.baremaps.com/).
 
 ## 👩‍💻 How do I contribute?
 
 There are many places where you can contribute to Baremaps and your contributions are more than welcome.
 
-The [developer manual](https://baremaps.com/documentation/additional-examples/) provides a good starting point on how to build and run the project from source.
+The [developer manual](https://www.baremaps.com/documentation/additional-examples/) provides a good starting point on how to build and run the project from source.
 
 You can contribute in the following ways:
 - Improve the code: Report [a bug or submit a feature request](https://github.com/baremaps/baremaps/issues), or [submit a pull request](https://github.com/baremaps/baremaps/pulls) in the [baremaps](https://github.com/baremaps/baremaps/) repository.

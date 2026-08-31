@@ -19,6 +19,15 @@ CREATE
         osm_way
     WHERE
         tags ? 'leisure'
+        AND NOT EXISTS(
+            SELECT
+                1
+            FROM
+                osm_member_tag
+            WHERE
+                member_ref = osm_way.id
+                AND tag_key = 'leisure'
+        )
 UNION SELECT
         id,
         tags,
@@ -126,16 +135,13 @@ CREATE
             'track'
         );
 
+-- No geometry index on this intermediate: its only reader scans it in full, and
+-- ST_ClusterDBSCAN builds its own index rather than using one.
 DROP
     INDEX IF EXISTS osm_leisure_z12_filtered_geom_idx;
 
 DROP
     INDEX IF EXISTS osm_leisure_z12_filtered_tags_idx;
-
-CREATE
-    INDEX IF NOT EXISTS osm_leisure_z12_filtered_geom_idx ON
-    osm_leisure_z12_filtered
-        USING GIST(geom);
 
 CREATE
     INDEX IF NOT EXISTS osm_leisure_z12_filtered_tags_idx ON
@@ -224,16 +230,13 @@ CREATE
         AND NOT ST_IsEmpty(geom)
         AND st_area(geom)> POWER( 78270 / POWER( 2, 11 ), 2 )* 32;
 
+-- No geometry index on this intermediate: its only reader scans it in full, and
+-- ST_ClusterDBSCAN builds its own index rather than using one.
 DROP
     INDEX IF EXISTS osm_leisure_z11_filtered_geom_idx;
 
 DROP
     INDEX IF EXISTS osm_leisure_z11_filtered_tags_idx;
-
-CREATE
-    INDEX IF NOT EXISTS osm_leisure_z11_filtered_geom_idx ON
-    osm_leisure_z11_filtered
-        USING GIST(geom);
 
 CREATE
     INDEX IF NOT EXISTS osm_leisure_z11_filtered_tags_idx ON
@@ -322,16 +325,13 @@ CREATE
         AND NOT ST_IsEmpty(geom)
         AND st_area(geom)> POWER( 78270 / POWER( 2, 10 ), 2 )* 32;
 
+-- No geometry index on this intermediate: its only reader scans it in full, and
+-- ST_ClusterDBSCAN builds its own index rather than using one.
 DROP
     INDEX IF EXISTS osm_leisure_z10_filtered_geom_idx;
 
 DROP
     INDEX IF EXISTS osm_leisure_z10_filtered_tags_idx;
-
-CREATE
-    INDEX IF NOT EXISTS osm_leisure_z10_filtered_geom_idx ON
-    osm_leisure_z10_filtered
-        USING GIST(geom);
 
 CREATE
     INDEX IF NOT EXISTS osm_leisure_z10_filtered_tags_idx ON
@@ -815,7 +815,7 @@ CREATE
                 'join=mitre'
             ) AS geom
         FROM
-            osm_leisure_z6
+            osm_leisure_z5
         WHERE
             geom IS NOT NULL
             AND NOT ST_IsEmpty(geom)

@@ -9,18 +9,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
-DROP
-    TABLE
-        IF EXISTS water_polygons_shp CASCADE;
-
-CREATE
-    TABLE
-        IF NOT EXISTS water_polygons_shp(
-            x BIGINT,
-            y BIGINT,
-            geometry geometry
-        );
-
+-- The water polygons are imported by the ImportShapefile task of import.js, which names its
+-- table after the shapefile it reads (water_polygons.shp, simplified_water_polygons.shp).
 DROP
     MATERIALIZED VIEW IF EXISTS osm_ocean CASCADE;
 
@@ -33,7 +23,7 @@ CREATE
             3857
         ) AS geom
     FROM
-        water_polygons_shp;
+        water_polygons;
 
 DROP
     INDEX IF EXISTS osm_ocean_geometry_index;
@@ -42,18 +32,6 @@ CREATE
     INDEX IF NOT EXISTS osm_ocean_geometry_index ON
     osm_ocean
         USING gist(geom);
-
-DROP
-    TABLE
-        IF EXISTS simplified_water_polygons_shp CASCADE;
-
-CREATE
-    TABLE
-        IF NOT EXISTS simplified_water_polygons_shp(
-            x BIGINT,
-            y BIGINT,
-            geometry geometry
-        );
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_ocean_simplified CASCADE;
@@ -67,7 +45,7 @@ CREATE
             3857
         ) AS geom
     FROM
-        simplified_water_polygons_shp;
+        simplified_water_polygons;
 
 DROP
     INDEX IF EXISTS osm_ocean_simplified_geometry_index;

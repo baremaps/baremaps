@@ -26,7 +26,7 @@ limitations under the License.
 
   <organization>
     <name>baremaps</name>
-    <url>https://baremaps.com/</url>
+    <url>https://www.baremaps.com/</url>
   </organization>
 
   <licenses>
@@ -93,10 +93,12 @@ limitations under the License.
     <version.lib.hikari>7.1.0</version.lib.hikari>
     <version.lib.ipresource>1.52</version.lib.ipresource>
     <version.lib.jackson>2.22.2</version.lib.jackson>
+    <version.lib.jaxb>2.3.1</version.lib.jaxb>
     <version.lib.jts>1.20.0</version.lib.jts>
     <version.lib.junit>5.12.2</version.lib.junit>
     <version.lib.log4j>3.0.0-beta2</version.lib.log4j>
     <version.lib.lucene>9.12.1</version.lib.lucene>
+    <version.lib.netty>4.2.16.Final</version.lib.netty>
     <version.lib.parquet>1.18.0</version.lib.parquet>
     <version.lib.pgbulkinsert>8.1.5</version.lib.pgbulkinsert>
     <version.lib.picocli>4.7.7</version.lib.picocli>
@@ -284,9 +286,26 @@ limitations under the License.
         <version>${version.lib.picocli}</version>
       </dependency>
       <dependency>
+        <!-- Armeria serves HTTP with netty 4.2, while hadoop and the aws sdk ask for netty 4.1.
+             The two lines share package names, so whichever jar comes first on the classpath wins
+             and the server fails to encode its responses. This pins every module to one line. -->
+        <groupId>io.netty</groupId>
+        <artifactId>netty-bom</artifactId>
+        <version>${version.lib.netty}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
         <groupId>it.unimi.dsi</groupId>
         <artifactId>fastutil</artifactId>
         <version>${version.lib.fastutil}</version>
+      </dependency>
+      <dependency>
+        <!-- Hadoop brings jackson-module-jaxb-annotations, which Jackson discovers on the
+             classpath and which fails to initialize without the JAXB annotations themselves. -->
+        <groupId>javax.xml.bind</groupId>
+        <artifactId>jaxb-api</artifactId>
+        <version>${version.lib.jaxb}</version>
       </dependency>
       <dependency>
         <groupId>mil.nga.geopackage</groupId>

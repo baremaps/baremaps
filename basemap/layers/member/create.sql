@@ -27,8 +27,13 @@ CREATE
     WHERE
         geom IS NOT NULL
         AND member_type = 1
-        AND tags ->> 'type' = 'multipolygon'
-        AND NOT tags ->> 'natural' = 'coastline';
+        AND tags ->> 'type' = 'multipolygon' -- COALESCE, not NOT (... = ...): tags ->> 'natural' is NULL for the vast majority of
+-- multipolygons, and NOT (NULL = 'coastline') is NULL, which drops the row.
+
+        AND COALESCE(
+            tags ->> 'natural',
+            ''
+        )<> 'coastline';
 
 DROP
     INDEX IF EXISTS osm_member_idx;
@@ -36,3 +41,54 @@ DROP
 CREATE
     INDEX IF NOT EXISTS osm_member_idx ON
     osm_member(member_ref);
+
+-- The tag keys a way's parent multipolygons already carry.
+--
+-- A way that closes a multipolygon ring is drawn a second time by any thematic layer that also
+-- selects it directly, but only when the parent relation carries the same key: a way tagged
+-- natural=wood inside a landuse=residential multipolygon is not drawn by the landuse relation and
+-- has to stay. Keys are restricted to the ones the thematic layers select on, which keeps the view
+-- small enough to be worth materializing.
+DROP
+    MATERIALIZED VIEW IF EXISTS osm_member_tag CASCADE;
+
+CREATE
+    MATERIALIZED VIEW IF NOT EXISTS osm_member_tag AS SELECT
+        DISTINCT member_ref AS member_ref,
+        tag_key AS tag_key
+    FROM
+        osm_relation,
+        UNNEST(
+            member_types,
+            member_refs
+        ) AS way(
+            member_type,
+            member_ref
+        ),
+        LATERAL UNNEST(
+            ARRAY [ 'natural',
+            'landuse',
+            'leisure',
+            'amenity',
+            'building',
+            'building:part' ]
+        ) AS tag_key
+    WHERE
+        geom IS NOT NULL
+        AND member_type = 1
+        AND tags ->> 'type' = 'multipolygon'
+        AND COALESCE(
+            tags ->> 'natural',
+            ''
+        )<> 'coastline'
+        AND tags ? tag_key;
+
+DROP
+    INDEX IF EXISTS osm_member_tag_idx;
+
+CREATE
+    INDEX IF NOT EXISTS osm_member_tag_idx ON
+    osm_member_tag(
+        tag_key,
+        member_ref
+    );

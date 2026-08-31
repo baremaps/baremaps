@@ -15,4 +15,4 @@ limitations under the License.
 
 This folder contains the required files to create and serve vector tiles from contour lines data. 
 
-Refer to the [official documentation](https://baremaps.com/documentation/examples/import-contour-into-postgis) for more information.
+Refer to the [official documentation](https://www.baremaps.com/documentation/examples/import-contour-into-postgis) for more information.

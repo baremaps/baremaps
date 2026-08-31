@@ -66,6 +66,22 @@ export default {
       ]
     },
     {
+      // The ocean views read the tables the shapefile imports create, so they belong here rather
+      // than in create.js, which runs before any data is imported.
+      "id": "openstreetmap-ocean",
+      "needs": [
+        "openstreetmap-water-polygons",
+        "openstreetmap-simplified-water-polygons",
+      ],
+      "tasks": [
+        {
+          "type": "ExecuteSqlScript",
+          "file": "layers/ocean/create.sql",
+          "database": config.database,
+        },
+      ]
+    },
+    {
       "id": "openstreetmap-data",
       "needs": [],
       "tasks": [
