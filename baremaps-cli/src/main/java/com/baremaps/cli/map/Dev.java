@@ -14,7 +14,6 @@
 
 package com.baremaps.cli.map;
 
-import com.baremaps.cli.BaremapsException;
 import com.baremaps.cli.WebServer;
 import com.baremaps.config.ConfigReader;
 import com.baremaps.maplibre.style.Style;
@@ -25,7 +24,6 @@ import com.baremaps.server.StyleResource;
 import com.baremaps.server.TilesetResource;
 import com.baremaps.server.VectorTileResource;
 import com.baremaps.tilestore.postgres.PostgresTileStore;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
@@ -38,12 +36,16 @@ public class Dev implements Callable<Integer> {
 
   private final ConfigReader configReader = new ConfigReader();
 
-  @Option(names = {"--tileset"}, paramLabel = "TILESET", description = "The tileset file.",
-      required = true)
+  @Option(names = {"--map"}, paramLabel = "MAP",
+      description = "The map specification file, from which the style and the tileset are derived.")
+  private Path mapPath;
+
+  @Option(names = {"--tileset"}, paramLabel = "TILESET",
+      description = "The tileset file. Superseded by --map.")
   private Path tilesetPath;
 
-  @Option(names = {"--style"}, paramLabel = "STYLE", description = "The style file.",
-      required = true)
+  @Option(names = {"--style"}, paramLabel = "STYLE",
+      description = "The style file. Superseded by --map.")
   private Path stylePath;
 
   @Option(names = {"--assets"}, paramLabel = "ASSETS", description = "The assets directory.")
@@ -59,11 +61,16 @@ public class Dev implements Callable<Integer> {
 
   @Override
   public Integer call() throws Exception {
+    MapInput.validate(mapPath, tilesetPath, stylePath);
+
     var datasource = PostgresUtils.createDataSourceFromObject(tileset().getDatabase());
     var postgresVersion = PostgresUtils.getPostgresVersion(datasource);
 
     new WebServer(host, port)
-        .resource(new ChangeResource(tilesetPath, stylePath))
+        // A specification is one file, so both watches land on it.
+        .resource(new ChangeResource(
+            mapPath != null ? mapPath : tilesetPath,
+            mapPath != null ? mapPath : stylePath))
         .resource("/tiles", new VectorTileResource(
             () -> new PostgresTileStore(datasource, tileset(), postgresVersion)))
         .resource(new StyleResource(this::style))
@@ -81,18 +88,10 @@ public class Dev implements Callable<Integer> {
   // thing that is kept, as the tileset is not expected to be pointed at another database midway.
 
   private Tileset tileset() {
-    return read(tilesetPath, Tileset.class);
+    return MapInput.tileset(configReader, mapPath, tilesetPath);
   }
 
   private Style style() {
-    return read(stylePath, Style.class);
-  }
-
-  private <T> T read(Path path, Class<T> type) {
-    try {
-      return configReader.read(path, type);
-    } catch (IOException e) {
-      throw new BaremapsException(e);
-    }
+    return MapInput.style(configReader, mapPath, stylePath);
   }
 }

@@ -46,8 +46,11 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'boundary',
     type: 'line',
-    source: 'baremaps',
-    'source-layer': 'boundary',
+    sourceLayer: 'boundary',
+    sourceQueries: [
+        {"minzoom": 13, "maxzoom": 20, "from": "osm_boundary"},
+    ],
+    sourceSchema: 'layers/boundary/create.sql',
     layout: {
         visibility: 'visible',
     },

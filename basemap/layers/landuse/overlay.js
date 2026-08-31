@@ -45,8 +45,7 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'landuse_overlay',
     type: 'fill',
-    source: 'baremaps',
-    'source-layer': 'landuse',
+    sourceLayer: 'landuse',
     layout: {
         visibility: 'visible',
     },

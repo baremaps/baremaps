@@ -16,8 +16,7 @@ import theme from "../../theme.js";
 export default {
     id: 'highway_label',
     type: 'symbol',
-    source: 'baremaps',
-    'source-layer': 'highway',
+    sourceLayer: 'highway',
     layout: {
         'symbol-placement': 'line',
         'text-anchor': 'center',

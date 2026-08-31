@@ -41,8 +41,7 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'amenity_overlay',
     type: 'fill',
-    source: 'baremaps',
-    'source-layer': 'amenity',
+    sourceLayer: 'amenity',
     layout: {
         visibility: 'visible',
     },

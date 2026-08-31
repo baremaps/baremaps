@@ -40,8 +40,11 @@ let directives = [
 
 export default asLayerObject(withSortKeys(directives), {
     id: 'barrier_line',
-    source: 'baremaps',
-    'source-layer': 'barrier',
+    sourceLayer: 'barrier',
+    sourceQueries: [
+        {"minzoom": 14, "maxzoom": 20, "from": "osm_barrier"},
+    ],
+    sourceSchema: 'layers/barrier/create.sql',
     type: 'line',
     layout: {
         visibility: 'visible',

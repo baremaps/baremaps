@@ -19,11 +19,10 @@ export default {
     "type": "circle",
     "filter": [
         "any",
-        ["==", "aerialway", "pylon"],
-        ["==", "aerialway", "station"],
+        ["==", ["get", "aerialway"], "pylon"],
+        ["==", ["get", "aerialway"], "station"],
     ],
-    "source": "baremaps",
-    "source-layer": "point",
+    sourceLayer: "point",
     "layout": {
         "visibility": "visible"
     },

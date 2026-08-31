@@ -34,7 +34,7 @@ echo "Start the Basemap server"
 echo "--------------------------------------------------------------------"
 echo ""
 
-nohup baremaps map dev --tileset 'tileset.js' --style 'style.js' > /dev/null 2>&1 &
+nohup baremaps map dev --map 'map.js' > /dev/null 2>&1 &
 baremaps=$!
 
 sleep 10
@@ -63,16 +63,14 @@ echo "--------------------------------------------------------------------"
 echo ""
 
 baremaps map export \
-  --tileset 'tileset.js' \
-  --style 'style.js' \
+  --map 'map.js' \
   --repository 'tiles/' \
   --format file
 
 du -h tiles
 
 baremaps map export \
-  --tileset 'tileset.js' \
-  --style 'style.js' \
+  --map 'map.js' \
   --repository 'tiles.mbtiles' \
   --format mbtiles
 

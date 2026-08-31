@@ -17,6 +17,8 @@ package com.baremaps.tasks;
 import static com.baremaps.utils.ObjectMapperUtils.objectMapper;
 
 import com.baremaps.config.ConfigReader;
+import com.baremaps.maplibre.map.MapCompiler;
+import com.baremaps.maplibre.map.MapSpec;
 import com.baremaps.maplibre.style.Style;
 import com.baremaps.maplibre.tileset.Tileset;
 import com.baremaps.maplibre.tileset.TilesetQuery;
@@ -57,6 +59,8 @@ public class ExportVectorTiles implements Task {
     PMTILES
   }
 
+  private Path map;
+
   private Path tileset;
 
   private Path style;
@@ -90,14 +94,36 @@ public class ExportVectorTiles implements Task {
   }
 
   /**
+   * Constructs a {@code ExportVectorTiles} from a map specification, which the tileset and the
+   * style are derived from.
+   *
+   * @param map the map specification
+   * @param repository the repository
+   * @param format the format
+   */
+  public ExportVectorTiles(Path map, Path repository, Format format) {
+    this.map = map;
+    this.repository = repository;
+    this.format = format;
+  }
+
+  /**
    * {@inheritDoc}
    */
   @Override
   public void execute(WorkflowContext context) throws Exception {
     var configReader = new ConfigReader();
     var objectMapper = objectMapper();
-    var tilesetObject = objectMapper.readValue(configReader.read(this.tileset), Tileset.class);
-    var styleObject = objectMapper.readValue(configReader.read(this.style), Style.class);
+    Tileset tilesetObject;
+    Style styleObject;
+    if (map != null) {
+      var spec = objectMapper.readValue(configReader.read(this.map), MapSpec.class);
+      tilesetObject = MapCompiler.tileset(spec);
+      styleObject = MapCompiler.style(spec);
+    } else {
+      tilesetObject = objectMapper.readValue(configReader.read(this.tileset), Tileset.class);
+      styleObject = objectMapper.readValue(configReader.read(this.style), Style.class);
+    }
 
     writeViewer(objectMapper, tilesetObject, styleObject);
 

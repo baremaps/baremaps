@@ -20,7 +20,8 @@ import picocli.CommandLine.Command;
 @Command(
     name = "map",
     description = "Map commands.",
-    subcommands = {Init.class, Export.class, Serve.class, Dev.class, MBTiles.class},
+    subcommands = {Init.class, Compile.class, Create.class, Export.class, Serve.class, Dev.class,
+        MBTiles.class},
     sortOptions = false)
 public class Map extends CommandGroup {
 }

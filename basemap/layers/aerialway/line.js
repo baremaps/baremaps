@@ -26,8 +26,11 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'aerialway_line',
     type: 'line',
-    source: 'baremaps',
-    'source-layer': 'aerialway',
+    sourceLayer: 'aerialway',
+    sourceQueries: [
+        {"minzoom": 13, "maxzoom": 20, "from": "osm_aerialway"},
+    ],
+    sourceSchema: 'layers/aerialway/create.sql',
     layout: {
         'line-cap': 'round',
         'line-join': 'round',

@@ -17,8 +17,7 @@ import theme from "../../theme.js";
 export default {
     id: 'power_cable',
     type: 'line',
-    source: 'baremaps',
-    'source-layer': 'power',
+    sourceLayer: 'power',
     layout: {
         'line-cap': 'round',
         'line-join': 'round',
@@ -30,8 +29,8 @@ export default {
     },
     filter: [
         'any',
-        ['==', 'power', 'cable'],
-        ['==', 'power', 'line'],
-        ['==', 'power', 'minor_line'],
+        ['==', ['get', 'power'], 'cable'],
+        ['==', ['get', 'power'], 'line'],
+        ['==', ['get', 'power'], 'minor_line'],
     ],
 }

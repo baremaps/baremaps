@@ -28,13 +28,30 @@
  * can be adjusted without disturbing the others; `parityGroups` below reports
  * when those lists diverge instead of preventing the divergence.
  */
-import {readFileSync, readdirSync, statSync} from 'fs';
+import {existsSync, readFileSync, readdirSync, statSync} from 'fs';
 import {join, dirname} from 'path';
 import {fileURLToPath} from 'url';
 
 import theme from './theme.js';
-import style from './style.js';
+import map from './map.js';
 import {Color} from './utils/color.js';
+
+// The style the map describes, which is the document without its recipe. This mirrors what
+// MapCompiler derives, so that the spec check below validates what MapLibre is actually served.
+// The style the map describes, derived the way MapCompiler derives it: the map-wide properties a
+// renderer uses, and the layers with the source filled in and the tileset extensions dropped.
+const source = map.source ?? 'baremaps';
+const style = {
+    version: 8,
+    name: map.name,
+    center: map.center,
+    zoom: map.zoom,
+    sprite: map.sprite,
+    glyphs: map.glyphs,
+    sources: {[source]: {type: 'vector', url: map.tilejson}},
+    layers: map.layers.map(({sourceQueries, sourceSchema, sourceLayer, ...layer}) =>
+        ({...layer, 'source-layer': sourceLayer, source: layer.source ?? source})),
+};
 
 const root = dirname(fileURLToPath(import.meta.url));
 
@@ -73,7 +90,7 @@ function layerFiles() {
         const path = join(root, 'layers', dir);
         if (!statSync(path).isDirectory()) continue;
         for (const file of readdirSync(path)) {
-            if (file.endsWith('.js') && file !== 'tileset.js') {
+            if (file.endsWith('.js')) {
                 files.push(`layers/${dir}/${file}`);
             }
         }
@@ -210,6 +227,37 @@ function checkUnsatisfiableFilters() {
 }
 
 /**
+ * The deprecated filter syntax, `['==', 'power', 'plant']`, names its attribute
+ * as a bare string where the expression syntax nests a `get`. MapLibre accepts
+ * both, so the map renders either way and nothing here would notice.
+ *
+ * Everything that reads the style as data does notice. An analyzer walking the
+ * expression tree sees a comparison of two literals, not an attribute read, and
+ * concludes the layer needs no attributes at all. That is the wrong direction to
+ * be wrong in: it yields a tileset that omits the tags the layer filters on, and
+ * the layer renders nothing. The `power` and `tourism` layers were filtered
+ * exclusively this way and would have been stripped whole.
+ *
+ * `['has', key]` is spelled the same in both syntaxes and is not affected.
+ */
+function checkLegacyFilters() {
+    const comparisons = new Set(['==', '!=', '<', '<=', '>', '>=', 'in', '!in']);
+    for (const layer of style.layers) {
+        for (const expression of expressionsOf(layer)) {
+            walk(expression, (node) => {
+                if (!comparisons.has(node[0]) || typeof node[1] !== 'string') return;
+                const suggestion = node[1].startsWith('$')
+                    ? `['${node[0]}', ['geometry-type'], ...]`
+                    : `['${node[0]}', ['get', '${node[1]}'], ...]`;
+                error('legacy-filter',
+                    `${layer.id}: ${JSON.stringify(node)} uses the deprecated filter syntax; ` +
+                    `write it as ${suggestion}`);
+            });
+        }
+    }
+}
+
+/**
  * A `case` returns its first matching branch, so a filter repeated later in the
  * same chain is dead. Two directives for one feature class usually means an
  * edit landed in the wrong group rather than that the second was meant to lose.
@@ -287,11 +335,20 @@ function checkParity() {
 
 /** A layer module that nothing imports is dead weight and drifts unnoticed. */
 function checkOrphans(files) {
-    const imports = readFileSync(join(root, 'style.js'), 'utf8') +
-        readFileSync(join(root, 'tileset.js'), 'utf8');
+    // A layer module is reached through the topic that owns it, and a topic imports its layers by a
+    // path relative to itself, so each module's imports are resolved against its own directory.
+    const imported = new Set();
+    const scan = (file) => {
+        const source = readFileSync(join(root, file), 'utf8');
+        for (const match of source.matchAll(/from\s+['"](\.[^'"]+)['"]/g)) {
+            imported.add(join(dirname(file), match[1]));
+        }
+    };
+    scan('map.js');
+
     for (const file of files) {
-        if (!imports.includes(file.replace('layers/', ''))) {
-            warn('orphan', `${file} is never imported by style.js or tileset.js`);
+        if (!imported.has(file)) {
+            warn('orphan', `${file} is never imported by map.js`);
         }
     }
 }
@@ -321,16 +378,57 @@ async function checkSpec() {
     }
 }
 
+/**
+ * A source layer is read by several style layers, so exactly one of them says where its features
+ * come from. Two answers to that question, or none, is a mistake the compiler refuses; catching it
+ * here names the layers involved instead of failing at build time.
+ */
+function checkSources() {
+    const declared = new Map();
+    const read = new Set();
+    for (const layer of map.layers) {
+        const id = layer.sourceLayer;
+        if (!id) continue;
+        read.add(id);
+        const queries = layer.sourceQueries;
+        if (!queries) continue;
+        if (declared.has(id)) {
+            error('source', `${id}: declared by both ${declared.get(id)} and ${layer.id}`);
+        }
+        declared.set(id, layer.id);
+        for (const query of queries) {
+            if (!query.from) {
+                error('source', `${id}: a query in ${layer.id} does not name a relation`);
+            }
+            if (!(query.minzoom < query.maxzoom)) {
+                error('source', `${id}: a query in ${layer.id} covers no zoom level ` +
+                    `(minzoom ${query.minzoom}, maxzoom ${query.maxzoom})`);
+            }
+        }
+        const schema = layer.sourceSchema;
+        if (schema && !existsSync(join(root, schema))) {
+            error('source', `${id}: source-schema names ${schema}, which does not exist`);
+        }
+    }
+    for (const id of read) {
+        if (!declared.has(id)) {
+            error('source', `${id}: no layer says where it comes from`);
+        }
+    }
+}
+
 // --- report ----------------------------------------------------------------
 
 const files = layerFiles();
 checkThemeReferences(files);
 await checkThemeValues();
 checkUnsatisfiableFilters();
+checkLegacyFilters();
 checkShadowedDirectives();
 checkParity();
 checkOrphans(files);
 checkDuplicateLayerIds();
+checkSources();
 await checkSpec();
 
 for (const {check, message} of warnings) console.warn(`warning  [${check}] ${message}`);

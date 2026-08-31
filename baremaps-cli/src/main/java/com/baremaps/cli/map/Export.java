@@ -26,12 +26,16 @@ import picocli.CommandLine.Option;
     description = "Export vector tiles from the database.")
 public class Export implements Callable<Integer> {
 
-  @Option(names = {"--tileset"}, paramLabel = "TILESET", description = "The tileset file.",
-      required = true)
+  @Option(names = {"--map"}, paramLabel = "MAP",
+      description = "The map specification file, from which the style and the tileset are derived.")
+  private Path map;
+
+  @Option(names = {"--tileset"}, paramLabel = "TILESET",
+      description = "The tileset file. Superseded by --map.")
   private Path tileset;
 
-  @Option(names = {"--style"}, paramLabel = "STYLE", description = "The style file.",
-      required = true)
+  @Option(names = {"--style"}, paramLabel = "STYLE",
+      description = "The style file. Superseded by --map.")
   private Path style;
 
   @Option(names = {"--repository"}, paramLabel = "REPOSITORY", description = "The tile repository.",
@@ -44,11 +48,12 @@ public class Export implements Callable<Integer> {
 
   @Override
   public Integer call() throws Exception {
-    new ExportVectorTiles(
-        tileset.toAbsolutePath(),
-        style.toAbsolutePath(),
-        repository.toAbsolutePath(),
-        format).execute(new WorkflowContext());
+    MapInput.validate(map, tileset, style);
+    var task = map != null
+        ? new ExportVectorTiles(map.toAbsolutePath(), repository.toAbsolutePath(), format)
+        : new ExportVectorTiles(tileset.toAbsolutePath(), style.toAbsolutePath(),
+            repository.toAbsolutePath(), format);
+    task.execute(new WorkflowContext());
     return 0;
   }
 }

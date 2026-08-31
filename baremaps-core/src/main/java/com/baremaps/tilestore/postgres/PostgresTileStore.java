@@ -159,8 +159,9 @@ public class PostgresTileStore implements TileStore<ByteBuffer> {
               .replace("$x", String.valueOf(tileCoord.x()))
               .replace("$y", String.valueOf(tileCoord.y()));
 
-          var querySqlWithParams =
-              postgresVersion >= 16 ? prepareNewQuery(querySql) : prepareLegacyQuery(querySql);
+          var querySqlWithParams = postgresVersion >= 16
+              ? prepareNewQuery(querySql)
+              : prepareLegacyQuery(querySql);
 
           layerSql.append(querySqlWithParams);
 
@@ -214,14 +215,23 @@ public class PostgresTileStore implements TileStore<ByteBuffer> {
     return String.format(
         """
             SELECT
-            mvtData.id AS id,
+            %s
             mvtData.tags - 'id' AS tags,
             ST_AsMVTGeom(mvtData.geom, ST_TileEnvelope(?, ?, ?)) AS geom
             FROM (%s) AS mvtData
             WHERE mvtData.geom IS NOT NULL
             AND mvtData.geom && ST_TileEnvelope(?, ?, ?, margin => (64.0/4096))
             """,
-        sql);
+        featureId(), sql);
+  }
+
+  /**
+   * The identifier column, selected only when the tileset asks for it. A tileset that does not
+   * carry identifiers must not name the column either, because its queries have no reason to select
+   * one.
+   */
+  private String featureId() {
+    return tileset.isFeatureIds() ? "mvtData.id AS id," : "";
   }
 
   /**
@@ -251,12 +261,12 @@ public class PostgresTileStore implements TileStore<ByteBuffer> {
     return String.format(
         """
             SELECT
-              mvtData.id AS id,
+              %s
               mvtData.tags - 'id' AS tags,
               ST_AsMVTGeom(mvtData.geom, ST_TileEnvelope(?, ?, ?)) AS geom
             FROM (%s) as mvtData
             """,
-        query);
+        featureId(), query);
   }
 
   /**

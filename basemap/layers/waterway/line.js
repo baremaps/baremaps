@@ -30,8 +30,30 @@ let directives = [
 let layer = asLayerObject(withSortKeys(directives), {
     "id": "waterway",
     "type": "line",
-    "source": "baremaps",
-    "source-layer": "waterway",
+    sourceLayer: "waterway",
+    sourceQueries: [
+        {
+            "minzoom": 6, "maxzoom": 10, "from": "osm_waterway",
+            "filter": ["==", ["get", "waterway"], "river"]
+        },
+        {
+            "minzoom": 10, "maxzoom": 13, "from": "osm_waterway",
+            "filter": ["in", ["get", "waterway"], ["literal", ["river", "stream"]]]
+        },
+        {"minzoom": 13, "maxzoom": 20, "from": "osm_way", "filter": ["has", "waterway"]},
+    ],
+    sourceSchema: 'layers/waterway/create.sql',
+    generalize: {
+        kind: 'lines',
+        by: 'waterway',
+        values: [
+            'canal',
+            'ditch',
+            'drain',
+            'river',
+            'stream'
+        ],
+    },
     filter: ['==', ['geometry-type'], 'LineString'],
     layout: {
         visibility: 'visible',

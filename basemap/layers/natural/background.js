@@ -61,8 +61,32 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'natural',
     type: 'fill',
-    source: 'baremaps',
-    'source-layer': 'natural',
+    sourceLayer: 'natural',
+    sourceQueries: [
+        {"minzoom": 1, "maxzoom": 20, "from": "osm_natural"},
+    ],
+    sourceSchema: 'layers/natural/create.sql',
+    generalize: {
+        by: 'natural',
+        values: [
+            'grassland',
+            'heath',
+            'scrub',
+            'wood',
+            'bay',
+            'beach',
+            'glacier',
+            'mud',
+            'shingle',
+            'shoal',
+            'strait',
+            'water',
+            'wetland',
+            'bare_rock',
+            'sand',
+            'scree'
+        ],
+    },
     layout: {
         visibility: 'visible',
     },

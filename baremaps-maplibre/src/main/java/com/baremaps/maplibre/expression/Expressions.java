@@ -102,7 +102,8 @@ public interface Expressions {
     }
   }
 
-  record In(Object value, Expression expression) implements Expression<Boolean> {
+  /** Whether the needle appears in the haystack, which is a list or a string. */
+  record In(Expression needle, Expression haystack) implements Expression<Boolean> {
 
     @Override
     public String name() {
@@ -111,11 +112,12 @@ public interface Expressions {
 
     @Override
     public Boolean evaluate(Feature feature) {
-      var expressionValue = expression.evaluate(feature);
-      if (expressionValue instanceof List list) {
+      var value = needle.evaluate(feature);
+      var within = haystack.evaluate(feature);
+      if (within instanceof List list) {
         return list.contains(value);
-      } else if (expressionValue instanceof String string) {
-        return string.contains(value.toString());
+      } else if (within instanceof String string) {
+        return value != null && string.contains(value.toString());
       } else {
         return false;
       }
@@ -412,6 +414,84 @@ public interface Expressions {
   }
 
 
+  /**
+   * The current zoom level. It is a property of the viewport rather than of a feature, so it cannot
+   * be evaluated against one; it exists so that zoom driven expressions keep their shape when a
+   * style is read as data.
+   */
+  record Zoom() implements Expression<Double> {
+
+    @Override
+    public String name() {
+      return "zoom";
+    }
+
+    @Override
+    public Double evaluate(Feature feature) {
+      throw new UnsupportedOperationException("zoom is not a property of a feature");
+    }
+  }
+
+  /**
+   * Interpolates between the stops surrounding the input. The stops alternate between an input
+   * value and an output value.
+   */
+  record Interpolate(Expression interpolation, Expression input,
+      List<Expression> stops) implements Expression<Double> {
+
+    @Override
+    public String name() {
+      return "interpolate";
+    }
+
+    @Override
+    public Double evaluate(Feature feature) {
+      throw new UnsupportedOperationException("interpolate is not supported");
+    }
+  }
+
+  /**
+   * Produces a value from a piecewise constant function of the input. The stops alternate between
+   * an input value and the output that applies from it onwards.
+   */
+  record Step(Expression input, Expression fallback,
+      List<Expression> stops) implements Expression {
+
+    @Override
+    public String name() {
+      return "step";
+    }
+
+    @Override
+    public Object evaluate(Feature feature) {
+      throw new UnsupportedOperationException("step is not supported");
+    }
+  }
+
+  /**
+   * An expression this implementation does not model, kept with its arguments rather than rejected.
+   *
+   * <p>
+   * The style specification is larger than what is modelled here and keeps growing, and a style is
+   * read for more than evaluation: an analysis that walks the tree to find out which attributes a
+   * layer reads has to be able to descend through an expression it does not recognise. Failing to
+   * parse would stop that analysis, and, worse, silently treating the node as empty would let it
+   * conclude that a layer reads nothing. Keeping the arguments lets a traversal widen its answer
+   * instead of narrowing it.
+   */
+  record Unknown(String expression, List<Expression> arguments) implements Expression {
+
+    @Override
+    public String name() {
+      return expression;
+    }
+
+    @Override
+    public Object evaluate(Feature feature) {
+      throw new UnsupportedOperationException("unsupported expression: " + expression);
+    }
+  }
+
   class ExpressionSerializer extends StdSerializer<Expression> {
 
     public ExpressionSerializer() {
@@ -425,10 +505,23 @@ public interface Expressions {
       jsonGenerator.writeString(expression.name());
       for (Field field : expression.getClass().getDeclaredFields()) {
         field.setAccessible(true);
+        // An unknown expression carries its own name, which has just been written.
+        if (expression instanceof Unknown && "expression".equals(field.getName())) {
+          continue;
+        }
         try {
           Object value = field.get(expression);
           if (value instanceof Expression subExpression) {
             serialize(subExpression, jsonGenerator, serializerProvider);
+          } else if (value instanceof List<?>list) {
+            // Arguments held in a list are arguments of this expression, not one nested array.
+            for (Object element : list) {
+              if (element instanceof Expression subExpression) {
+                serialize(subExpression, jsonGenerator, serializerProvider);
+              } else {
+                jsonGenerator.writeObject(element);
+              }
+            }
           } else {
             jsonGenerator.writeObject(value);
           }
@@ -463,13 +556,37 @@ public interface Expressions {
       };
     }
 
+    /** A literal holds a value rather than an expression, and that value may be a list. */
+    private Object literal(JsonNode node) {
+      return switch (node.getNodeType()) {
+        case BOOLEAN -> node.asBoolean();
+        case NUMBER -> node.asDouble();
+        case ARRAY -> {
+          var values = new ArrayList<Object>();
+          node.elements().forEachRemaining(element -> values.add(literal(element)));
+          yield values;
+        }
+        default -> node.asText();
+      };
+    }
+
     public Expression deserializeJsonArray(JsonNode node) {
       var arrayList = new ArrayList<JsonNode>();
       node.elements().forEachRemaining(arrayList::add);
+      // A layer with no filter is written as an empty array.
+      if (arrayList.isEmpty()) {
+        return new Literal(null);
+      }
       return switch (arrayList.get(0).asText()) {
-        case "literal" -> new Literal(arrayList.get(1).asText());
+        case "literal" -> new Literal(literal(arrayList.get(1)));
         case "get" -> new Get(arrayList.get(1).asText());
         case "has" -> new Has(arrayList.get(1).asText());
+        // Names the attribute as a bare string, like has, so it has to be modelled: left to the
+        // fallback the attribute would be read as a literal and the layer would appear to read
+        // nothing.
+        case "!has" -> new Not(new Has(arrayList.get(1).asText()));
+        case "in" -> new In(deserializeJsonNode(arrayList.get(1)),
+            deserializeJsonNode(arrayList.get(2)));
         case ">" -> new Greater(deserializeJsonNode(arrayList.get(1)),
             deserializeJsonNode(arrayList.get(2)));
         case ">=" -> new GreaterOrEqual(deserializeJsonNode(arrayList.get(1)),
@@ -495,10 +612,39 @@ public interface Expressions {
                 .stream().map(this::deserializeJsonNode).toList(),
             deserializeJsonNode(arrayList.get(arrayList.size() - 1)));
         case "within" -> new Within(deserializeJsonNode(arrayList.get(1)));
-        default -> throw new IllegalArgumentException(
-            "Unknown expression: " + arrayList.get(0).asText());
+        case "geometry-type" -> new GeometryType(new Literal(null));
+        case "zoom" -> new Zoom();
+        case "interpolate" -> new Interpolate(
+            deserializeJsonNode(arrayList.get(1)),
+            deserializeJsonNode(arrayList.get(2)),
+            arrayList.stream().skip(3).map(this::deserializeJsonNode).toList());
+        case "step" -> new Step(
+            deserializeJsonNode(arrayList.get(1)),
+            deserializeJsonNode(arrayList.get(2)),
+            arrayList.stream().skip(3).map(this::deserializeJsonNode).toList());
+        default -> new Unknown(arrayList.get(0).asText(),
+            arrayList.stream().skip(1).map(this::deserializeJsonNode).toList());
       };
     }
+  }
+
+  /**
+   * Holds the mapper used to read expressions out of an already mapped style. Reading one style
+   * walks thousands of properties, and building a mapper for each of them dominates the cost.
+   */
+  final class Mapper {
+
+    private static final ObjectMapper INSTANCE = createObjectMapper();
+
+    private Mapper() {}
+  }
+
+  /**
+   * Reads an expression from the object tree a style is mapped to, where an expression is a nested
+   * list rather than a typed value.
+   */
+  static Expression from(Object value) {
+    return Mapper.INSTANCE.convertValue(value, Expression.class);
   }
 
   static Expression read(String json) throws IOException {

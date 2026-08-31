@@ -26,8 +26,29 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'route_ferry',
     type: 'line',
-    source: 'baremaps',
-    'source-layer': 'route',
+    sourceLayer: 'route',
+    sourceQueries: [
+        {"minzoom": 9, "maxzoom": 13, "from": "osm_route", "filter": ["has", "route"]},
+        {"minzoom": 13, "maxzoom": 20, "from": "osm_way", "filter": ["has", "route"]},
+    ],
+    sourceSchema: 'layers/route/create.sql',
+    generalize: {
+        kind: 'lines',
+        by: 'route',
+        values: [
+            'bus',
+            'ferry',
+            'funicular',
+            'light_rail',
+            'railway',
+            'road',
+            'route',
+            'subway',
+            'train',
+            'tram',
+            'trolleybus'
+        ],
+    },
     layout: {
         'line-cap': 'round',
         'line-join': 'round',

@@ -104,8 +104,50 @@ let directives = [
 
 export default asLayerObject(withSortKeys(directives), {
     id: 'tunnel_outline',
-    source: 'baremaps',
-    'source-layer': 'highway',
+    sourceLayer: 'highway',
+    sourceQueries: [
+        // Below 13 the generalized levels; at 13 the classes worth drawing when they stop being
+        // generalized; above it, every highway.
+        {"minzoom": 4, "maxzoom": 13, "from": "osm_highway"},
+        {
+            "minzoom": 13, "maxzoom": 14, "from": "osm_highway",
+            "filter": ["in", ["get", "highway"], ["literal", ["motorway", "motorway_link", "primary", "primary_link", "residential", "secondary", "secondary_link", "tertiary", "tertiary_link", "trunk", "trunk_link", "unclassified"]]]
+        },
+        {"minzoom": 14, "maxzoom": 20, "from": "osm_highway"},
+    ],
+    sourceSchema: 'layers/highway/create.sql',
+    generalize: {
+        kind: 'lines',
+        by: 'highway',
+        values: [
+            'motorway',
+            'motorway_link',
+            'primary',
+            'primary_link',
+            'residential',
+            'secondary',
+            'secondary_link',
+            'tertiary',
+            'tertiary_link',
+            'trunk',
+            'trunk_link',
+            'unclassified'
+        ],
+        minzoom: {
+            'motorway': 4,
+            'motorway_link': 9,
+            'primary': 6,
+            'primary_link': 9,
+            'residential': 11,
+            'secondary': 9,
+            'secondary_link': 9,
+            'tertiary': 10,
+            'tertiary_link': 10,
+            'trunk': 6,
+            'trunk_link': 9,
+            'unclassified': 11
+        },
+    },
     type: 'line',
     layout: {
         visibility: 'visible',

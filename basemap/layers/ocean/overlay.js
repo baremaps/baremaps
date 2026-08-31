@@ -25,8 +25,11 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'ocean_overlay',
     type: 'fill',
-    source: 'baremaps',
-    'source-layer': 'ocean',
+    sourceLayer: 'ocean',
+    sourceQueries: [
+        {"minzoom": 0, "maxzoom": 10, "from": "osm_ocean_simplified"},
+        {"minzoom": 10, "maxzoom": 20, "from": "osm_ocean"},
+    ],
     layout: {
         visibility: 'visible',
     },

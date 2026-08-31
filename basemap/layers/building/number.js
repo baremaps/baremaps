@@ -16,8 +16,7 @@ import theme from "../../theme.js";
 export default {
     id: 'building_number',
     type: 'symbol',
-    source: 'baremaps',
-    'source-layer': 'building',
+    sourceLayer: 'building',
     layout: {
         'text-allow-overlap': false,
         'text-anchor': 'center',

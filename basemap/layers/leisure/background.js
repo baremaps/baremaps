@@ -37,8 +37,26 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'leisure',
     type: 'fill',
-    source: 'baremaps',
-    'source-layer': 'leisure',
+    sourceLayer: 'leisure',
+    sourceQueries: [
+        {"minzoom": 1, "maxzoom": 20, "from": "osm_leisure", "filter": ["has", "leisure"]},
+    ],
+    sourceSchema: 'layers/leisure/create.sql',
+    generalize: {
+        by: 'leisure',
+        values: [
+            'garden',
+            'golf_course',
+            'marina',
+            'nature_reserve',
+            'park',
+            'pitch',
+            'sport_center',
+            'stadium',
+            'swimming_pool',
+            'track'
+        ],
+    },
     layout: {
         visibility: 'visible',
     },

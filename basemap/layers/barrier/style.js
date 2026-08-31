@@ -17,9 +17,8 @@ export default [
     {
         id: 'barrier_guard_rail',
         type: 'line',
-        filter: ['all', ['==', 'barrier', 'guard_rail']],
-        source: 'baremaps',
-        'source-layer': 'barrier',
+        filter: ['all', ['==', ['get', 'barrier'], 'guard_rail']],
+        sourceLayer: 'barrier',
         paint: {
             'line-color': theme.barrierGuardRailBackgroundLineColor,
         },

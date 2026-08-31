@@ -16,8 +16,7 @@ import theme from "../../theme.js";
 export default {
     id: 'natural_tree',
     type: 'circle',
-    source: 'baremaps',
-    'source-layer': 'point',
+    sourceLayer: 'point',
     layout: {
         visibility: 'visible',
     },
@@ -35,6 +34,6 @@ export default {
         ],
     },
     filter: ['all',
-        ['==', 'natural', 'tree'],
+        ['==', ['get', 'natural'], 'tree'],
     ],
 }

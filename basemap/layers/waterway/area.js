@@ -15,8 +15,7 @@ import theme from "../../theme.js";
 
 export default {
     id: 'waterway_polygon',
-    source: 'baremaps',
-    'source-layer': 'waterway',
+    sourceLayer: 'waterway',
     type: 'fill',
     layout: {
         visibility: 'visible',

@@ -53,7 +53,7 @@ Assuming that the necessary requirements have been installed, the database can b
 
 ```
 // This command creates the database schema
-baremaps workflow execute --file create.js
+baremaps map create --map map.js
 
 // This command imports the data into the database
 baremaps workflow execute --file import.js
@@ -83,14 +83,84 @@ The dev mode automatically reloads the map when the configuration files are modi
 
 ```
 baremaps map dev --log-level DEBUG \
-  --tileset 'tileset.js' \
-  --style 'style.js'
+  --map 'map.js'
 ```
 
-## Editing the tileset
+## Editing the map
 
-The configuration format used in the `tileset.js` file extends the [TileJSON specification](https://github.com/mapbox/tilejson-spec/tree/master/2.2.0).
-Simply put, it adds in the ability to describe the `vector_tiles` and their content with SQL queries that follow the PostGIS dialect.
+`map.js` holds a few properties of the map as a whole and its layers, in the
+order they are painted. Baremaps derives both
+[the style](https://maplibre.org/maplibre-style-spec/) and
+[the tileset](https://github.com/mapbox/tilejson-spec/tree/master/2.2.0) from
+it.
+
+A layer is a MapLibre style layer that also says where its features come from:
+
+```
+export default {
+    id: 'building',
+    type: 'fill',
+    sourceLayer: 'building',
+    sourceQueries: [
+        {minzoom: 13, maxzoom: 20, from: 'osm_building'},
+    ],
+    sourceSchema: 'layers/building/create.sql',
+    paint: { /* ... */ },
+};
+```
+
+Everything about a subject therefore lives with it: open `layers/building/` to
+work on buildings. A source layer usually feeds several layers — nine draw from
+`highway`, seven from `point` — so exactly one of them carries `sourceQueries`,
+and the compiler refuses a source layer declared twice or not at all.
+
+A query names the relation and, optionally, a `filter`, written in the same
+expression language the style filters in:
+
+```
+sourceQueries: [
+    {minzoom: 6, maxzoom: 10, from: 'osm_waterway',
+     filter: ['in', ['get', 'waterway'], ['literal', ['river', 'stream']]]},
+],
+```
+
+Baremaps turns that into sql, and into sql that uses the index: every test of a
+value is emitted with a `tags ? 'key'` containment test beside it, which is
+redundant to the meaning and decisive to the plan. Without it the gin index
+cannot answer the query, which on a country extract is the difference between a
+plan costing 130 thousand and one costing 381 thousand. `where` remains for a
+predicate the expression language cannot say.
+
+`drawable: true` drops features carrying none of the attributes the style reads
+at that zoom. They can only be drawn as nothing, and the set to test is the one
+already derived for the projection, so this is not a filter that has to be kept
+in step by hand.
+
+A query does not name the attributes to select: those are read off the layers that use them, per zoom
+level, so a tile carries what is drawn and nothing else. Adding a directive that
+reads a new tag is enough to make the tiles carry it, and removing the last
+directive that reads one is enough to make them stop.
+
+The keys this format defines are camelCase; the ones that pass through to a
+specification keep its spelling, which is why the property names inside `layout`
+and `paint` are untouched and the style is written back out with `source-layer`.
+A layer pasted from a style is refused rather than quietly ignored.
+
+Anything the compiler can work out is left out. No layer names the source it
+reads, because there is only one; the style version, the `sources` block and the
+zoom range of each query are filled in the same way. What cannot be derived
+stays declared: `simplify`, a tolerance in tile pixels, and `feature_ids`, off by
+default because a style cannot draw with a feature identifier and identifiers
+compress badly.
+
+`baremaps map compile --map map.js --style style.json --tileset tileset.json`
+writes out what was derived, which is useful for reviewing it.
+
+The tileset format that `map.js` replaces is still accepted: pass `--tileset`
+and `--style` instead of `--map`.
+
+<details>
+<summary>The tileset format</summary>
 
 ```
 {
@@ -113,9 +183,7 @@ Simply put, it adds in the ability to describe the `vector_tiles` and their cont
 }
 ```
 
-## Editing the style
-
-The configuration format used in the `style.js` file follows the [Mapbox style specification](https://github.com/mapbox/mapbox-gl-js).
+</details>
 
 ## Selecting a theme
 
@@ -131,8 +199,7 @@ fails with the list of valid ones.
 
 ```
 BAREMAPS_THEME=dark baremaps map dev \
-  --tileset 'tileset.js' \
-  --style 'style.js'
+  --map 'map.js'
 ```
 
 ## JavaScript as a configuration language
@@ -169,8 +236,8 @@ It reports as errors:
   rejects.
 
 It reports as warnings a theme key that nothing references, a layer module that
-neither `style.js` nor `tileset.js` imports, and any divergence between the layer
-groups listed in `parityGroups`.
+`map.js` does not import, and any divergence between the layer groups listed in
+`parityGroups`.
 
 That last check is worth explaining. The road, tunnel and bridge layers repeat
 their directive lists rather than sharing a generated one, so that a single road

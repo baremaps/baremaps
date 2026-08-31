@@ -25,8 +25,7 @@ let directives = [
 export default asLayerObject(directives, {
     id: 'amenity_fill_2',
     type: 'fill',
-    source: 'baremaps',
-    'source-layer': 'amenity',
+    sourceLayer: 'amenity',
     layout: {
         visibility: 'visible',
     },

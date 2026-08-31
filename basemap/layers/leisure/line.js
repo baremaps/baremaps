@@ -30,8 +30,7 @@ export let directives = [
 
 export default asLayerObject(withSortKeys(directives), {
     'id': 'leisure_line',
-    'source': 'baremaps',
-    'source-layer': 'leisure',
+    sourceLayer: 'leisure',
     'type': 'line',
     'layout': {
         'visibility': 'visible',

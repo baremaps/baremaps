@@ -37,8 +37,11 @@ let directives = [
 export default asLayerObject(directives, {
     id: 'man_made_bridge',
     type: 'fill',
-    source: 'baremaps',
-    'source-layer': 'man_made',
+    sourceLayer: 'man_made',
+    sourceQueries: [
+        {"minzoom": 14, "maxzoom": 20, "from": "osm_man_made"},
+    ],
+    sourceSchema: 'layers/man_made/create.sql',
     layout: {
         visibility: 'visible',
     },

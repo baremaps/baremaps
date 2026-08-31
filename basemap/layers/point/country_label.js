@@ -29,8 +29,7 @@ let directives = [
 export default asLayerObject(withSymbolSortKeys(directives), {
     id: 'country_label',
     type: 'symbol',
-    source: 'baremaps',
-    'source-layer': 'point',
+    sourceLayer: 'point',
     'minzoom': 1,
     'maxzoom': 6,
     layout: {

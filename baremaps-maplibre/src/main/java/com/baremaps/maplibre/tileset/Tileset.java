@@ -79,6 +79,19 @@ public class Tileset {
   @JsonProperty("vector_layers")
   private List<TilesetLayer> vectorLayers = new ArrayList<>();
 
+  /**
+   * Whether the tiles carry the identifier of each feature as an attribute.
+   *
+   * <p>
+   * Identifiers are unique by definition, so each one becomes its own entry in a tile's value
+   * dictionary and compresses about as badly as data can. On this basemap they account for roughly
+   * a fifth of every tile, and no layer of the style reads them. A tileset written by hand keeps
+   * them, because something downstream may be relying on them; one derived from a map specification
+   * does not, because the specification says what is drawn and nothing draws with an identifier.
+   */
+  @JsonProperty("feature_ids")
+  private boolean featureIds = true;
+
   private Integer fillzoom;
 
   public Tileset() {}
@@ -270,6 +283,15 @@ public class Tileset {
 
   public Tileset setVectorLayers(List<TilesetLayer> vectorLayers) {
     this.vectorLayers = vectorLayers;
+    return this;
+  }
+
+  public boolean isFeatureIds() {
+    return featureIds;
+  }
+
+  public Tileset setFeatureIds(boolean featureIds) {
+    this.featureIds = featureIds;
     return this;
   }
 

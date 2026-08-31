@@ -15,8 +15,7 @@ import theme from "../../theme.js";
 
 export default {
     id: 'pedestrian_area',
-    source: 'baremaps',
-    'source-layer': 'highway',
+    sourceLayer: 'highway',
     type: 'fill',
     layout: {
         visibility: 'visible',
@@ -26,12 +25,12 @@ export default {
         ['has', 'area'], // Some pedestrian areas are not closed polygons, hence the need for this filter
         [
             'any',
-            ['==', 'highway', 'pedestrian'],
-            ['==', 'highway', 'path'],
-            ['==', 'highway', 'sidewalk'],
-            ['==', 'highway', 'crossing'],
-            ['==', 'highway', 'steps'],
-            ['==', 'highway', 'footway'],
+            ['==', ['get', 'highway'], 'pedestrian'],
+            ['==', ['get', 'highway'], 'path'],
+            ['==', ['get', 'highway'], 'sidewalk'],
+            ['==', ['get', 'highway'], 'crossing'],
+            ['==', ['get', 'highway'], 'steps'],
+            ['==', ['get', 'highway'], 'footway'],
         ],
     ],
     paint: {

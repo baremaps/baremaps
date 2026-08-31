@@ -17,9 +17,8 @@ import theme from "../../theme.js";
 export default {
     id: 'man_made_pier_label',
     type: 'symbol',
-    filter: ['all', ['==', 'man_made', 'pier']],
-    source: 'baremaps',
-    'source-layer': 'man_made',
+    filter: ['all', ['==', ['get', 'man_made'], 'pier']],
+    sourceLayer: 'man_made',
     layout: {
         'text-field': ['get', 'name'],
         'text-font': ['Noto Sans Regular'],

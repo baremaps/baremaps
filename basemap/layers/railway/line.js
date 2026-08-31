@@ -98,8 +98,7 @@ export let directives = [
 
 export default asLayerObject(withSortKeys(directives), {
     'id': 'railway_line',
-    'source': 'baremaps',
-    'source-layer': 'railway',
+    sourceLayer: 'railway',
     'type': 'line',
     'layout': {
         'visibility': 'visible',

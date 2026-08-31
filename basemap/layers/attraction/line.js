@@ -26,8 +26,11 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'attraction_line',
     type: 'line',
-    source: 'baremaps',
-    'source-layer': 'attraction',
+    sourceLayer: 'attraction',
+    sourceQueries: [
+        {"minzoom": 13, "maxzoom": 20, "from": "osm_attraction"},
+    ],
+    sourceSchema: 'layers/attraction/create.sql',
     layout: {
         visibility: 'visible',
         'line-cap': 'round',

@@ -30,8 +30,7 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'man_made_pier_line',
     type: 'line',
-    source: 'baremaps',
-    'source-layer': 'man_made',
+    sourceLayer: 'man_made',
     layout: {
         visibility: 'visible',
         'line-cap': 'round',

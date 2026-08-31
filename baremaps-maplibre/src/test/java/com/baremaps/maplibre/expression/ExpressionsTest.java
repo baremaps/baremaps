@@ -58,18 +58,18 @@ class ExpressionsTest {
   @Test
   void inList() {
     var literal = new Literal(List.of(0, 1, 2));
-    assertEquals(true, new In(0, literal).evaluate(null));
-    assertEquals(true, new In(1, literal).evaluate(null));
-    assertEquals(true, new In(2, literal).evaluate(null));
-    assertEquals(false, new In(3, literal).evaluate(null));
+    assertEquals(true, new In(new Literal(0), literal).evaluate(null));
+    assertEquals(true, new In(new Literal(1), literal).evaluate(null));
+    assertEquals(true, new In(new Literal(2), literal).evaluate(null));
+    assertEquals(false, new In(new Literal(3), literal).evaluate(null));
   }
 
   @Test
   void inString() {
     var literal = new Literal("foobar");
-    assertEquals(true, new In("foo", literal).evaluate(null));
-    assertEquals(true, new In("bar", literal).evaluate(null));
-    assertEquals(false, new In("baz", literal).evaluate(null));
+    assertEquals(true, new In(new Literal("foo"), literal).evaluate(null));
+    assertEquals(true, new In(new Literal("bar"), literal).evaluate(null));
+    assertEquals(false, new In(new Literal("baz"), literal).evaluate(null));
   }
 
   @Test
@@ -204,6 +204,55 @@ class ExpressionsTest {
         .read("[\"match\", \"bar\", \"foo\", \"foo\", \"bar\", \"bar\", \"baz\"]").evaluate(null));
     assertEquals("baz", Expressions
         .read("[\"match\", \"baz\", \"foo\", \"foo\", \"bar\", \"bar\", \"baz\"]").evaluate(null));
+  }
+
+  /**
+   * An expression outside what is modelled here is kept with its arguments, so that a traversal can
+   * still descend through it. Rejecting it would stop an analysis of the style, and treating it as
+   * empty would let one conclude that a layer reads no attributes.
+   */
+  @Test
+  void unknown() throws IOException {
+    var expression = Expressions.read("[\"to-number\", [\"get\", \"population\"], 0]");
+    assertInstanceOf(Unknown.class, expression);
+    var unknown = (Unknown) expression;
+    assertEquals("to-number", unknown.name());
+    assertEquals(new Get("population"), unknown.arguments().get(0));
+    assertThrows(UnsupportedOperationException.class, () -> unknown.evaluate(null));
+  }
+
+  @Test
+  void negatedHas() throws IOException {
+    var feature = new Feature(1, Map.of("name", "value"), null);
+    assertEquals(false, Expressions.read("[\"!has\", \"name\"]").evaluate(feature));
+    assertEquals(true, Expressions.read("[\"!has\", \"other\"]").evaluate(feature));
+  }
+
+  /** A layer with no filter is written as an empty array. */
+  @Test
+  void emptyArray() throws IOException {
+    assertEquals(new Literal(null), Expressions.read("[]"));
+  }
+
+  @Test
+  void zoomDrivenExpressions() throws IOException {
+    assertInstanceOf(Zoom.class, Expressions.read("[\"zoom\"]"));
+
+    var interpolate = (Interpolate) Expressions
+        .read("[\"interpolate\", [\"linear\"], [\"zoom\"], 13, 0, 13.5, 1]");
+    assertInstanceOf(Zoom.class, interpolate.input());
+    assertEquals(4, interpolate.stops().size());
+
+    var step = (Step) Expressions.read("[\"step\", [\"zoom\"], 0, 15, 10]");
+    assertInstanceOf(Zoom.class, step.input());
+    assertEquals(new Literal(0.0), step.fallback());
+    assertEquals(2, step.stops().size());
+  }
+
+  @Test
+  void listArgumentsAreWrittenBackAsArguments() throws IOException {
+    assertEquals("[\"any\",[\"has\",\"a\"],[\"has\",\"b\"]]",
+        Expressions.write(new Any(List.of(new Has("a"), new Has("b")))));
   }
 
 }

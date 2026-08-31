@@ -19,8 +19,7 @@ export default {
     type: 'symbol',
     minzoom: 12,
     filter: ['==', ['get', 'waterway'], 'river'],
-    source: 'baremaps',
-    'source-layer': 'waterway',
+    sourceLayer: 'waterway',
     layout: {
         visibility: 'visible',
         'text-font': ['Noto Sans Italic'],

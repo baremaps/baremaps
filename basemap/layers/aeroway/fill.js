@@ -24,8 +24,11 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'aeroway_polygon',
     type: 'fill',
-    source: 'baremaps',
-    'source-layer': 'aeroway',
+    sourceLayer: 'aeroway',
+    sourceQueries: [
+        {"minzoom": 13, "maxzoom": 20, "from": "osm_aeroway"},
+    ],
+    sourceSchema: 'layers/aeroway/create.sql',
     layout: {
         visibility: 'visible',
     },

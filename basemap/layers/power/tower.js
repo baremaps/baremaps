@@ -19,13 +19,12 @@ export default {
     "type": "circle",
     "filter": [
         "any",
-        ["==", "power", "tower"],
-        ["==", "power", "pole"],
-        ["==", "power", "portal"],
-        ["==", "power", "catenary_mast"]
+        ["==", ["get", "power"], "tower"],
+        ["==", ["get", "power"], "pole"],
+        ["==", ["get", "power"], "portal"],
+        ["==", ["get", "power"], "catenary_mast"]
     ],
-    "source": "baremaps",
-    "source-layer": "point",
+    sourceLayer: "point",
     "layout": {
         "visibility": "visible"
     },

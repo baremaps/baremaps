@@ -17,9 +17,8 @@ import theme from "../../theme.js";
 export default {
     "id": "tourism_zoo",
     "type": "line",
-    "filter": ["all", ["==", "tourism", "zoo"]],
-    "source": "baremaps",
-    "source-layer": "tourism",
+    "filter": ["all", ["==", ["get", "tourism"], "zoo"]],
+    sourceLayer: "tourism",
     "layout": {
         "visibility": "visible"
     },

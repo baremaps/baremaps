@@ -48,8 +48,7 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'natural_overlay',
     type: 'fill',
-    source: 'baremaps',
-    'source-layer': 'natural',
+    sourceLayer: 'natural',
     layout: {
         visibility: 'visible',
     },

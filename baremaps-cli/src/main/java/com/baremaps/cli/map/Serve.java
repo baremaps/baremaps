@@ -16,9 +16,6 @@ package com.baremaps.cli.map;
 
 import com.baremaps.cli.WebServer;
 import com.baremaps.config.ConfigReader;
-import com.baremaps.maplibre.style.Style;
-import com.baremaps.maplibre.tilejson.TileJSON;
-import com.baremaps.maplibre.tileset.Tileset;
 import com.baremaps.postgres.utils.PostgresUtils;
 import com.baremaps.server.SearchResource;
 import com.baremaps.server.StyleResource;
@@ -43,12 +40,16 @@ public class Serve implements Callable<Integer> {
           "sets a 1GB cache whose entries expires after one hour."})
   private String cache = "";
 
-  @Option(names = {"--tileset"}, paramLabel = "TILESET", description = "The tileset file.",
-      required = true)
+  @Option(names = {"--map"}, paramLabel = "MAP",
+      description = "The map specification file, from which the style and the tileset are derived.")
+  private Path mapPath;
+
+  @Option(names = {"--tileset"}, paramLabel = "TILESET",
+      description = "The tileset file. Superseded by --map.")
   private Path tilesetPath;
 
-  @Option(names = {"--style"}, paramLabel = "STYLE", description = "The style file.",
-      required = true)
+  @Option(names = {"--style"}, paramLabel = "STYLE",
+      description = "The style file. Superseded by --map.")
   private Path stylePath;
 
   @Option(names = {"--assets"}, paramLabel = "ASSETS", description = "The assets directory.")
@@ -64,10 +65,12 @@ public class Serve implements Callable<Integer> {
 
   @Override
   public Integer call() throws Exception {
+    MapInput.validate(mapPath, tilesetPath, stylePath);
+
     var configReader = new ConfigReader();
-    var tileset = configReader.read(tilesetPath, Tileset.class);
-    var style = configReader.read(stylePath, Style.class);
-    var tileJSON = configReader.read(tilesetPath, TileJSON.class);
+    var tileset = MapInput.tileset(configReader, mapPath, tilesetPath);
+    var style = MapInput.style(configReader, mapPath, stylePath);
+    var tileJSON = MapInput.tileJSON(configReader, mapPath, tilesetPath);
 
     var datasource = PostgresUtils.createDataSourceFromObject(tileset.getDatabase());
     var postgresVersion = PostgresUtils.getPostgresVersion(datasource);

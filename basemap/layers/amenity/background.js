@@ -44,8 +44,15 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'amenity_background',
     type: 'fill',
-    source: 'baremaps',
-    'source-layer': 'amenity',
+    sourceLayer: 'amenity',
+    sourceQueries: [
+        {"minzoom": 1, "maxzoom": 20, "from": "osm_amenity"},
+    ],
+    sourceSchema: 'layers/amenity/create.sql',
+    generalize: {
+        // Every amenity that survives the area threshold is worth merging, so no value is named.
+        by: 'amenity',
+    },
     layout: {
         visibility: 'visible',
     },

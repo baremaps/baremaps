@@ -2038,8 +2038,15 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'icon',
     type: 'symbol',
-    source: 'baremaps',
-    'source-layer': 'point',
+    sourceLayer: 'point',
+    sourceQueries: [
+        {
+            "minzoom": 1, "maxzoom": 2, "from": "osm_point_z$zoom",
+            "filter": ["==", ["get", "place"], "country"]
+        },
+        {"minzoom": 2, "maxzoom": 20, "from": "osm_point_z$zoom", "drawable": true},
+    ],
+    sourceSchema: 'layers/point/create.sql',
     'minzoom': 14,
     layout: {
         visibility: 'visible',

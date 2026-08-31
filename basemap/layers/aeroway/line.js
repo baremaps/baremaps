@@ -32,8 +32,7 @@ let directives = [
 export default asLayerObject(withSortKeys(directives), {
     id: 'aeroway_line',
     type: 'line',
-    source: 'baremaps',
-    'source-layer': 'aeroway',
+    sourceLayer: 'aeroway',
     layout: {
         'line-cap': 'round',
         'line-join': 'round',

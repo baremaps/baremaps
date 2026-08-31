@@ -100,8 +100,22 @@ export let directives = [
 
 export default asLayerObject(withSortKeys(directives), {
     'id': 'railway_tunnel',
-    'source': 'baremaps',
-    'source-layer': 'railway',
+    sourceLayer: 'railway',
+    sourceQueries: [
+        {"minzoom": 7, "maxzoom": 20, "from": "osm_railway"},
+    ],
+    sourceSchema: 'layers/railway/create.sql',
+    generalize: {
+        kind: 'lines',
+        by: 'railway',
+        values: [
+            'light_rail',
+            'monorail',
+            'rail',
+            'subway',
+            'tram'
+        ],
+    },
     'type': 'line',
     'layout': {
         'visibility': 'visible',

@@ -17,9 +17,12 @@ import theme from "../../theme.js";
 export default {
     "id": "tourism_zoo_casing",
     "type": "line",
-    "filter": ["all", ["==", "tourism", "zoo"]],
-    "source": "baremaps",
-    "source-layer": "tourism",
+    "filter": ["all", ["==", ["get", "tourism"], "zoo"]],
+    sourceLayer: "tourism",
+    sourceQueries: [
+        {"minzoom": 14, "maxzoom": 20, "from": "osm_tourism"},
+    ],
+    sourceSchema: 'layers/tourism/create.sql',
     "layout": {
         "visibility": "visible"
     },

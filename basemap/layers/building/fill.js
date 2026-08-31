@@ -16,8 +16,11 @@ import theme from "../../theme.js";
 export default {
     id: 'building',
     type: 'fill',
-    source: 'baremaps',
-    'source-layer': 'building',
+    sourceLayer: 'building',
+    sourceQueries: [
+        {"minzoom": 13, "maxzoom": 20, "from": "osm_building"},
+    ],
+    sourceSchema: 'layers/building/create.sql',
     layout: {
         visibility: 'visible',
     },

@@ -17,7 +17,6 @@ import theme from '../../theme.js';
 export default {
     id: 'background',
     type: 'background',
-    source: 'baremaps',
     layout: {
         visibility: 'visible',
     },

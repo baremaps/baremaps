@@ -134,8 +134,7 @@ let directives = [
 
 export default asLayerObject(withSortKeys(directives), {
     id: 'highway_construction_line',
-    source: 'baremaps',
-    'source-layer': 'highway',
+    sourceLayer: 'highway',
     type: 'line',
     layout: {
         visibility: 'visible',

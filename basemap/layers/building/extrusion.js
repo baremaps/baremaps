@@ -16,8 +16,7 @@ import theme from "../../theme.js";
 export default {
     id: 'building-extrusion',
     type: 'fill-extrusion',
-    source: 'baremaps',
-    'source-layer': 'building',
+    sourceLayer: 'building',
     filter: ['all',
         ['==', ['geometry-type'], 'Polygon'],
         ['!=', ['get', 'building'], 'no'],

@@ -17,8 +17,11 @@ import theme from "../../theme.js";
 export default {
     id: 'power_plant',
     type: 'fill',
-    source: 'baremaps',
-    'source-layer': 'power',
+    sourceLayer: 'power',
+    sourceQueries: [
+        {"minzoom": 13, "maxzoom": 20, "from": "osm_power"},
+    ],
+    sourceSchema: 'layers/power/create.sql',
     layout: {
         visibility: 'visible',
     },
@@ -27,5 +30,5 @@ export default {
         'fill-color': theme.powerPlantBackgroundFillColor,
         'fill-outline-color': theme.powerPlantBackgroundOutlineColor,
     },
-    filter: ['any', ['==', 'power', 'plant'], ['==', 'power', 'substation']],
+    filter: ['any', ['==', ['get', 'power'], 'plant'], ['==', ['get', 'power'], 'substation']],
 }

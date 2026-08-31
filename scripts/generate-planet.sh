@@ -36,4 +36,4 @@ echo "Export the Basemap tiles"
 echo "--------------------------------------------------------------------"
 echo ""
 
-baremaps map export --tileset 'tileset.js' --repository 'tiles.mbtiles' --format mbtiles
+baremaps map export --map 'map.js' --repository 'tiles.mbtiles' --format mbtiles
