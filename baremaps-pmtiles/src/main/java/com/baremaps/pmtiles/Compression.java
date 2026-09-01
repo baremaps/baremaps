@@ -43,7 +43,7 @@ public enum Compression {
    * @return a stream yielding the decompressed bytes
    * @throws IOException if an I/O error occurs
    */
-  InputStream decompress(InputStream input) throws IOException {
+  public InputStream decompress(InputStream input) throws IOException {
     return switch (this) {
       case NONE -> input;
       case GZIP -> new GZIPInputStream(input);

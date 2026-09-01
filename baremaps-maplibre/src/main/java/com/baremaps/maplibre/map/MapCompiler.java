@@ -68,6 +68,23 @@ public final class MapCompiler {
     vector.setType("vector");
     vector.setUrl(source.url());
 
+    var sources = new LinkedHashMap<String, StyleSource>();
+    sources.put(source.id(), vector);
+
+    // The terrain is a second source because it is not a second query: it is traced from an
+    // elevation archive rather than selected from the database, so it has a tileset of nothing and
+    // reaches the style directly.
+    if (spec.terrain() != null) {
+      var terrain = spec.terrain();
+      sources.put(terrain.id(), new StyleSource()
+          .setType("vector")
+          .setTiles(terrain.tiles())
+          .setBounds(terrain.bounds())
+          .setMinzoom(terrain.minzoom())
+          .setMaxzoom(terrain.maxzoom())
+          .setAttribution(terrain.attribution()));
+    }
+
     var layers = new ArrayList<StyleLayer>();
     for (var layer : spec.layers()) {
       layers.add(new StyleLayer()
@@ -90,7 +107,7 @@ public final class MapCompiler {
         .setZoom(spec.zoom())
         .setSprite(spec.sprite())
         .setGlyphs(spec.glyphs())
-        .setSources(Map.of(source.id(), vector))
+        .setSources(sources)
         .setLayers(layers);
   }
 
@@ -195,9 +212,21 @@ public final class MapCompiler {
     var queries = new LinkedHashMap<String, List<MapSpec.Query>>();
     var declaredBy = new HashMap<String, String>();
 
+    var terrain = spec.terrain() == null ? null : spec.terrain().id();
     for (var layer : spec.layers()) {
       var id = layer.getSourceLayer();
       if (id == null) {
+        continue;
+      }
+      // A layer reading the terrain reads tiles that are computed rather than queried, so it
+      // neither declares a query nor leaves one owing.
+      if (terrain != null && terrain.equals(layer.getSource())) {
+        if (layer.getSourceQueries() != null) {
+          throw new IllegalArgumentException(String.format(
+              "The layer '%s' reads the terrain, which is traced from elevation, "
+                  + "so it cannot declare source-queries.",
+              layer.getId()));
+        }
         continue;
       }
       queries.putIfAbsent(id, null);

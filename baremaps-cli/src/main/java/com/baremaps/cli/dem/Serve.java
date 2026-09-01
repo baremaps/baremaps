@@ -14,11 +14,15 @@
 
 package com.baremaps.cli.dem;
 
+import com.baremaps.cli.BaremapsException;
 import com.baremaps.cli.WebServer;
 import com.baremaps.server.BufferedImageResource;
 import com.baremaps.server.VectorTileResource;
+import com.baremaps.tilestore.pmtiles.PMTilesStore;
+import com.baremaps.tilestore.raster.ElevationReader;
 import com.baremaps.tilestore.raster.GeoTiffReader;
 import com.baremaps.tilestore.raster.RasterHillshadeTileStore;
+import com.baremaps.tilestore.raster.TerrariumElevationReader;
 import com.baremaps.tilestore.raster.TerrariumTileStore;
 import com.baremaps.tilestore.raster.VectorContourTileStore;
 import com.baremaps.tilestore.raster.VectorHillshadeTileStore;
@@ -42,17 +46,29 @@ public class Serve implements Callable<Integer> {
   @Option(names = {"--port"}, paramLabel = "PORT", description = "The port of the server.")
   private int port = 9000;
 
-  @Option(names = {"--path"}, paramLabel = "PATH", required = true,
+  @Option(names = {"--path"}, paramLabel = "PATH",
       description = "The path of a digital elevation model (DEM) file in the geotiff format.")
   private Path path;
 
+  @Option(names = {"--pmtiles"}, paramLabel = "PMTILES",
+      description = "The path of a PMTiles archive of terrarium tiles, such as Mapterhorn's.")
+  private Path pmtilesPath;
+
+  @Option(names = {"--pmtiles-tile-size"}, paramLabel = "SIZE",
+      description = "The side of a tile of that archive, in pixels.")
+  private int pmtilesTileSize = TerrariumElevationReader.DEFAULT_TILE_SIZE;
+
+  @Option(names = {"--pmtiles-maxzoom"}, paramLabel = "MAXZOOM",
+      description = "The deepest zoom level that archive holds.")
+  private int pmtilesMaxzoom = 12;
+
   @Override
   public Integer call() throws Exception {
-    try (var geoTiffReader = new GeoTiffReader(path);
-        var rasterElevation = new TerrariumTileStore(geoTiffReader);
-        var rasterHillshade = new RasterHillshadeTileStore(geoTiffReader);
-        var vectorContour = new VectorContourTileStore(geoTiffReader);
-        var vectorHillshade = new VectorHillshadeTileStore(geoTiffReader)) {
+    try (var elevation = elevation();
+        var rasterElevation = new TerrariumTileStore(elevation);
+        var rasterHillshade = new RasterHillshadeTileStore(elevation);
+        var vectorContour = new VectorContourTileStore(elevation);
+        var vectorHillshade = new VectorHillshadeTileStore(elevation)) {
       new WebServer(host, port)
           .resource("/raster/elevation", new BufferedImageResource(() -> rasterElevation))
           .resource("/raster/hillshade", new BufferedImageResource(() -> rasterHillshade))
@@ -62,5 +78,21 @@ public class Serve implements Callable<Integer> {
           .run();
     }
     return 0;
+  }
+
+  /**
+   * The elevation to preview: a GeoTIFF covering a region, or an archive of terrarium tiles
+   * covering the planet. Both resolve to the same grid, so the four stores above are the same
+   * either way.
+   */
+  private ElevationReader elevation() throws Exception {
+    if ((path == null) == (pmtilesPath == null)) {
+      throw new BaremapsException("Pass --path or --pmtiles, but not both.");
+    }
+    if (path != null) {
+      return new GeoTiffReader(path);
+    }
+    return new TerrariumElevationReader(
+        new PMTilesStore(pmtilesPath), pmtilesTileSize, pmtilesMaxzoom);
   }
 }

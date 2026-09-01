@@ -16,34 +16,44 @@ package com.baremaps.tilestore.raster;
 
 import com.baremaps.dem.ContourTracer;
 import com.baremaps.maplibre.vectortile.Feature;
+import com.baremaps.maplibre.vectortile.Layer;
 import com.baremaps.tilestore.TileCoord;
 import com.baremaps.tilestore.TileStoreException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Map;
+import java.util.HashMap;
+import java.util.List;
 import org.locationtech.jts.geom.util.AffineTransformation;
 
 /**
- * A {@code TileStore} that calculates vector contour tiles from elevation tiles.
+ * A {@code TileStore} that traces vector contour tiles from elevation.
+ *
+ * <p>
+ * A contour is a line and is traced as one, not as the boundary of the ground above it. Both would
+ * draw the same stroke, but only a line can be labelled with the height it stands for: a renderer
+ * asked to write along a shape needs to know which way along it to write, and a closed ring around
+ * a summit does not say. Tracing lines also leaves out what a ring needs and a contour does not,
+ * the segments that close it against the edge of the grid and the nesting of one inside another.
  */
 public class VectorContourTileStore extends RasterTileStore<ByteBuffer> {
 
-  // A contour that runs off the edge of a tile has to meet the one of the adjacent tile, so the
-  // grid is computed with a border that is then translated away.
-  private static final int TILE_BUFFER = 4;
-
-  // The lowest and highest elevations on earth, rounded outwards.
-  private static final int MIN_ELEVATION = -10000;
-
-  private static final int MAX_ELEVATION = 10000;
+  /** The name of the layer the contours are encoded in. */
+  static final String LAYER = "contour";
 
   /**
-   * Constructs a {@code VectorContourTileStore} with the specified GeoTIFF reader.
-   *
-   * @param geoTiffReader the geotiff reader
+   * How many intervals apart the contours a map draws more heavily are. Which contour carries a
+   * label and a thicker line is a decision the tracer can make and the style cannot, because the
+   * interval changes with the zoom level and a style filter would have to change with it.
    */
-  public VectorContourTileStore(GeoTiffReader geoTiffReader) {
-    super(geoTiffReader);
+  private static final int INDEX_EVERY = 5;
+
+  /**
+   * Constructs a {@code VectorContourTileStore} with the specified elevation reader.
+   *
+   * @param elevation the elevation reader
+   */
+  public VectorContourTileStore(ElevationReader elevation) {
+    super(elevation);
   }
 
   /**
@@ -56,45 +66,79 @@ public class VectorContourTileStore extends RasterTileStore<ByteBuffer> {
   @Override
   public ByteBuffer read(TileCoord tileCoord) throws TileStoreException {
     try {
-      var gridSize = TILE_SIZE + 2 * TILE_BUFFER;
-      var grid = geoTiffReader.read(tileCoord, TILE_SIZE, TILE_BUFFER);
-
-      var tracer = new ContourTracer(grid, gridSize, gridSize);
-      // Move the border out of the way, then scale the grid to the extent of the vector tile.
-      var toTileExtent = AffineTransformation
-          .translationInstance(-TILE_BUFFER, -TILE_BUFFER)
-          .scale(4096 / TILE_SIZE, 4096 / TILE_SIZE);
-
-      var features = new ArrayList<Feature>();
-      for (int level = MIN_ELEVATION; level < MAX_ELEVATION; level += interval(tileCoord.z())) {
-        for (var polygon : tracer.tracePolygons(level)) {
-          features.add(new Feature(level, Map.of("level", String.valueOf(level)),
-              toTileExtent.transform(polygon)));
-        }
-      }
-
-      return encodeLayer("contour", features);
+      var grid = elevation.read(tileCoord, TILE_SIZE, TRACE_BUFFER);
+      return encodeLayers(List.of(layer(grid, tileCoord.z())));
+    } catch (TileStoreException e) {
+      throw e;
     } catch (Exception e) {
       throw new TileStoreException(e);
     }
   }
 
   /**
+   * Traces the contours of an elevation grid into a vector tile layer.
+   *
+   * @param grid the elevation grid, including the border
+   * @param zoom the zoom level the tile is produced at, which sets the interval
+   * @return the layer
+   */
+  static Layer layer(double[] grid, int zoom) {
+    var gridSize = TILE_SIZE + 2 * TRACE_BUFFER;
+    var tracer = new ContourTracer(grid, gridSize, gridSize);
+    // Move the border out of the way, then scale the grid to the extent of the vector tile.
+    var toTileExtent = AffineTransformation
+        .translationInstance(-TRACE_BUFFER, -TRACE_BUFFER)
+        .scale((double) TILE_EXTENT / TILE_SIZE, (double) TILE_EXTENT / TILE_SIZE);
+
+    // Only the levels the grid actually crosses are traced. Walking the whole range of terrestrial
+    // elevations instead would sweep the grid two thousand times at the zoom levels where the
+    // interval is finest, to find that the tile spans a hundred meters of it.
+    var interval = interval(zoom);
+    var min = Double.MAX_VALUE;
+    var max = -Double.MAX_VALUE;
+    for (var value : grid) {
+      min = Math.min(min, value);
+      max = Math.max(max, value);
+    }
+    var lowest = (int) (Math.ceil(min / interval) * interval);
+    var highest = (int) (Math.floor(max / interval) * interval);
+
+    var features = new ArrayList<Feature>();
+    for (int level = lowest; level <= highest; level += interval) {
+      var tags = new HashMap<String, Object>();
+      tags.put("level", String.valueOf(level));
+      if (Math.floorMod(level / interval, INDEX_EVERY) == 0) {
+        tags.put("index", "yes");
+      }
+      for (var line : tracer.traceLines(level)) {
+        features.add(new Feature(level, tags, toTileExtent.transform(line)));
+      }
+    }
+    return new Layer(LAYER, TILE_EXTENT, features);
+  }
+
+  /**
    * Returns the elevation between two contours at a zoom level. A tile covers a smaller area as the
    * zoom grows, so the contours can be drawn closer together without crowding it.
+   *
+   * <p>
+   * What sets the interval is not the zoom on its own but how far apart the contours land on the
+   * screen, and that depends on the slope: the steeper the ground, the closer together the same
+   * interval draws them. The values below keep a slope of forty-five degrees, which is a mountain
+   * face rather than a hillside, at roughly eight pixels between contours. A gentler interval reads
+   * better on gentle ground and fills a cliff with solid ink, which is what these are chosen to
+   * avoid: at a hundred meters, the north faces of the Alps come out black.
    *
    * @param zoom the zoom level
    * @return the interval in meters
    */
-  private static int interval(int zoom) {
+  static int interval(int zoom) {
     return switch (zoom) {
-      case 1, 2 -> 2000;
-      case 3, 4, 5, 6, 7 -> 1000;
-      case 8, 9 -> 500;
-      case 10, 11 -> 250;
-      case 12, 13 -> 100;
-      case 14 -> 50;
-      default -> 10;
+      case 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 -> 1000;
+      case 10, 11 -> 500;
+      case 12, 13 -> 200;
+      case 14, 15 -> 100;
+      default -> 50;
     };
   }
 }

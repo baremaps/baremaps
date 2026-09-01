@@ -14,10 +14,17 @@
 
 package com.baremaps.tilestore.raster;
 
+import com.baremaps.tilestore.TileStoreException;
+
 /**
  * An exception thrown when an error occurs while reading a GeoTIFF file.
+ *
+ * <p>
+ * A GeoTIFF is one of the sources a tile can be derived from, so this is a
+ * {@link TileStoreException}: a caller that only wants to know that a tile could not be produced
+ * does not have to name every format it might have come from.
  */
-public class GeoTiffException extends Exception {
+public class GeoTiffException extends TileStoreException {
 
   /**
    * Constructs an {@code GeoTiffException} with the specified detail message.

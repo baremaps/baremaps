@@ -16,6 +16,7 @@ package com.baremaps.maplibre.vectortile;
 
 import java.nio.ByteBuffer;
 import org.locationtech.jts.algorithm.Orientation;
+import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -140,8 +141,33 @@ public class VectorTileFunctions {
    * @return True if the winding order is clockwise
    */
   public static boolean isClockWise(Geometry geometry) {
-    // As the origin of the vector tile coordinate system is in the top left corner, the
-    // orientation of the geometry is inverted.
-    return Orientation.isCCW(geometry.getCoordinates());
+    return isClockWise(geometry.getCoordinates());
+  }
+
+  /**
+   * Returns true if the winding order of a ring is clockwise, by the sign of the area the
+   * specification measures it with.
+   *
+   * <p>
+   * The specification tells a polygon's outline from its holes by the sign of the surveyor's
+   * formula over the ring, and that is what this computes. It is not the same question as which way
+   * a ring is wound geometrically, which is what {@link Orientation#isCCW} answers: that answer is
+   * only defined for a ring that does not touch itself, and rounding a traced contour onto the tile
+   * grid regularly pinches one against itself, at which point the two disagree. Since the decoder
+   * has nothing but these coordinates to judge by, the encoder has to judge by the same thing, or
+   * it writes an outline that is read back as a hole.
+   *
+   * @param coordinates the coordinates of the ring, closed
+   * @return true if the winding order is clockwise
+   */
+  public static boolean isClockWise(Coordinate[] coordinates) {
+    // As the origin of the vector tile coordinate system is in the top left corner, a ring that is
+    // counter-clockwise by the formula is clockwise on the screen.
+    double area = 0;
+    for (int i = 0; i < coordinates.length - 1; i++) {
+      area += coordinates[i].getX() * coordinates[i + 1].getY()
+          - coordinates[i + 1].getX() * coordinates[i].getY();
+    }
+    return area > 0;
   }
 }

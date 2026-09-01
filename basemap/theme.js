@@ -81,4 +81,17 @@ if (!Object.prototype.hasOwnProperty.call(themes, name)) {
     );
 }
 
-export default themes[name];
+/**
+ * The colours no theme derives, taken from the default one whichever theme is selected.
+ *
+ * Every other theme is the default put through a transform of each colour, which is what a colour
+ * ought to get: a dark map wants its land, its water and its roads inverted. The hillshade colours
+ * are not the colour of anything, they are the light falling on it, and inverting a map does not
+ * move the sun. Deriving them turns the lit slopes dark and the shaded ones light, which reads as
+ * terrain pressed into the ground rather than standing out of it. White adds light and a neutral
+ * dark adds shadow whatever they are drawn over, so they hold across every theme unchanged.
+ */
+const fixed = Object.fromEntries(Object.entries(defaultTheme)
+    .filter(([key]) => key.startsWith('terrainHillshade')));
+
+export default {...themes[name], ...fixed};

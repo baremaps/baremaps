@@ -263,27 +263,44 @@ public class VectorTileEncoder {
    * @param encoding The consumer of commands and parameters.
    */
   protected void encodePolygon(Polygon polygon, IntConsumer encoding) {
-    LinearRing exteriorRing = polygon.getExteriorRing();
-    List<Coordinate> exteriorRingCoordinates = List.of(exteriorRing.getCoordinates());
+    // Every ring is rounded to the tile grid before its winding is decided, because the winding is
+    // the only thing that tells a decoder an outline from a hole, and it is the rounded ring the
+    // decoder sees. A thin ring can wind one way at full precision and the other way once its
+    // vertices land on the grid: judged before rounding, such an outline is written unreversed and
+    // read back as a hole, leaving a polygon that has holes and no outline at all.
+    List<Coordinate> exteriorRingCoordinates = rounded(polygon.getExteriorRing());
 
     // Exterior ring must be clockwise
-    if (!isClockWise(exteriorRing)) {
+    if (!isClockWise(exteriorRingCoordinates)) {
       exteriorRingCoordinates = Lists.reverse(exteriorRingCoordinates);
     }
 
     encodeRing(exteriorRingCoordinates, encoding);
 
     for (int i = 0; i < polygon.getNumInteriorRing(); i++) {
-      LinearRing interiorRing = polygon.getInteriorRingN(i);
-      List<Coordinate> interiorRingCoordinates = List.of(interiorRing.getCoordinates());
+      List<Coordinate> interiorRingCoordinates = rounded(polygon.getInteriorRingN(i));
 
-      // Exterior ring must be counter-clockwise
-      if (isClockWise(interiorRing)) {
-        interiorRingCoordinates = Lists.reverse(exteriorRingCoordinates);
+      // Interior rings must be counter-clockwise, which is what tells a decoder they are holes.
+      if (isClockWise(interiorRingCoordinates)) {
+        interiorRingCoordinates = Lists.reverse(interiorRingCoordinates);
       }
 
       encodeRing(interiorRingCoordinates, encoding);
     }
+  }
+
+  /** A ring's coordinates on the tile grid, rounded the way {@link #encodeCoordinates} rounds. */
+  private static List<Coordinate> rounded(LinearRing ring) {
+    var coordinates = new ArrayList<Coordinate>(ring.getNumPoints());
+    for (var coordinate : ring.getCoordinates()) {
+      coordinates.add(new Coordinate(Math.round(coordinate.getX()), Math.round(coordinate.getY())));
+    }
+    return coordinates;
+  }
+
+  /** Whether a ring of already rounded coordinates winds clockwise on the tile grid. */
+  private static boolean isClockWise(List<Coordinate> coordinates) {
+    return VectorTileFunctions.isClockWise(coordinates.toArray(new Coordinate[0]));
   }
 
   /**

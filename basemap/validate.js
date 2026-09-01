@@ -41,6 +41,18 @@ import {Color} from './utils/color.js';
 // mirrors what MapCompiler does, so that the spec check below validates what MapLibre is served.
 const source = map.source ?? {};
 const id = source.id ?? 'baremaps';
+const sources = {[id]: {type: 'vector', url: source.url}};
+// The terrain is a second source, traced from elevation rather than queried, so a layer naming it
+// has to find it here or the specification check below reports a source that does not exist.
+if (map.terrain) {
+    sources[map.terrain.id ?? 'terrain'] = {
+        type: 'vector',
+        tiles: map.terrain.tiles,
+        minzoom: map.terrain.minzoom,
+        maxzoom: map.terrain.maxzoom,
+        attribution: map.terrain.attribution,
+    };
+}
 const style = {
     version: 8,
     name: map.name,
@@ -48,7 +60,7 @@ const style = {
     zoom: map.zoom,
     sprite: map.sprite,
     glyphs: map.glyphs,
-    sources: {[id]: {type: 'vector', url: source.url}},
+    sources,
     layers: map.layers.map(({sourceQueries, sourceSchema, sourceLayer, ...layer}) =>
         ({...layer, 'source-layer': sourceLayer, source: layer.source ?? id})),
 };
@@ -386,9 +398,18 @@ async function checkSpec() {
 function checkSources() {
     const declared = new Map();
     const read = new Set();
+    const terrain = map.terrain ? (map.terrain.id ?? 'terrain') : null;
     for (const layer of map.layers) {
         const id = layer.sourceLayer;
         if (!id) continue;
+        // A layer reading the terrain reads tiles that are traced from elevation rather than
+        // queried, so it neither declares a query nor leaves one owing.
+        if (terrain && layer.source === terrain) {
+            if (layer.sourceQueries) {
+                error('source', `${layer.id}: reads the terrain, so it cannot declare source-queries`);
+            }
+            continue;
+        }
         read.add(id);
         const queries = layer.sourceQueries;
         if (!queries) continue;

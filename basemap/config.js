@@ -15,6 +15,11 @@ export default {
     "host": "http://localhost:9000",
     "database": "jdbc:postgresql://localhost:5432/baremaps?&user=baremaps&password=baremaps",
     "osmPbfUrl": "https://download.geofabrik.de/europe/switzerland-latest.osm.pbf",
+    // The elevation the relief and the contours are traced from: an archive of terrarium tiles,
+    // such as the ones Mapterhorn publishes. Download one, or an extract of one, to this path.
+    // https://mapterhorn.com/data-access/
+    "dem": "data/mapterhorn.pmtiles",
+    "demMaxzoom": 12,
     "center": [0, 0],
     "bounds": [-180, -85, 180, 85],
     "zoom": 2,

@@ -28,9 +28,9 @@ import org.opengis.referencing.operation.TransformException;
 import org.opengis.util.FactoryException;
 
 /**
- * A reader for geotiff files based on the Apache SIS library.
+ * An {@link ElevationReader} that samples a GeoTIFF, based on the Apache SIS library.
  */
-public class GeoTiffReader implements AutoCloseable {
+public class GeoTiffReader implements ElevationReader {
 
   private static final CoordinateReferenceSystem WEB_MERCATOR;
 
@@ -87,6 +87,7 @@ public class GeoTiffReader implements AutoCloseable {
    * @return the elevation data
    * @throws GeoTiffException if an error occurs
    */
+  @Override
   public double[] read(TileCoord tileCoord, int tileSizePx, int tileBufferPx)
       throws GeoTiffException {
     try {

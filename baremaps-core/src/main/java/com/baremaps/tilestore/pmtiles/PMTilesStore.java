@@ -15,10 +15,13 @@
 package com.baremaps.tilestore.pmtiles;
 
 import com.baremaps.maplibre.tileset.Tileset;
+import com.baremaps.pmtiles.Compression;
+import com.baremaps.pmtiles.PMTilesReader;
 import com.baremaps.pmtiles.PMTilesWriter;
 import com.baremaps.tilestore.TileCoord;
 import com.baremaps.tilestore.TileStore;
 import com.baremaps.tilestore.TileStoreException;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
@@ -26,11 +29,44 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * A {@code TileStore} over a PMTiles archive.
+ *
+ * <p>
+ * An archive is opened either to be read or to be written, never both, because PMTiles is written
+ * in one pass: the directories that address the tiles are laid out once every tile is known. Which
+ * of the two an archive was opened for is what the constructor says.
+ */
 public class PMTilesStore implements TileStore<ByteBuffer> {
+
+  private final PMTilesReader reader;
 
   private final PMTilesWriter writer;
 
+  /**
+   * Opens an existing archive for reading.
+   *
+   * @param path the path of the archive
+   * @throws TileStoreException if the archive cannot be opened
+   */
+  public PMTilesStore(Path path) throws TileStoreException {
+    try {
+      this.reader = new PMTilesReader(path);
+      this.writer = null;
+    } catch (IOException e) {
+      throw new TileStoreException(e);
+    }
+  }
+
+  /**
+   * Opens an archive for writing, describing it with a tileset.
+   *
+   * @param path the path of the archive
+   * @param tileset what the archive holds
+   * @throws TileStoreException if the archive cannot be opened
+   */
   public PMTilesStore(Path path, Tileset tileset) throws TileStoreException {
+    this.reader = null;
     try {
       var metadata = new HashMap<String, Object>();
       metadata.put("name", tileset.getName());
@@ -55,13 +91,41 @@ public class PMTilesStore implements TileStore<ByteBuffer> {
     }
   }
 
+  /**
+   * Reads a tile, or returns {@code null} when the archive does not hold it.
+   *
+   * <p>
+   * The bytes come back as the tile itself rather than as the archive stores it: the compression a
+   * PMTiles archive applies to its tiles is a property of the container, and a caller reading an
+   * archive of images should not have to know that the container gzipped them.
+   */
   @Override
   public ByteBuffer read(TileCoord tileCoord) throws TileStoreException {
-    throw new UnsupportedOperationException();
+    if (reader == null) {
+      throw new UnsupportedOperationException("This archive was opened for writing");
+    }
+    try {
+      var blob = reader.getTile(tileCoord.z(), tileCoord.x(), tileCoord.y());
+      if (blob == null) {
+        return null;
+      }
+      var compression = reader.getHeader().tileCompression();
+      if (compression == Compression.NONE) {
+        return blob;
+      }
+      try (var input = compression.decompress(new ByteArrayInputStream(blob.array()))) {
+        return ByteBuffer.wrap(input.readAllBytes());
+      }
+    } catch (IOException e) {
+      throw new TileStoreException(e);
+    }
   }
 
   @Override
   public void write(TileCoord tileCoord, ByteBuffer blob) throws TileStoreException {
+    if (writer == null) {
+      throw new UnsupportedOperationException("This archive was opened for reading");
+    }
     try {
       writer.setTile(tileCoord.z(), tileCoord.x(), tileCoord.y(), blob.array());
     } catch (IOException e) {
@@ -77,6 +141,10 @@ public class PMTilesStore implements TileStore<ByteBuffer> {
   @Override
   public void close() throws TileStoreException {
     try {
+      if (reader != null) {
+        reader.close();
+        return;
+      }
       writer.write();
     } catch (IOException e) {
       throw new TileStoreException(e);

@@ -119,6 +119,9 @@ export default {
     database: 'jdbc:postgresql://localhost:5432/baremaps',
     schema: ['queries/initialize.sql', /* ... */],
 
+    // The elevation the relief and the contours are traced from, if the map has any.
+    terrain: {dem: 'data/mapterhorn.pmtiles', /* ... */},
+
     // The layers, bottom to top.
     layers: [background, /* ... */],
 };
@@ -132,6 +135,10 @@ its own: `id` defaults to `baremaps`, `minzoom` to 0 and `maxzoom` to 20, and
 identifier and identifiers compress badly. These properties used to sit at the
 top level, where they read as properties of the map rather than of its tiles; a
 map that still declares them there is refused rather than quietly ignored.
+
+`terrain` is the one exception to there being a single source, because it is the
+one thing the layers read that no query produces. It is described under
+[Terrain](#terrain).
 
 A layer is a MapLibre style layer that also says where its features come from:
 
@@ -325,6 +332,82 @@ and `--style` instead of `--map`.
 
 </details>
 
+## Terrain
+
+The relief and the elevation contours are traced from a digital elevation model rather than
+queried from the database, so they are declared once, beside the source rather than inside it:
+
+```
+terrain: {
+    dem: 'data/mapterhorn.pmtiles',
+    demMaxzoom: 12,
+    tiles: [`${config.host}/terrain/{z}/{x}/{y}.mvt`],
+    minzoom: 4,
+    maxzoom: 14,
+    attribution: '© Mapterhorn',
+},
+```
+
+One declaration and not two, because the tiles the browser reads at `tiles` are the archive at
+`dem`, traced. `dem` names an archive of [terrarium][terrarium] encoded raster tiles, which is what
+[Mapterhorn][mapterhorn] publishes; `demMaxzoom` is the deepest level it holds, and `demTileSize`
+the side of one of its tiles, which defaults to 512 because that is what Mapterhorn ships. The
+remaining members mean what they mean in a style source and are written out to it unchanged.
+
+Download the archive, or an extract of it, to the path `dem` names:
+
+```
+pmtiles extract https://download.mapterhorn.com/planet.pmtiles data/mapterhorn.pmtiles \
+  --bbox=5.9,45.8,10.5,47.8 --maxzoom=12
+```
+
+The whole planet is available too, and each additional zoom level roughly doubles it. `demMaxzoom`
+has to match what was extracted: past it the archive is sampled beyond its resolution, which is
+smooth rather than wrong, and below it the detail is downloaded and never read. A map that declares
+terrain and finds no archive at that path is refused rather than served without relief.
+
+Two layers read it, and they name the source because they are the only ones that do not read the
+database:
+
+```
+export default asLayerObject({
+    id: 'terrain_hillshade',
+    type: 'fill',
+    source: 'terrain',
+    sourceLayer: 'hillshade',
+    // ...
+});
+```
+
+`hillshade` carries the shading as six nested polygons, from the broadest and faintest to the
+smallest and strongest, tagged `level` 1 to 6: 1 and 2 are the lit side and 3 to 6 the shaded one.
+They are drawn over one another, so a theme colour says what a level adds rather than what it ends
+up as. Expressing the relief this way rather than as a shaded image is what lets the dark and the
+colour-vision themes shade the map to suit themselves.
+
+`contour` carries the elevation contours as lines, tagged with the `level` they are drawn at and,
+on every fifth one, `index`. They are lines and not the boundaries of the ground above them because
+only a line can be labelled with the height it stands for, which `terrain_contour_label` does for
+the index contours. The interval between contours changes with the zoom level, from 1000 meters at
+the top to 50 at the bottom, so which contour is an index contour is decided where the interval is
+known and not by a filter in the style. The intervals are chosen for steep ground: what sets them
+is how far apart the contours land on the screen, and on a mountain face the same interval draws
+them far closer together than it does on a hillside.
+
+Both are traced from a single elevation grid when a tile is asked for, which is why they arrive as
+two layers of one tile rather than as two sources. `map dev` traces them per request, `map serve`
+caches them alongside the vector tiles.
+
+The elevation can also be previewed on its own, from an archive or from a GeoTIFF, without a
+database:
+
+```
+baremaps dem serve --pmtiles data/mapterhorn.pmtiles --pmtiles-maxzoom 12
+```
+
+[mapterhorn]: https://mapterhorn.com/data-access/
+[terrarium]: https://github.com/tilezen/joerd/blob/master/docs/formats.md#terrarium
+
 ## Selecting a theme
 
 The colours of the style are held in `themes/`, separately from the rules that use
@@ -332,6 +415,12 @@ them. `themes/default.js` lists every colour; the others are derived from it by 
 transform, so `themes/dark.js` is the light theme inverted and the colour-vision
 themes apply the corresponding confusion matrix. Deriving them means a colour
 added to the default theme appears in all of them.
+
+The hillshade colours are the exception, and `theme.js` holds them out of every
+derivation. They are not the colour of anything, they are the light falling on
+it, and inverting a map does not move the sun: derived, they would turn the lit
+slopes dark and the shaded ones light, which reads as terrain pressed into the
+ground rather than standing out of it.
 
 `BAREMAPS_THEME` selects the one the style is built with, naming a file in
 `themes/` without its extension. It defaults to `default`, and an unknown name

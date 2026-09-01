@@ -403,6 +403,26 @@ export default {
     religionIconColor: 'rgb(0, 0, 0)',
     routeFerryLineColor: 'rgb(112, 181, 201)',
     shopIconColor: 'rgb(172, 57, 172)',
+    terrainContourIndexLineColor: 'rgba(126, 98, 68, 0.8)',
+    terrainContourLineColor: 'rgba(141, 111, 79, 0.6)',
+    terrainContourTextColor: 'rgba(112, 86, 58, 1)',
+    terrainContourTextHaloColor: 'rgba(255, 255, 255, 0.85)',
+    // The six nested levels the hillshade is traced into, from the brightest lit region to the
+    // deepest shadow. They are drawn over one another, so each colour is the amount of light or
+    // shade that level adds rather than the shade it ends up as.
+    //
+    // The shade is a cool grey and not the brown it reads as on paper, because it falls on land
+    // that is already coloured: a warm shadow over the green of a forest turns it to mud, where a
+    // cool one darkens it and leaves it green. The lit side is barely there for the same reason.
+    // Light on ground that is already pale adds no relief and only washes the colour out of it, so
+    // the relief here is carried by the shaded side and the lit side only keeps a ridge from
+    // reading flat.
+    terrainHillshadeLit1FillColor: 'rgba(255, 255, 255, 0.14)',
+    terrainHillshadeLit2FillColor: 'rgba(255, 255, 255, 0.06)',
+    terrainHillshadeShade1FillColor: 'rgba(74, 78, 88, 0.05)',
+    terrainHillshadeShade2FillColor: 'rgba(74, 78, 88, 0.07)',
+    terrainHillshadeShade3FillColor: 'rgba(74, 78, 88, 0.09)',
+    terrainHillshadeShade4FillColor: 'rgba(74, 78, 88, 0.11)',
     tourismHotelIconColor: 'rgba(3, 146, 218, 1)',
     tourismHotelIconHaloColor: 'rgba(255, 255, 255, 0.8)',
     tourismHotelTextColor: 'rgba(3, 146, 218, 1)',

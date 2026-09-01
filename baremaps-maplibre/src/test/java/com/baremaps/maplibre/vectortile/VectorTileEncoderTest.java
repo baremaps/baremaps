@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.*;
 
@@ -125,6 +126,79 @@ class VectorTileEncoderTest {
     var encoding = new ArrayList<Integer>();
     encoder.encodePolygon(polygon, encoding::add);
     assertEquals(List.of(9, 6, 12, 18, 10, 12, 24, 44, 15), encoding);
+  }
+
+  /**
+   * A hole wound the same way as its shell is reversed, and stays its own ring.
+   *
+   * <p>
+   * The specification distinguishes a hole from a new polygon by its winding alone, so a hole
+   * arriving clockwise has to be turned around. What it must not do is turn into a second copy of
+   * the shell, which is a polygon with its middle painted over rather than a polygon with a hole.
+   */
+  @Test
+  void encodePolygonWithAClockwiseHole() {
+    var shell = geometryFactory.createLinearRing(new Coordinate[] {
+        new Coordinate(0, 0),
+        new Coordinate(10, 0),
+        new Coordinate(10, 10),
+        new Coordinate(0, 10),
+        new Coordinate(0, 0)
+    });
+    // The same winding as the shell, which is what the encoder has to correct.
+    var hole = geometryFactory.createLinearRing(new Coordinate[] {
+        new Coordinate(3, 3),
+        new Coordinate(7, 3),
+        new Coordinate(7, 7),
+        new Coordinate(3, 7),
+        new Coordinate(3, 3)
+    });
+    var polygon = geometryFactory.createPolygon(shell, new LinearRing[] {hole});
+
+    var feature = new Feature(1, Map.of(), polygon);
+    var encoded = new VectorTileEncoder()
+        .encodeTile(new Tile(List.of(new Layer("t", 4096, List.of(feature)))));
+    var decoded = (Polygon) new VectorTileDecoder().decodeTile(encoded)
+        .getLayers().get(0).getFeatures().get(0).getGeometry();
+
+    assertEquals(1, decoded.getNumInteriorRing());
+    assertEquals(16, decoded.getInteriorRingN(0).getEnvelope().getArea(),
+        "the hole is the hole, not the shell painted over");
+    assertEquals(100, decoded.getExteriorRing().getEnvelope().getArea());
+  }
+
+  /**
+   * A ring that pinches against itself once rounded is still written as an outline.
+   *
+   * <p>
+   * These are the coordinates of a shading polygon traced from real elevation, against the right
+   * edge of its tile. Two of its vertices round onto the same point, which leaves a ring that
+   * touches itself; a geometric winding test has no defined answer there and returns the wrong one,
+   * so the outline was written unreversed and read back as a hole, leaving the feature with no
+   * outline at all. The area the specification measures is defined either way.
+   */
+  @Test
+  void encodePolygonThatPinchesWhenRounded() {
+    var polygon = geometryFactory.createPolygon(new Coordinate[] {
+        new Coordinate(4093.575040353221, 4064),
+        new Coordinate(4094.2108612548072, 4080),
+        new Coordinate(4095.829430867713, 4096),
+        new Coordinate(4096, 4100.9513706088155),
+        new Coordinate(4096.103825384771, 4096),
+        new Coordinate(4097.534488497868, 4080),
+        new Coordinate(4100.504089085348, 4064),
+        new Coordinate(4096, 4049.6767323456315),
+        new Coordinate(4093.575040353221, 4064)
+    });
+
+    var feature = new Feature(1, Map.of(), polygon);
+    var encoded = new VectorTileEncoder()
+        .encodeTile(new Tile(List.of(new Layer("t", 4096, List.of(feature)))));
+    var decoded = new VectorTileDecoder().decodeTile(encoded)
+        .getLayers().get(0).getFeatures().get(0).getGeometry();
+
+    assertEquals("Polygon", decoded.getGeometryType());
+    assertEquals(0, ((Polygon) decoded).getNumInteriorRing());
   }
 
   /**

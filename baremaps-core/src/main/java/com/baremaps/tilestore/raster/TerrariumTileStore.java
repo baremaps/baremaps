@@ -20,18 +20,17 @@ import com.baremaps.tilestore.TileStoreException;
 import java.awt.image.BufferedImage;
 
 /**
- * A {@code TileStore} that reads elevation tiles from a GeoTIFF file and converts them to the
- * terrarium tile format.
+ * A {@code TileStore} that renders elevation as terrarium encoded raster tiles.
  */
 public class TerrariumTileStore extends RasterTileStore<BufferedImage> {
 
   /**
-   * Constructs a {@code TerrariumTileStore} with the specified GeoTIFF reader.
+   * Constructs a {@code TerrariumTileStore} with the specified elevation reader.
    *
-   * @param geoTiffReader the geotiff reader
+   * @param elevation the elevation reader
    */
-  public TerrariumTileStore(GeoTiffReader geoTiffReader) {
-    super(geoTiffReader);
+  public TerrariumTileStore(ElevationReader elevation) {
+    super(elevation);
   }
 
   /**
@@ -44,7 +43,7 @@ public class TerrariumTileStore extends RasterTileStore<BufferedImage> {
   @Override
   public BufferedImage read(TileCoord tileCoord) throws TileStoreException {
     try {
-      var grid = geoTiffReader.read(tileCoord, TILE_SIZE, 0);
+      var grid = elevation.read(tileCoord, TILE_SIZE, 0);
       var image = new BufferedImage(TILE_SIZE, TILE_SIZE, BufferedImage.TYPE_INT_RGB);
       for (int x = 0; x < TILE_SIZE; x++) {
         for (int y = 0; y < TILE_SIZE; y++) {

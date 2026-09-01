@@ -110,6 +110,7 @@ limitations under the License.
     <version.lib.slf4j>2.0.17</version.lib.slf4j>
     <version.lib.sqlite>3.53.4.0</version.lib.sqlite>
     <version.lib.testcontainers>1.21.4</version.lib.testcontainers>
+    <version.lib.twelvemonkeys>3.12.0</version.lib.twelvemonkeys>
     <version.plugin.jacoco-maven-plugin>0.8.15</version.plugin.jacoco-maven-plugin>
     <version.plugin.jib-maven-plugin>3.0.0</version.plugin.jib-maven-plugin>
     <version.plugin.maven-compiler-plugin>3.15.0</version.plugin.maven-compiler-plugin>
@@ -269,6 +270,13 @@ limitations under the License.
         <groupId>com.linecorp.armeria</groupId>
         <artifactId>armeria-reactor3</artifactId>
         <version>${version.lib.armeria}</version>
+      </dependency>
+      <dependency>
+        <!-- Java has no WebP reader of its own, and the terrain archives are WebP. This registers
+             one with ImageIO, which is why nothing imports it. -->
+        <groupId>com.twelvemonkeys.imageio</groupId>
+        <artifactId>imageio-webp</artifactId>
+        <version>${version.lib.twelvemonkeys}</version>
       </dependency>
       <dependency>
         <groupId>com.zaxxer</groupId>

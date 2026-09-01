@@ -18,12 +18,14 @@ import com.baremaps.dem.ContourTracer;
 import com.baremaps.dem.ElevationUtils;
 import com.baremaps.dem.HillshadeCalculator;
 import com.baremaps.maplibre.vectortile.Feature;
+import com.baremaps.maplibre.vectortile.Layer;
 import com.baremaps.tilestore.TileCoord;
 import com.baremaps.tilestore.TileStoreException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.locationtech.jts.geom.Polygon;
 import org.locationtech.jts.geom.util.AffineTransformation;
 
 /**
@@ -31,13 +33,13 @@ import org.locationtech.jts.geom.util.AffineTransformation;
  *
  * <p>
  * The shading is expressed as nested contours of the hillshade grid rather than as pixels, so that
- * a client can style the levels itself.
+ * a client can style the levels itself. A raster shade carries its own colours and its own opacity
+ * and cannot be told to suit a dark map or a colour-vision theme; six nested polygons can.
  */
 public class VectorHillshadeTileStore extends RasterTileStore<ByteBuffer> {
 
-  // Contours near the edge of a tile need the neighbouring elevations to line up with the contours
-  // of the adjacent tile, so the grid is computed with a wide border that is then translated away.
-  private static final int TILE_BUFFER = 16;
+  /** The name of the layer the shading is encoded in. */
+  static final String LAYER = "hillshade";
 
   // The levels of the lit and of the shaded side, from the faintest to the strongest, paired with
   // the category a client styles them by.
@@ -46,13 +48,18 @@ public class VectorHillshadeTileStore extends RasterTileStore<ByteBuffer> {
   private static final int[][] SHADED_LEVELS =
       {{255 - 32, 6}, {255 - 64, 5}, {255 - 98, 4}, {255 - 128, 3}};
 
+  /** The direction the light comes from, and how high it stands, in degrees. */
+  private static final double ALTITUDE = 45;
+
+  private static final double AZIMUTH = 315;
+
   /**
-   * Constructs a {@code VectorHillshadeTileStore} with the specified geotiff reader.
+   * Constructs a {@code VectorHillshadeTileStore} with the specified elevation reader.
    *
-   * @param geoTiffReader the geotiff reader
+   * @param elevation the elevation reader
    */
-  public VectorHillshadeTileStore(GeoTiffReader geoTiffReader) {
-    super(geoTiffReader);
+  public VectorHillshadeTileStore(ElevationReader elevation) {
+    super(elevation);
   }
 
   /**
@@ -65,25 +72,35 @@ public class VectorHillshadeTileStore extends RasterTileStore<ByteBuffer> {
   @Override
   public ByteBuffer read(TileCoord tileCoord) throws TileStoreException {
     try {
-      var gridSize = TILE_SIZE + 2 * TILE_BUFFER;
-
-      var grid = geoTiffReader.read(tileCoord, TILE_SIZE, TILE_BUFFER);
-      grid = ElevationUtils.clampGrid(grid, 0, 10000);
-      grid = new HillshadeCalculator(
-          grid,
-          gridSize,
-          gridSize,
-          HillshadeCalculator.getResolution(tileCoord.z()) / 2)
-              .calculate(45, 315);
-
-      var features = new ArrayList<Feature>();
-      addContours(grid, gridSize, LIT_LEVELS, features);
-      addContours(HillshadeCalculator.invert(grid), gridSize, SHADED_LEVELS, features);
-
-      return encodeLayer("elevation", features);
+      var grid = elevation.read(tileCoord, TILE_SIZE, TRACE_BUFFER);
+      return encodeLayers(List.of(layer(grid, tileCoord.z())));
+    } catch (TileStoreException e) {
+      throw e;
     } catch (Exception e) {
       throw new TileStoreException(e);
     }
+  }
+
+  /**
+   * Shades an elevation grid and traces the result into a vector tile layer.
+   *
+   * @param grid the elevation grid, including the border
+   * @param zoom the zoom level the tile is produced at, which sets the size of a pixel
+   * @return the layer
+   */
+  static Layer layer(double[] grid, int zoom) {
+    var gridSize = TILE_SIZE + 2 * TRACE_BUFFER;
+    var shaded = new HillshadeCalculator(
+        ElevationUtils.clampGrid(grid, 0, 10000),
+        gridSize,
+        gridSize,
+        HillshadeCalculator.getResolution(zoom) / 2)
+            .calculate(ALTITUDE, AZIMUTH);
+
+    var features = new ArrayList<Feature>();
+    addContours(shaded, gridSize, LIT_LEVELS, features);
+    addContours(HillshadeCalculator.invert(shaded), gridSize, SHADED_LEVELS, features);
+    return new Layer(LAYER, TILE_EXTENT, features);
   }
 
   private static void addContours(double[] grid, int gridSize, int[][] levels,
@@ -91,13 +108,15 @@ public class VectorHillshadeTileStore extends RasterTileStore<ByteBuffer> {
     var tracer = new ContourTracer(grid, gridSize, gridSize);
     // Move the border out of the way, then scale the grid to the extent of the vector tile.
     var toTileExtent = AffineTransformation
-        .translationInstance(-TILE_BUFFER, -TILE_BUFFER)
-        .scale(4096 / TILE_SIZE, 4096 / TILE_SIZE);
+        .translationInstance(-TRACE_BUFFER, -TRACE_BUFFER)
+        .scale((double) TILE_EXTENT / TILE_SIZE, (double) TILE_EXTENT / TILE_SIZE);
     for (int[] level : levels) {
       var category = level[1];
       for (var polygon : tracer.tracePolygons(level[0])) {
-        features.add(new Feature(category, Map.of("level", String.valueOf(category)),
-            toTileExtent.transform(polygon)));
+        var scaled = (Polygon) toTileExtent.transform(polygon);
+        if (drawable(scaled)) {
+          features.add(new Feature(category, Map.of("level", String.valueOf(category)), scaled));
+        }
       }
     }
   }

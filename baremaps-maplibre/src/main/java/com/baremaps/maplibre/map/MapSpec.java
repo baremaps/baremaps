@@ -53,6 +53,7 @@ import java.util.Map;
  * @param sprite the URL of the icon sprite
  * @param glyphs the URL template of the fonts
  * @param source the tiles the layers read
+ * @param terrain the elevation the map is shaded and contoured from, if it is
  * @param database the database the queries are run against
  * @param schema the sql that has to run before the layers' own, in order: the extensions and
  *        functions the queries rely on, and the tables the sources are read out of
@@ -67,6 +68,7 @@ public record MapSpec(
     @JsonProperty("sprite") String sprite,
     @JsonProperty("glyphs") String glyphs,
     @JsonProperty("source") Source source,
+    @JsonProperty("terrain") Terrain terrain,
     @JsonProperty("database") Object database,
     @JsonProperty("schema") List<String> schema,
     @JsonProperty("layers") List<MapLayer> layers,
@@ -149,6 +151,65 @@ public record MapSpec(
       minzoom = minzoom == null ? DEFAULT_MINZOOM : minzoom;
       maxzoom = maxzoom == null ? DEFAULT_MAXZOOM : maxzoom;
       featureIds = featureIds != null && featureIds;
+    }
+  }
+
+  /**
+   * The elevation the map is shaded and contoured from.
+   *
+   * <p>
+   * This is one declaration and not two because the archive and the source are two ends of the same
+   * thing: the tiles the browser reads at {@code tiles} are the archive at {@code dem}, traced. A
+   * map that named them separately could name an archive nothing served and a source nothing
+   * produced, and would be right about neither.
+   *
+   * <p>
+   * The archive holds terrarium encoded raster tiles, which is what Mapterhorn publishes; the tiles
+   * the layers read hold the {@code hillshade} and {@code contour} layers traced from it. Nothing
+   * about this reaches the database, and a map that declares no terrain has none: the source is not
+   * emitted and the tiles are not served.
+   *
+   * @param id the name the style refers to the terrain tiles by; defaults to {@code terrain}
+   * @param dem the path of the archive of terrarium tiles the terrain is traced from
+   * @param demTileSize the side of a tile of that archive, in pixels; defaults to 512, which is
+   *        what Mapterhorn publishes
+   * @param demMaxzoom the deepest level that archive holds; defaults to 12, and a map that has a
+   *        deeper archive says so rather than losing the detail
+   * @param tiles the URL templates the traced tiles are served from
+   * @param bounds the extent the terrain covers
+   * @param minzoom the lowest zoom level terrain tiles are produced for; defaults to 0
+   * @param maxzoom the highest zoom level terrain tiles are produced for; defaults to 14, past
+   *        which the browser stretches the deepest tile rather than tracing contours a meter apart
+   * @param attribution the attribution shown for the elevation data
+   */
+  public record Terrain(
+      @JsonProperty("id") String id,
+      @JsonProperty("dem") String dem,
+      @JsonProperty("demTileSize") Integer demTileSize,
+      @JsonProperty("demMaxzoom") Integer demMaxzoom,
+      @JsonProperty("tiles") List<String> tiles,
+      @JsonProperty("bounds") List<Double> bounds,
+      @JsonProperty("minzoom") Integer minzoom,
+      @JsonProperty("maxzoom") Integer maxzoom,
+      @JsonProperty("attribution") String attribution) {
+
+    private static final String DEFAULT_ID = "terrain";
+    private static final int DEFAULT_DEM_TILE_SIZE = 512;
+    private static final int DEFAULT_DEM_MAXZOOM = 12;
+    private static final int DEFAULT_MINZOOM = 0;
+    private static final int DEFAULT_MAXZOOM = 14;
+
+    public Terrain {
+      id = id == null ? DEFAULT_ID : id;
+      demTileSize = demTileSize == null ? DEFAULT_DEM_TILE_SIZE : demTileSize;
+      demMaxzoom = demMaxzoom == null ? DEFAULT_DEM_MAXZOOM : demMaxzoom;
+      tiles = tiles == null ? List.of() : tiles;
+      minzoom = minzoom == null ? DEFAULT_MINZOOM : minzoom;
+      maxzoom = maxzoom == null ? DEFAULT_MAXZOOM : maxzoom;
+      if (dem == null) {
+        throw new IllegalArgumentException(
+            "A map that declares terrain says where the elevation comes from, as 'terrain.dem'.");
+      }
     }
   }
 

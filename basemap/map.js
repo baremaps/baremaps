@@ -43,6 +43,9 @@ import natural_overlay from "./layers/natural/overlay.js";
 import amenity_overlay from "./layers/amenity/overlay.js";
 import leisure_overlay from "./layers/leisure/overlay.js";
 import ocean_overlay from "./layers/ocean/overlay.js";
+import terrain_hillshade from "./layers/terrain/hillshade.js";
+import terrain_contour from "./layers/terrain/contour.js";
+import terrain_contour_label from "./layers/terrain/label.js";
 import natural_line from "./layers/natural/line.js";
 import barrier_line from "./layers/barrier/line.js";
 import waterway_line from "./layers/waterway/line.js";
@@ -102,6 +105,19 @@ export default {
         attribution: '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a>',
     },
 
+    // The elevation the relief and the contours are traced from, and the tiles they are served as.
+    // One declaration and not two: the tiles the browser reads are the archive, traced. Nothing
+    // about this reaches the database, and a map that declares no terrain has neither.
+    terrain: {
+        dem: config.dem,
+        demMaxzoom: config.demMaxzoom,
+        tiles: [`${config.host}/terrain/{z}/{x}/{y}.mvt`],
+        bounds: config.bounds,
+        minzoom: 4,
+        maxzoom: 14,
+        attribution: '\u00a9 <a href="https://mapterhorn.com/">Mapterhorn</a>',
+    },
+
     // What the tiles are built out of: the database the queries are run against, and the sql that
     // builds what the layers read, in the order it has to run. The extensions and functions first,
     // then the tables an import writes into, then the views the layers name.
@@ -134,6 +150,10 @@ export default {
         natural_overlay,
         amenity_overlay,
         leisure_overlay,
+        // The relief and the contours shade the land cover drawn above, and are covered in turn by
+        // the water and by everything linear: a road is not shaded and a lake has no contours.
+        terrain_hillshade,
+        terrain_contour,
         ocean_overlay,
         natural_line,
         barrier_line,
@@ -169,6 +189,8 @@ export default {
         tourism_zoo_casing,
         tourism_zoo_line,
         boundary_line,
+        // Among the labels, and first, so that a place name or a river wins where they compete.
+        terrain_contour_label,
         waterway_label,
         point_icon,
         point_place,

@@ -31,12 +31,12 @@ public class RasterHillshadeTileStore extends RasterTileStore<BufferedImage> {
   private static final int TILE_BUFFER = 1;
 
   /**
-   * Constructs a {@code RasterHillshadeTileStore} with the specified GeoTIFF reader.
+   * Constructs a {@code RasterHillshadeTileStore} with the specified elevation reader.
    *
-   * @param geoTiffReader the geotiff reader
+   * @param elevation the elevation reader
    */
-  public RasterHillshadeTileStore(GeoTiffReader geoTiffReader) {
-    super(geoTiffReader);
+  public RasterHillshadeTileStore(ElevationReader elevation) {
+    super(elevation);
   }
 
   /**
@@ -51,7 +51,7 @@ public class RasterHillshadeTileStore extends RasterTileStore<BufferedImage> {
     try {
       var imageSize = TILE_SIZE + 2 * TILE_BUFFER;
 
-      var grid = geoTiffReader.read(tileCoord, TILE_SIZE, TILE_BUFFER);
+      var grid = elevation.read(tileCoord, TILE_SIZE, TILE_BUFFER);
       grid = ElevationUtils.clampGrid(grid, 0, 10000);
       grid = new HillshadeCalculator(
           grid,

@@ -22,8 +22,15 @@ import com.baremaps.maplibre.map.MapSpec;
 import com.baremaps.maplibre.style.Style;
 import com.baremaps.maplibre.tilejson.TileJSON;
 import com.baremaps.maplibre.tileset.Tileset;
+import com.baremaps.tilestore.TileStore;
+import com.baremaps.tilestore.TileStoreException;
+import com.baremaps.tilestore.pmtiles.PMTilesStore;
+import com.baremaps.tilestore.raster.TerrariumElevationReader;
+import com.baremaps.tilestore.raster.VectorTerrainTileStore;
 import com.baremaps.utils.ObjectMapperUtils;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -67,6 +74,38 @@ final class MapInput {
       return MapCompiler.style(read(reader, map, MapSpec.class));
     }
     return read(reader, style, Style.class);
+  }
+
+  /**
+   * The terrain the map declares, or null when it declares none or was described as a tileset and a
+   * style, which have nowhere to say it.
+   */
+  static MapSpec.Terrain terrain(ConfigReader reader, Path map) {
+    return map == null ? null : read(reader, map, MapSpec.class).terrain();
+  }
+
+  /**
+   * Opens the tiles a terrain declaration is served from: the elevation archive it names, traced
+   * into shading and contours as the tiles are asked for.
+   *
+   * <p>
+   * The archive is opened once and kept, even by the development server, which rebuilds everything
+   * else on every request. Reopening it would reread its directories to answer one tile, and an
+   * elevation archive is the one input an edit to the map cannot change the meaning of.
+   */
+  static TileStore<ByteBuffer> terrainTileStore(MapSpec.Terrain terrain) throws TileStoreException {
+    var dem = Path.of(terrain.dem());
+    // A map that declares terrain and has no elevation to trace it from is refused rather than
+    // served without relief, which would look like a styling problem and be a missing file.
+    if (!Files.exists(dem)) {
+      throw new BaremapsException(String.format(
+          "The map declares terrain traced from '%s', which does not exist. "
+              + "Download an archive of terrarium tiles to that path, "
+              + "or remove the terrain block from the map.",
+          dem));
+    }
+    return new VectorTerrainTileStore(new TerrariumElevationReader(
+        new PMTilesStore(dem), terrain.demTileSize(), terrain.demMaxzoom()));
   }
 
   /**
