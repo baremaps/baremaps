@@ -14,43 +14,13 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-
-    {
-        filter: ['==', ['get', 'admin_level'], "1"],
-        'line-color': theme.boundaryAdminLevelLineColor,
-        'line-width': 3,
-    },
-    {
-        filter: ['==', ['get', 'admin_level'], "2"],
-        'line-color': theme.boundaryAdminLevelLineColor,
-        'line-width': 3,
-    },
-    {
-        filter: ['==', ['get', 'admin_level'], "3"],
-        'line-color': theme.boundaryAdminLevelLineColor,
-        'line-width': 2,
-    },
-    {
-        filter: ['==', ['get', 'admin_level'], "4"],
-        'line-color': theme.boundaryAdminLevelLineColor,
-        'line-width': 2,
-    },
-    {
-        filter: ['has', 'boundary'],
-        'line-color': theme.boundaryAdminLevelLineColor,
-        'line-width': 1,
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'boundary',
     type: 'line',
     sourceLayer: 'boundary',
     sourceQueries: [
         {"minzoom": 13, "maxzoom": 20, "from": "osm_boundary"},
     ],
-    sourceSchema: 'layers/boundary/create.sql',
     layout: {
         visibility: 'visible',
     },
@@ -58,4 +28,31 @@ export default asLayerObject(withSortKeys(directives), {
         'line-dasharray': [4, 1, 1, 1],
     },
     filter: ['==', ["geometry-type"], 'LineString'],
+    directives: withSortKeys([
+        {
+            filter: ['==', ['get', 'admin_level'], "1"],
+            'line-color': theme.boundaryAdminLevelLineColor,
+            'line-width': 3,
+        },
+        {
+            filter: ['==', ['get', 'admin_level'], "2"],
+            'line-color': theme.boundaryAdminLevelLineColor,
+            'line-width': 3,
+        },
+        {
+            filter: ['==', ['get', 'admin_level'], "3"],
+            'line-color': theme.boundaryAdminLevelLineColor,
+            'line-width': 2,
+        },
+        {
+            filter: ['==', ['get', 'admin_level'], "4"],
+            'line-color': theme.boundaryAdminLevelLineColor,
+            'line-width': 2,
+        },
+        {
+            filter: ['has', 'boundary'],
+            'line-color': theme.boundaryAdminLevelLineColor,
+            'line-width': 1,
+        },
+    ]),
 });

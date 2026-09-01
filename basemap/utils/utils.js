@@ -43,7 +43,16 @@ export function withSymbolSortKey(directive, index) {
     };
 }
 
-export function asLayerObject(directives = [], baseLayer = {}) {
+/**
+ * Resolve a layer written as one nested object.
+ *
+ * The layer carries its own `directives`, the list of feature classes it draws and how each is
+ * drawn. They are the layer's bulk, but they are still part of it, so they are declared inside it
+ * rather than beside it. This turns them into the `filter`, `layout` and `paint` of a style layer
+ * and drops the member itself, which the style specification does not define.
+ */
+export function asLayerObject(layer = {}) {
+    const {directives = [], ...baseLayer} = layer;
     return {
         ...baseLayer,
         filter: asFilterProperty(directives, baseLayer['filter']),

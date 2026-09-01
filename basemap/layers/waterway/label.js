@@ -13,7 +13,6 @@
  **/
 import theme from "../../theme.js";
 
-
 export default {
     id: 'waterway_label',
     type: 'symbol',

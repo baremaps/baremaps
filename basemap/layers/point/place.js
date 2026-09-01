@@ -14,85 +14,7 @@
 import theme from "../../theme.js";
 import {asLayerObject, withSymbolSortKeys} from "../../utils/utils.js";
 
-let directives = [
-    {
-        'filter': [
-            'all',
-            ['==', ['get', 'place'], 'city'],
-            ['==', ['get', 'capital'], 'yes'],
-        ],
-        'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
-        'label-color': theme.placeIconColor,
-        'text-size-stops': [
-            0, 0,
-            10, 18,
-            24, 72
-        ],
-    },
-    {
-        'filter': [
-            'all',
-            ['==', ['get', 'place'], 'city'],
-            ['!=', ['get', 'capital'], 'yes'],
-        ],
-        'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
-        'label-color': [theme.placeCityCapitalTextColorOne, theme.placeCityCapitalTextColorTwo],
-        'text-size-stops': [
-            0, 0,
-            10, 16,
-            24, 64
-        ],
-    },
-    {
-        'filter': ['==', ['get', 'place'], 'town'],
-        'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
-        'label-color': [theme.placeTownTextColorOne, theme.placeTownTextColorTwo],
-        'text-size-stops': [
-            0, 0,
-            10, 14,
-            24, 56
-        ],
-    },
-    {
-        filter: ['==', ['get', 'place'], 'village'],
-        'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
-        'label-color': theme.placeVillageTextColor,
-        'text-size-stops': [
-            0, 0,
-            10, 10,
-            24, 40
-        ],
-    },
-    {
-        filter: ['==', ['get', 'place'], 'locality'],
-        'label-color': theme.placeLocalityTextColor,
-        'text-size-stops': [
-            0, 0,
-            10, 8,
-            24, 32
-        ],
-    },
-    // {
-    //     filter: [
-    //         'in',
-    //         ['get', 'place'],
-    //         [
-    //             'literal', [
-    //                 'neighbourhood',
-    //                 'quarter',
-    //                 'hamlet',
-    //                 'isolated_dwelling',
-    //                 'islet'
-    //             ]
-    //         ]
-    //     ],
-    //     'text-size': 11,
-    //     'text-color': theme.placeTextColor,
-    // },
-
-];
-
-export default asLayerObject(withSymbolSortKeys(directives), {
+export default asLayerObject({
     id: 'point_label',
     type: 'symbol',
     sourceLayer: 'point',
@@ -109,4 +31,81 @@ export default asLayerObject(withSymbolSortKeys(directives), {
         'text-halo-color': theme.placeTextHaloColor,
         'text-halo-width': 1,
     },
+    directives: withSymbolSortKeys([
+        {
+            'filter': [
+                'all',
+                ['==', ['get', 'place'], 'city'],
+                ['==', ['get', 'capital'], 'yes'],
+            ],
+            'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
+            'label-color': theme.placeIconColor,
+            'text-size-stops': [
+                0, 0,
+                10, 18,
+                24, 72
+            ],
+        },
+        {
+            'filter': [
+                'all',
+                ['==', ['get', 'place'], 'city'],
+                ['!=', ['get', 'capital'], 'yes'],
+            ],
+            'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
+            'label-color': [theme.placeCityCapitalTextColorOne, theme.placeCityCapitalTextColorTwo],
+            'text-size-stops': [
+                0, 0,
+                10, 16,
+                24, 64
+            ],
+        },
+        {
+            'filter': ['==', ['get', 'place'], 'town'],
+            'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
+            'label-color': [theme.placeTownTextColorOne, theme.placeTownTextColorTwo],
+            'text-size-stops': [
+                0, 0,
+                10, 14,
+                24, 56
+            ],
+        },
+        {
+            filter: ['==', ['get', 'place'], 'village'],
+            'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
+            'label-color': theme.placeVillageTextColor,
+            'text-size-stops': [
+                0, 0,
+                10, 10,
+                24, 40
+            ],
+        },
+        {
+            filter: ['==', ['get', 'place'], 'locality'],
+            'label-color': theme.placeLocalityTextColor,
+            'text-size-stops': [
+                0, 0,
+                10, 8,
+                24, 32
+            ],
+        },
+        // {
+        //     filter: [
+        //         'in',
+        //         ['get', 'place'],
+        //         [
+        //             'literal', [
+        //                 'neighbourhood',
+        //                 'quarter',
+        //                 'hamlet',
+        //                 'isolated_dwelling',
+        //                 'islet'
+        //             ]
+        //         ]
+        //     ],
+        //     'text-size': 11,
+        //     'text-color': theme.placeTextColor,
+        // },
+
+    ]),
 });

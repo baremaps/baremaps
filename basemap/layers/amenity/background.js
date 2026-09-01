@@ -14,41 +14,13 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: ['==', ['get', 'amenity'], 'kindergarten'],
-        'fill-color': theme.amenityKinderGartenFillColor,
-    },
-    {
-        filter: ['==', ['get', 'amenity'], 'school'],
-        'fill-color': theme.amenitySchoolFillColor,
-    },
-    {
-        filter: ['==', ['get', 'amenity'], 'college'],
-        'fill-color': theme.amenityCollegeBackgroundFillColor,
-    },
-    {
-        filter: ['==', ['get', 'amenity'], 'university'],
-        'fill-color': theme.amenityUniversityBackgroundFillColor,
-    },
-    {
-        filter: ['==', ['get', 'amenity'], 'hospital'],
-        'fill-color': theme.amenityHospitalBackgroundFillColor,
-    },
-    {
-        filter: ['==', ['get', 'amenity'], 'grave_yard'],
-        'fill-color': theme.amenityGraveYardBackgroundFillColor,
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'amenity_background',
     type: 'fill',
     sourceLayer: 'amenity',
     sourceQueries: [
         {"minzoom": 1, "maxzoom": 20, "from": "osm_amenity"},
     ],
-    sourceSchema: 'layers/amenity/create.sql',
     generalize: {
         // Every amenity that survives the area threshold is worth merging, so no value is named.
         by: 'amenity',
@@ -60,4 +32,30 @@ export default asLayerObject(withSortKeys(directives), {
         'fill-antialias': false,
     },
     filter: ['==', ["geometry-type"], 'Polygon'],
+    directives: withSortKeys([
+        {
+            filter: ['==', ['get', 'amenity'], 'kindergarten'],
+            'fill-color': theme.amenityKinderGartenFillColor,
+        },
+        {
+            filter: ['==', ['get', 'amenity'], 'school'],
+            'fill-color': theme.amenitySchoolFillColor,
+        },
+        {
+            filter: ['==', ['get', 'amenity'], 'college'],
+            'fill-color': theme.amenityCollegeBackgroundFillColor,
+        },
+        {
+            filter: ['==', ['get', 'amenity'], 'university'],
+            'fill-color': theme.amenityUniversityBackgroundFillColor,
+        },
+        {
+            filter: ['==', ['get', 'amenity'], 'hospital'],
+            'fill-color': theme.amenityHospitalBackgroundFillColor,
+        },
+        {
+            filter: ['==', ['get', 'amenity'], 'grave_yard'],
+            'fill-color': theme.amenityGraveYardBackgroundFillColor,
+        },
+    ]),
 });

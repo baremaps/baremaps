@@ -13,7 +13,6 @@
  **/
 import theme from "../../theme.js";
 
-
 export default {
     "id": "tourism_zoo_casing",
     "type": "line",
@@ -22,7 +21,6 @@ export default {
     sourceQueries: [
         {"minzoom": 14, "maxzoom": 20, "from": "osm_tourism"},
     ],
-    sourceSchema: 'layers/tourism/create.sql',
     "layout": {
         "visibility": "visible"
     },

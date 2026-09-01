@@ -145,7 +145,7 @@ public final class SchemaCompiler {
         WITH filtered AS (
           SELECT tags -> %s AS tag, geom
           FROM %s
-          WHERE tags ->> %s IN (%s)
+          WHERE tags ->> %s IN (%s)%s
         ),
         clustered AS (
           SELECT tag, geom, ST_ClusterDBSCAN(geom, 0, 1) OVER (PARTITION BY tag) AS cluster
@@ -161,7 +161,7 @@ public final class SchemaCompiler {
         )
         SELECT ROW_NUMBER() OVER () AS id, jsonb_build_object(%s, tag) AS tags, geom
         FROM exploded"""
-        .formatted(merged, key, source, key, values(generalize), key));
+        .formatted(merged, key, source, key, values(generalize), condition(generalize), key));
     statements.add("CREATE INDEX IF NOT EXISTS %s_geom ON %s USING GIST(geom)"
         .formatted(merged, merged));
 
@@ -198,6 +198,12 @@ public final class SchemaCompiler {
     }
     return " AND tags ->> %s IN (%s)".formatted(literal(generalize.by()),
         drawn.stream().map(SchemaCompiler::literal).collect(Collectors.joining(", ")));
+  }
+
+  /** The condition on what enters the chain, beyond carrying one of the values. */
+  private static String condition(MapSpec.Generalize generalize) {
+    var filter = FilterCompiler.sql(generalize.filter(), "tags");
+    return filter == null ? "" : " AND " + filter;
   }
 
   private static String values(MapSpec.Generalize generalize) {
@@ -242,7 +248,7 @@ public final class SchemaCompiler {
             tags -> %s AS tag,
             st_buffer(st_simplifypreservetopology(geom, %s), %s, 'join=mitre') AS geom
           FROM %s
-          WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom) AND st_area(geom) > %s%s
+          WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom) AND st_area(geom) > %s%s%s
         ),
         clustered AS (
           SELECT tag, geom, st_clusterdbscan(geom, 0, 1) OVER (PARTITION BY tag) AS cluster
@@ -262,7 +268,8 @@ public final class SchemaCompiler {
           geom
         FROM merged
         WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom) AND st_area(geom) > %s"""
-        .formatted(view, key, tolerance, buffer, from, area, values, buffer, tolerance, key, area);
+        .formatted(view, key, tolerance, buffer, from, area, values,
+            select ? condition(generalize) : "", buffer, tolerance, key, area);
   }
 
   /** Below the merge, the geometry is only simplified and the rows keep their identity. */

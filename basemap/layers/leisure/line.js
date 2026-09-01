@@ -14,21 +14,7 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-
-export let directives = [
-    {
-        'filter': ['==', ['get', 'leisure'], 'nature_reserve'],
-        'line-color': theme.leisureNatureReserveLineColor,
-        'line-width': 2,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'track'],
-        'line-color': theme.leisureTrackLineColor,
-        'line-width-stops': theme.leisureTrackLineWidth,
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     'id': 'leisure_line',
     sourceLayer: 'leisure',
     'type': 'line',
@@ -38,4 +24,16 @@ export default asLayerObject(withSortKeys(directives), {
         'line-join': 'round',
     },
     'filter': ['==', ['geometry-type'], 'LineString'],
+    directives: withSortKeys([
+        {
+            'filter': ['==', ['get', 'leisure'], 'nature_reserve'],
+            'line-color': theme.leisureNatureReserveLineColor,
+            'line-width': 2,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'track'],
+            'line-color': theme.leisureTrackLineColor,
+            'line-width-stops': theme.leisureTrackLineWidth,
+        },
+    ]),
 });

@@ -13,7 +13,6 @@
  **/
 import theme from "../../theme.js";
 
-
 export default {
     id: 'power_plant',
     type: 'fill',
@@ -21,7 +20,6 @@ export default {
     sourceQueries: [
         {"minzoom": 13, "maxzoom": 20, "from": "osm_power"},
     ],
-    sourceSchema: 'layers/power/create.sql',
     layout: {
         visibility: 'visible',
     },

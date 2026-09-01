@@ -15,34 +15,7 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: ['==', ['get', 'landuse'], 'military'],
-        'fill-color': theme.landuseMilitaryOverlayFillColor,
-    },
-    {
-        filter: ['==', ['get', 'landuse'], 'forest'],
-        'fill-color': theme.landuseForestOverlayFillColor,
-    },
-    {
-        filter: ['==', ['get', 'landuse'], 'grass'],
-        'fill-color': theme.landuseGrassOverlayFillColor,
-    },
-    {
-        filter: ['==', ['get', 'landuse'], 'greenhouse_horticulture'],
-        'fill-color': theme.landuseGreenhouseHorticultureOverlayFillColor,
-    },
-    {
-        filter: ['==', ['get', 'landuse'], 'orchard'],
-        'fill-color': theme.landuseOrchardOverlayFillColor,
-    },
-    {
-        filter: ['==', ['get', 'landuse'], 'meadow'],
-        'fill-color': theme.landuseMeadowOverlayFillColor,
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'landuse_overlay',
     type: 'fill',
     sourceLayer: 'landuse',
@@ -53,4 +26,30 @@ export default asLayerObject(withSortKeys(directives), {
         'fill-antialias': false,
     },
     filter: ['==', ['geometry-type'], 'Polygon'],
+    directives: withSortKeys([
+        {
+            filter: ['==', ['get', 'landuse'], 'military'],
+            'fill-color': theme.landuseMilitaryOverlayFillColor,
+        },
+        {
+            filter: ['==', ['get', 'landuse'], 'forest'],
+            'fill-color': theme.landuseForestOverlayFillColor,
+        },
+        {
+            filter: ['==', ['get', 'landuse'], 'grass'],
+            'fill-color': theme.landuseGrassOverlayFillColor,
+        },
+        {
+            filter: ['==', ['get', 'landuse'], 'greenhouse_horticulture'],
+            'fill-color': theme.landuseGreenhouseHorticultureOverlayFillColor,
+        },
+        {
+            filter: ['==', ['get', 'landuse'], 'orchard'],
+            'fill-color': theme.landuseOrchardOverlayFillColor,
+        },
+        {
+            filter: ['==', ['get', 'landuse'], 'meadow'],
+            'fill-color': theme.landuseMeadowOverlayFillColor,
+        },
+    ]),
 });

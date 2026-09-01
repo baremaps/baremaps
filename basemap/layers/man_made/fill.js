@@ -15,38 +15,36 @@
 import {asLayerObject} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: ['==', ['get', 'man_made'], 'bridge'],
-        'fill-color': theme.manMadeBridgeFillColor,
-    },
-    {
-        filter: ['==', ['get', 'man_made'], 'groyne'],
-        'fill-color': theme.manMadeGroyneFillColor,
-    },
-    {
-        filter: ['==', ['get', 'man_made'], 'pier'],
-        'fill-color': theme.manMadePierFillColor,
-    },
-    {
-        filter: ['==', ['get', 'man_made'], 'wastewater_plant'],
-        'fill-color': theme.manMadeWasteWaterPlantFillColor,
-    }
-];
-
-export default asLayerObject(directives, {
+export default asLayerObject({
     id: 'man_made_bridge',
     type: 'fill',
     sourceLayer: 'man_made',
     sourceQueries: [
         {"minzoom": 14, "maxzoom": 20, "from": "osm_man_made"},
     ],
-    sourceSchema: 'layers/man_made/create.sql',
     layout: {
         visibility: 'visible',
     },
     paint: {
         'fill-antialias': false,
     },
-    filter: ['==', ["geometry-type"], 'Polygon']
+    filter: ['==', ["geometry-type"], 'Polygon'],
+    directives: [
+        {
+            filter: ['==', ['get', 'man_made'], 'bridge'],
+            'fill-color': theme.manMadeBridgeFillColor,
+        },
+        {
+            filter: ['==', ['get', 'man_made'], 'groyne'],
+            'fill-color': theme.manMadeGroyneFillColor,
+        },
+        {
+            filter: ['==', ['get', 'man_made'], 'pier'],
+            'fill-color': theme.manMadePierFillColor,
+        },
+        {
+            filter: ['==', ['get', 'man_made'], 'wastewater_plant'],
+            'fill-color': theme.manMadeWasteWaterPlantFillColor,
+        }
+    ],
 });

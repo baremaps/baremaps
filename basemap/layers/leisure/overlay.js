@@ -15,57 +15,7 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: ['==', ['get', 'leisure'], 'marina'],
-        'fill-color': theme.leisureMarinaOverlayFillColor,
-        'fill-outline-color': theme.leisureMarinaOverlayOutlineColor,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'swimming_pool'],
-        'fill-color': theme.leisureSwimmingPoolBackgroundFillColor,
-        'fill-outline-color': theme.leisureSwimmingPoolOverlayOutlineColor,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'fitness_station'],
-        'fill-color': theme.leisureFitnessStationOverlayFillColor,
-        'fill-outline-color': theme.leisureFitnessStationOverlayOutlineColor,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'miniature_golf'],
-        'fill-color': theme.leisureMiniatureGolfOverlayFillColor,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'ice_rink'],
-        'fill-color': theme.leisureIceRinkOverlayFillColor,
-        'fill-outline-color': theme.leisureIceRinkOverlayOutlineColor,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'dog_park'],
-        'fill-color': theme.leisureDogParkOverlayFillColor,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'playground'],
-        'fill-color': theme.leisurePlayGroundOverlayFillColor,
-        'fill-outline-color': theme.leisurePlayGroundOverlayOutlineColor,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'pitch'],
-        'fill-color': theme.leisurePitchOverlayFillColor,
-        'fill-outline-color': theme.leisurePitchOverlayOutlineColor,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'track'],
-        'fill-color': theme.leisureTrackBackgroundFillColor,
-        'fill-outline-color': theme.leisureTrackBackgroundFillOutlineColor,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'stadium'],
-        'fill-color': theme.leisureStadiumOverlayFillColor,
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'leisure_overlay',
     type: 'fill',
     sourceLayer: 'leisure',
@@ -75,5 +25,54 @@ export default asLayerObject(withSortKeys(directives), {
     paint: {
         'fill-antialias': false,
     },
-    filter: ['==', ["geometry-type"], 'Polygon']
+    filter: ['==', ["geometry-type"], 'Polygon'],
+    directives: withSortKeys([
+        {
+            filter: ['==', ['get', 'leisure'], 'marina'],
+            'fill-color': theme.leisureMarinaOverlayFillColor,
+            'fill-outline-color': theme.leisureMarinaOverlayOutlineColor,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'swimming_pool'],
+            'fill-color': theme.leisureSwimmingPoolBackgroundFillColor,
+            'fill-outline-color': theme.leisureSwimmingPoolOverlayOutlineColor,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'fitness_station'],
+            'fill-color': theme.leisureFitnessStationOverlayFillColor,
+            'fill-outline-color': theme.leisureFitnessStationOverlayOutlineColor,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'miniature_golf'],
+            'fill-color': theme.leisureMiniatureGolfOverlayFillColor,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'ice_rink'],
+            'fill-color': theme.leisureIceRinkOverlayFillColor,
+            'fill-outline-color': theme.leisureIceRinkOverlayOutlineColor,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'dog_park'],
+            'fill-color': theme.leisureDogParkOverlayFillColor,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'playground'],
+            'fill-color': theme.leisurePlayGroundOverlayFillColor,
+            'fill-outline-color': theme.leisurePlayGroundOverlayOutlineColor,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'pitch'],
+            'fill-color': theme.leisurePitchOverlayFillColor,
+            'fill-outline-color': theme.leisurePitchOverlayOutlineColor,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'track'],
+            'fill-color': theme.leisureTrackBackgroundFillColor,
+            'fill-outline-color': theme.leisureTrackBackgroundFillOutlineColor,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'stadium'],
+            'fill-color': theme.leisureStadiumOverlayFillColor,
+        },
+    ]),
 });

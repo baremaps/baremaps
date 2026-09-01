@@ -30,7 +30,7 @@ class SchemaCompilerTest {
         .build();
     try {
       return mapper.readValue("""
-          {"name":"test","minzoom":0,"maxzoom":16,"layers":[
+          {"name":"test","source":{"minzoom":0,"maxzoom":16},"layers":[
             {"id":"a","type":"fill","sourceLayer":"leisure",
              "sourceQueries":[{"minzoom":1,"maxzoom":20,"from":"osm_leisure"}],
              "filter":["has","leisure"],
@@ -129,7 +129,7 @@ class SchemaCompilerTest {
         .build();
     try {
       return mapper.readValue("""
-          {"name":"test","minzoom":0,"maxzoom":16,"layers":[
+          {"name":"test","source":{"minzoom":0,"maxzoom":16},"layers":[
             {"id":"a","type":"line","sourceLayer":"highway",
              "sourceQueries":[{"minzoom":4,"maxzoom":20,"from":"osm_highway"}],
              "filter":["has","highway"],

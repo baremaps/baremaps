@@ -14,38 +14,7 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: [
-            'all',
-            ['==', ['get', 'natural'], 'beach'],
-            ['==', ['get', 'surface'], 'gravel']
-        ],
-        'fill-color': theme.naturalBeachGravelOverlayFillColor
-    },
-    {
-        filter: ['==', ['get', 'natural'], 'beach'],
-        'fill-color': theme.naturalBeachOverlayFillColor
-    },
-    {
-        filter: ['==', ['get', 'natural'], 'sand'],
-        'fill-color': theme.naturalSandOverlayFillColor
-    },
-    {
-        filter: [
-            'all',
-            ['==', ['get', 'natural'], 'water'],
-            ['!=', ['get', 'water'], 'lake'],
-        ],
-        'fill-color': theme.naturalLakeOverlayFillColor
-    },
-    {
-        filter: ['==', ['get', 'natural'], 'wetland'],
-        'fill-color': theme.naturalWetlandOverlayFillColor
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'natural_overlay',
     type: 'fill',
     sourceLayer: 'natural',
@@ -56,4 +25,34 @@ export default asLayerObject(withSortKeys(directives), {
         'fill-antialias': false,
     },
     filter: ['==', ['geometry-type'], 'Polygon'],
+    directives: withSortKeys([
+        {
+            filter: [
+                'all',
+                ['==', ['get', 'natural'], 'beach'],
+                ['==', ['get', 'surface'], 'gravel']
+            ],
+            'fill-color': theme.naturalBeachGravelOverlayFillColor
+        },
+        {
+            filter: ['==', ['get', 'natural'], 'beach'],
+            'fill-color': theme.naturalBeachOverlayFillColor
+        },
+        {
+            filter: ['==', ['get', 'natural'], 'sand'],
+            'fill-color': theme.naturalSandOverlayFillColor
+        },
+        {
+            filter: [
+                'all',
+                ['==', ['get', 'natural'], 'water'],
+                ['!=', ['get', 'water'], 'lake'],
+            ],
+            'fill-color': theme.naturalLakeOverlayFillColor
+        },
+        {
+            filter: ['==', ['get', 'natural'], 'wetland'],
+            'fill-color': theme.naturalWetlandOverlayFillColor
+        },
+    ]),
 });

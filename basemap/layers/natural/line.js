@@ -14,21 +14,7 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: ['==', ['get', 'natural'], 'cliff'],
-        'line-color': theme.naturalCliffLineColor,
-        'line-width-stops': theme.naturalCliffLineWidth,
-    },
-    {
-        filter: ['==', ['get', 'natural'], 'tree_row'],
-        'line-color': theme.naturalTreeRowLineColor,
-        'line-width-stops': theme.naturalTreeRowLineWidth,
-    },
-
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'natural_line',
     sourceLayer: 'natural',
     type: 'line',
@@ -41,4 +27,17 @@ export default asLayerObject(withSortKeys(directives), {
         'all',
         ['==', ['geometry-type'], 'LineString'],
     ],
+    directives: withSortKeys([
+        {
+            filter: ['==', ['get', 'natural'], 'cliff'],
+            'line-color': theme.naturalCliffLineColor,
+            'line-width-stops': theme.naturalCliffLineWidth,
+        },
+        {
+            filter: ['==', ['get', 'natural'], 'tree_row'],
+            'line-color': theme.naturalTreeRowLineColor,
+            'line-width-stops': theme.naturalTreeRowLineWidth,
+        },
+
+    ]),
 });

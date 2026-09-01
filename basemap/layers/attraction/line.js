@@ -14,26 +14,24 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: ['==', ['get', 'attraction'], "water_slide"],
-        'line-color': theme.attractionWaterSlideLineColor,
-        'line-width-stops': theme.attractionWaterSlideLineWidth,
-    },
-
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'attraction_line',
     type: 'line',
     sourceLayer: 'attraction',
     sourceQueries: [
         {"minzoom": 13, "maxzoom": 20, "from": "osm_attraction"},
     ],
-    sourceSchema: 'layers/attraction/create.sql',
     layout: {
         visibility: 'visible',
         'line-cap': 'round',
         'line-join': 'round',
     },
+    directives: withSortKeys([
+        {
+            filter: ['==', ['get', 'attraction'], "water_slide"],
+            'line-color': theme.attractionWaterSlideLineColor,
+            'line-width-stops': theme.attractionWaterSlideLineWidth,
+        },
+
+    ]),
 });

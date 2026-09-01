@@ -14,20 +14,7 @@
 import theme from "../../theme.js";
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 
-let directives = [
-    {
-        "filter": ["!", ["has", "tunnel"]],
-        "line-color": theme.waterwayLineColor,
-        "line-width-stops": [4, 1, 14, 1],
-    },
-    {
-        "filter": ["has", "tunnel"],
-        "line-color": theme.waterwayTunnelColor,
-        "line-width-stops": [4, 1, 14, 1],
-    },
-];
-
-let layer = asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     "id": "waterway",
     "type": "line",
     sourceLayer: "waterway",
@@ -42,7 +29,6 @@ let layer = asLayerObject(withSortKeys(directives), {
         },
         {"minzoom": 13, "maxzoom": 20, "from": "osm_way", "filter": ["has", "waterway"]},
     ],
-    sourceSchema: 'layers/waterway/create.sql',
     generalize: {
         kind: 'lines',
         by: 'waterway',
@@ -53,6 +39,8 @@ let layer = asLayerObject(withSortKeys(directives), {
             'river',
             'stream'
         ],
+        // A siding is a railway and a dry bed is a waterway; neither is worth generalizing.
+        filter: ['!', ['has', 'intermittent']],
     },
     filter: ['==', ['geometry-type'], 'LineString'],
     layout: {
@@ -60,6 +48,16 @@ let layer = asLayerObject(withSortKeys(directives), {
         'line-cap': 'round',
         'line-join': 'round',
     },
+    directives: withSortKeys([
+        {
+            "filter": ["!", ["has", "tunnel"]],
+            "line-color": theme.waterwayLineColor,
+            "line-width-stops": [4, 1, 14, 1],
+        },
+        {
+            "filter": ["has", "tunnel"],
+            "line-color": theme.waterwayTunnelColor,
+            "line-width-stops": [4, 1, 14, 1],
+        },
+    ]),
 });
-
-export default layer;

@@ -47,9 +47,8 @@ import java.util.TreeMap;
  */
 public final class MapCompiler {
 
-  private static final int DEFAULT_MINZOOM = 0;
+  /** The zoom a query is taken to end at when it names no end, one past the deepest tile. */
   private static final int DEFAULT_MAXZOOM = 20;
-  private static final String DEFAULT_SOURCE = "baremaps";
 
   /** Metres per pixel at zoom zero, for a tile 512 pixels across. */
   private static final String RESOLUTION = "78270";
@@ -63,11 +62,11 @@ public final class MapCompiler {
    * @return the style
    */
   public static Style style(MapSpec spec) {
-    var source = source(spec);
+    var source = spec.source();
 
     var vector = new StyleSource();
     vector.setType("vector");
-    vector.setUrl(spec.tilejson());
+    vector.setUrl(source.url());
 
     var layers = new ArrayList<StyleLayer>();
     for (var layer : spec.layers()) {
@@ -76,7 +75,7 @@ public final class MapCompiler {
           .setType(layer.getType())
           .setFilter(layer.getFilter())
           // Every layer reads the one source, so no layer says so.
-          .setSource(layer.getSource() == null ? source : layer.getSource())
+          .setSource(layer.getSource() == null ? source.id() : layer.getSource())
           .setSourceLayer(layer.getSourceLayer())
           .setLayout(layer.getLayout())
           .setMinzoom(layer.getMinzoom())
@@ -91,7 +90,7 @@ public final class MapCompiler {
         .setZoom(spec.zoom())
         .setSprite(spec.sprite())
         .setGlyphs(spec.glyphs())
-        .setSources(Map.of(source, vector))
+        .setSources(Map.of(source.id(), vector))
         .setLayers(layers);
   }
 
@@ -104,9 +103,10 @@ public final class MapCompiler {
    */
   public static Tileset tileset(MapSpec spec) {
     var style = style(spec);
-    int minzoom = spec.minzoom() == null ? DEFAULT_MINZOOM : spec.minzoom();
-    int maxzoom = spec.maxzoom() == null ? DEFAULT_MAXZOOM : spec.maxzoom();
-    var featureIds = Boolean.TRUE.equals(spec.featureIds());
+    var source = spec.source();
+    int minzoom = source.minzoom();
+    int maxzoom = source.maxzoom();
+    var featureIds = source.featureIds();
 
     // The demand of every source layer, at every zoom the tileset covers. Computed once: reading it
     // walks the whole style, and every query below consults it.
@@ -142,12 +142,12 @@ public final class MapCompiler {
 
     var tileset = new Tileset()
         .setName(spec.name())
-        .setAttribution(spec.attribution())
-        .setBounds(spec.bounds())
+        .setAttribution(source.attribution())
+        .setBounds(source.bounds())
         .setCenter(center(spec))
         .setMinzoom(minzoom)
         .setMaxzoom(maxzoom)
-        .setTiles(spec.tiles() == null ? List.of() : spec.tiles())
+        .setTiles(source.tiles())
         .setFeatureIds(featureIds)
         .setVectorLayers(layers);
     tileset.setDatabase(spec.database());
@@ -223,17 +223,6 @@ public final class MapCompiler {
       }
     }
     return queries;
-  }
-
-  /** The schemas the source layers are read out of, in the order they are declared. */
-  public static List<String> schemas(MapSpec spec) {
-    var schemas = new ArrayList<String>();
-    for (var layer : spec.layers()) {
-      if (layer.getSourceSchema() != null && !schemas.contains(layer.getSourceSchema())) {
-        schemas.add(layer.getSourceSchema());
-      }
-    }
-    return schemas;
   }
 
   /**
@@ -351,10 +340,6 @@ public final class MapCompiler {
 
   private static String literal(String value) {
     return "'" + value.replace("'", "''") + "'";
-  }
-
-  private static String source(MapSpec spec) {
-    return spec.source() == null ? DEFAULT_SOURCE : spec.source();
   }
 
   /** A tileset centre carries the zoom as a third element, where a style centre holds two. */

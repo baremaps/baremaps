@@ -11,23 +11,23 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  **/
-
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
 export default asLayerObject({
-    id: 'tunnel_line',
+    id: 'highway_line',
     sourceLayer: 'highway',
     type: 'line',
     layout: {
         visibility: 'visible',
-        'line-cap': 'square',
-        'line-join': 'miter',
+        'line-cap': 'round',
+        'line-join': 'round',
     },
     filter: [
         'all',
         ['==', ['geometry-type'], 'LineString'],
-        ['==', ['get', 'tunnel'], 'yes'],
+        ['!=', ['get', 'bridge'], 'yes'],
+        ['!=', ['get', 'tunnel'], 'yes'],
     ],
     directives: withSortKeys([
         {
@@ -42,11 +42,6 @@ export default asLayerObject({
         {
             filter: ['==', ['get', 'highway'], 'bridleway'],
             'line-color': theme.highwayDashBridlewayLineColor,
-            'line-width-stops': theme.highwayMinorLineWidth,
-        },
-        {
-            filter: ['==', ['get', 'highway'], 'busway'],
-            'line-color': theme.highwayBuswayDashColor,
             'line-width-stops': theme.highwayMinorLineWidth,
         },
         {
@@ -95,7 +90,7 @@ export default asLayerObject({
                 ['==', ['get', 'highway'], 'motorway'],
                 ['==', ['get', 'highway'], 'motorway_link'],
             ],
-            'line-color': theme.highwayMotorwayTunnelLineColor,
+            'line-color': theme.highwayMotorwayLineColor,
             'line-width-stops': theme.highwayMotorwayLineWidth,
         },
         {
@@ -104,7 +99,7 @@ export default asLayerObject({
                 ['==', ['get', 'highway'], 'trunk'],
                 ['==', ['get', 'highway'], 'trunk_link'],
             ],
-            'line-color': theme.highwayTrunkTunnelLineColor,
+            'line-color': theme.highwayTrunkLineColor,
             'line-width-stops': theme.highwayTrunkLineWidth,
         },
         {
@@ -113,7 +108,7 @@ export default asLayerObject({
                 ['==', ['get', 'highway'], 'primary'],
                 ['==', ['get', 'highway'], 'primary_link'],
             ],
-            'line-color': theme.highwayPrimaryTunnelLineColor,
+            'line-color': theme.highwayPrimaryLineColor,
             'line-width-stops': theme.highwayPrimaryLineWidth,
         },
         {
@@ -122,7 +117,7 @@ export default asLayerObject({
                 ['==', ['get', 'highway'], 'secondary'],
                 ['==', ['get', 'highway'], 'secondary_link'],
             ],
-            'line-color': theme.highwaySecondaryTunnelLineColor,
+            'line-color': theme.highwaySecondaryLineColor,
             'line-width-stops': theme.highwaySecondaryLineWidth,
         },
         {
@@ -131,47 +126,38 @@ export default asLayerObject({
                 ['==', ['get', 'highway'], 'tertiary'],
                 ['==', ['get', 'highway'], 'tertiary_link'],
             ],
-            'line-color': theme.highwayTertiaryTunnelLineColor,
+            'line-color': theme.highwayTertiaryLineColor,
             'line-width-stops': theme.highwayTertiaryLineWidth,
         },
         {
+            filter: ['==', ['get', 'highway'], 'busway'],
+            'line-color': theme.highwayBuswayLineColor,
+            'line-width-stops': theme.highwayBuswayLineWidth,
+        },
+        {
             filter: ['==', ['get', 'highway'], 'unclassified'],
-            'line-color': theme.highwayUnclassifiedTunnelLineColor,
+            'line-color': theme.highwayUnclassifiedLineColor,
             'line-width-stops': theme.highwayUnclassifiedLineWidth,
         },
         {
             filter: ['==', ['get', 'highway'], 'residential'],
-            'line-color': theme.highwayResidentialTunnelLineColor,
+            'line-color': theme.highwayResidentialLineColor,
             'line-width-stops': theme.highwayResidentialLineWidth,
         },
         {
             filter: ['==', ['get', 'highway'], 'living_street'],
-            'line-color': theme.highwayLivingStreetTunnelLineColor,
+            'line-color': theme.highwayLivingStreetLineColor,
             'line-width-stops': theme.highwayLivingStreetLineWidth,
         },
         {
             filter: ['==', ['get', 'highway'], 'service'],
-            'line-color': theme.highwayServiceTunnelLineColor,
+            'line-color': theme.highwayServiceLineColor,
             'line-width-stops': theme.highwayServiceLineWidth,
         },
         {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'pedestrian'],
-                ['!=', ['geometry-type'], 'Polygon'],
-            ],
-            'line-color': theme.highwayPedestrianTunnelLineColor,
-            'line-width-stops': theme.highwayPedestrianLineWidth,
-        },
-        {
             filter: ['==', ['get', 'highway'], 'raceway'],
-            'line-color': theme.highwayRacewayTunnelLineColor,
+            'line-color': theme.highwayRacewayLineColor,
             'line-width-stops': theme.highwayRacewayLineWidth,
-        },
-        {
-            filter: ['==', ['get', 'highway'], 'track'],
-            'line-color': theme.highwayTrackTunnelLineColor,
-            'line-width-stops': theme.highwayMinorLineWidth,
         },
     ]),
 });

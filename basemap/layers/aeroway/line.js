@@ -14,22 +14,7 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-
-let directives = [
-    {
-        'filter': ['==', ['get', 'aeroway'], 'runway'],
-        'line-color': theme.aerowayRunwayLineColor,
-        'line-width-stops': theme.aerowayRunwayLineWidth,
-    },
-    {
-
-        'filter': ['==', ['get', 'aeroway'], 'taxiway'],
-        'line-color': theme.aerowayTaxiwayLineColor,
-        'line-width-stops': theme.aerowayTaxiwayLineWidth,
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'aeroway_line',
     type: 'line',
     sourceLayer: 'aeroway',
@@ -39,4 +24,17 @@ export default asLayerObject(withSortKeys(directives), {
         visibility: 'visible',
     },
     filter: ['==', ['geometry-type'], 'LineString'],
+    directives: withSortKeys([
+        {
+            'filter': ['==', ['get', 'aeroway'], 'runway'],
+            'line-color': theme.aerowayRunwayLineColor,
+            'line-width-stops': theme.aerowayRunwayLineWidth,
+        },
+        {
+
+            'filter': ['==', ['get', 'aeroway'], 'taxiway'],
+            'line-color': theme.aerowayTaxiwayLineColor,
+            'line-width-stops': theme.aerowayTaxiwayLineWidth,
+        },
+    ]),
 });

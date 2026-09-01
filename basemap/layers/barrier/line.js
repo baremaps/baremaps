@@ -14,37 +14,12 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: ['==', ['get', 'barrier'], 'hedge'],
-        'line-color': theme.barrierHedgeLineColor,
-        'line-width-stops': theme.barrierHedgeLineWidth,
-    },
-    {
-        filter: ['==', ['get', 'barrier'], 'wall'],
-        'line-color': theme.barrierWallLineColor,
-        'line-width-stops': theme.barrierWallLineWidth,
-    },
-    {
-        filter: ['==', ['get', 'barrier'], 'fence'],
-        'line-color': theme.barrierFenceLineColor,
-        'line-width-stops': theme.barrierFenceLineWidth,
-    },
-    {
-        filter: ['==', ['get', 'barrier'], 'city_wall'],
-        'line-color': theme.barrierCityWallLineColor,
-        'line-width-stops': theme.barrierCityWallLineWidth,
-    },
-
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'barrier_line',
     sourceLayer: 'barrier',
     sourceQueries: [
         {"minzoom": 14, "maxzoom": 20, "from": "osm_barrier"},
     ],
-    sourceSchema: 'layers/barrier/create.sql',
     type: 'line',
     layout: {
         visibility: 'visible',
@@ -55,4 +30,27 @@ export default asLayerObject(withSortKeys(directives), {
         'all',
         ['==', ['geometry-type'], 'LineString'],
     ],
+    directives: withSortKeys([
+        {
+            filter: ['==', ['get', 'barrier'], 'hedge'],
+            'line-color': theme.barrierHedgeLineColor,
+            'line-width-stops': theme.barrierHedgeLineWidth,
+        },
+        {
+            filter: ['==', ['get', 'barrier'], 'wall'],
+            'line-color': theme.barrierWallLineColor,
+            'line-width-stops': theme.barrierWallLineWidth,
+        },
+        {
+            filter: ['==', ['get', 'barrier'], 'fence'],
+            'line-color': theme.barrierFenceLineColor,
+            'line-width-stops': theme.barrierFenceLineWidth,
+        },
+        {
+            filter: ['==', ['get', 'barrier'], 'city_wall'],
+            'line-color': theme.barrierCityWallLineColor,
+            'line-width-stops': theme.barrierCityWallLineWidth,
+        },
+
+    ]),
 });

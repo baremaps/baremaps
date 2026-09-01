@@ -15,19 +15,7 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: [
-            'all',
-            ['==', ["geometry-type"], 'LineString'],
-            ['==', ['get', 'man_made'], 'pier'],
-        ],
-        'line-color': theme.manMadePierLineColor,
-        'line-width-stops': theme.manMadePierLineWidth,
-    }
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'man_made_pier_line',
     type: 'line',
     sourceLayer: 'man_made',
@@ -37,4 +25,15 @@ export default asLayerObject(withSortKeys(directives), {
         'line-join': 'round',
     },
     minzoom: 12,
+    directives: withSortKeys([
+        {
+            filter: [
+                'all',
+                ['==', ["geometry-type"], 'LineString'],
+                ['==', ['get', 'man_made'], 'pier'],
+            ],
+            'line-color': theme.manMadePierLineColor,
+            'line-width-stops': theme.manMadePierLineWidth,
+        }
+    ]),
 });

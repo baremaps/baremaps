@@ -14,15 +14,7 @@
 import {withSortKeys, asLayerObject} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: ['==', ['get', 'ocean'], 'water'],
-        'fill-color': theme.oceanWaterFillColor,
-        'fill-sort-key': 10,
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'ocean_overlay',
     type: 'fill',
     sourceLayer: 'ocean',
@@ -36,4 +28,11 @@ export default asLayerObject(withSortKeys(directives), {
     paint: {
         'fill-antialias': false,
     },
+    directives: withSortKeys([
+        {
+            filter: ['==', ['get', 'ocean'], 'water'],
+            'fill-color': theme.oceanWaterFillColor,
+            'fill-sort-key': 10,
+        },
+    ]),
 });

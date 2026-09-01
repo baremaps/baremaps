@@ -14,27 +14,24 @@
 import theme from "../../theme.js";
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 
-
-let directives = [
-    {
-        filter: ['has', 'aerialway'],
-        'line-color': theme.aerialwayLineColor,
-        'line-width': 1,
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'aerialway_line',
     type: 'line',
     sourceLayer: 'aerialway',
     sourceQueries: [
         {"minzoom": 13, "maxzoom": 20, "from": "osm_aerialway"},
     ],
-    sourceSchema: 'layers/aerialway/create.sql',
     layout: {
         'line-cap': 'round',
         'line-join': 'round',
         visibility: 'visible',
     },
     filter: ['==', ['geometry-type'], 'LineString'],
+    directives: withSortKeys([
+        {
+            filter: ['has', 'aerialway'],
+            'line-color': theme.aerialwayLineColor,
+            'line-width': 1,
+        },
+    ]),
 });

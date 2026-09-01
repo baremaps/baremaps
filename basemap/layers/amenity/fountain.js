@@ -14,15 +14,7 @@
 import {asLayerObject} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: ['==', ['get', 'amenity'], 'fountain'],
-        'fill-color': theme.amenityFountainFillColor,
-        'fill-outline-color': theme.amenityFountainFillOutlineColor,
-    },
-];
-
-export default asLayerObject(directives, {
+export default asLayerObject({
     id: 'amenity_fill_2',
     type: 'fill',
     sourceLayer: 'amenity',
@@ -33,4 +25,11 @@ export default asLayerObject(directives, {
         'fill-antialias': false,
     },
     filter: ['==', ["geometry-type"], 'Polygon'],
+    directives: [
+        {
+            filter: ['==', ['get', 'amenity'], 'fountain'],
+            'fill-color': theme.amenityFountainFillColor,
+            'fill-outline-color': theme.amenityFountainFillOutlineColor,
+        },
+    ],
 });

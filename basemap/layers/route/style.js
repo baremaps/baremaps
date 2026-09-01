@@ -14,16 +14,7 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-
-let directives = [
-    {
-        filter: ['==', ['get', 'route'], 'ferry'],
-        'line-color': theme.routeFerryLineColor,
-        'line-width': 1
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'route_ferry',
     type: 'line',
     sourceLayer: 'route',
@@ -31,7 +22,6 @@ export default asLayerObject(withSortKeys(directives), {
         {"minzoom": 9, "maxzoom": 13, "from": "osm_route", "filter": ["has", "route"]},
         {"minzoom": 13, "maxzoom": 20, "from": "osm_way", "filter": ["has", "route"]},
     ],
-    sourceSchema: 'layers/route/create.sql',
     generalize: {
         kind: 'lines',
         by: 'route',
@@ -55,4 +45,11 @@ export default asLayerObject(withSortKeys(directives), {
         visibility: 'visible',
     },
     filter: ['==', ['geometry-type'], 'LineString'],
+    directives: withSortKeys([
+        {
+            filter: ['==', ['get', 'route'], 'ferry'],
+            'line-color': theme.routeFerryLineColor,
+            'line-width': 1
+        },
+    ]),
 });

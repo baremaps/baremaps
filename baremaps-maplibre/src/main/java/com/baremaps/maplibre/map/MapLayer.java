@@ -57,9 +57,6 @@ public class MapLayer {
   @JsonProperty("sourceQueries")
   private List<MapSpec.Query> sourceQueries;
 
-  @JsonProperty("sourceSchema")
-  private String sourceSchema;
-
   @JsonProperty("generalize")
   private MapSpec.Generalize generalize;
 
@@ -88,8 +85,7 @@ public class MapLayer {
   public void unknown(String name, Object value) {
     var camel = Map.of(
         "source-layer", "sourceLayer",
-        "source-queries", "sourceQueries",
-        "source-schema", "sourceSchema");
+        "source-queries", "sourceQueries");
     if (camel.containsKey(name)) {
       throw new IllegalArgumentException(String.format(
           "Layer '%s' uses '%s'; this format writes it as '%s'.",
@@ -148,15 +144,6 @@ public class MapLayer {
 
   public MapLayer setSourceQueries(List<MapSpec.Query> sourceQueries) {
     this.sourceQueries = sourceQueries;
-    return this;
-  }
-
-  public String getSourceSchema() {
-    return sourceSchema;
-  }
-
-  public MapLayer setSourceSchema(String sourceSchema) {
-    this.sourceSchema = sourceSchema;
     return this;
   }
 

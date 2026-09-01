@@ -15,33 +15,13 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: ['==', ['get', 'leisure'], 'golf_course'],
-        'fill-color': theme.leisureGolfCourseBackgroundFillColor,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'sports_centre'],
-        'fill-color': theme.leisureSportsCentreBackgroundFillColor,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'garden'],
-        'fill-color': theme.leisureGardenBackgroundFillColor,
-    },
-    {
-        filter: ['==', ['get', 'leisure'], 'park'],
-        'fill-color': theme.leisureParkBackgroundFillColor,
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'leisure',
     type: 'fill',
     sourceLayer: 'leisure',
     sourceQueries: [
         {"minzoom": 1, "maxzoom": 20, "from": "osm_leisure", "filter": ["has", "leisure"]},
     ],
-    sourceSchema: 'layers/leisure/create.sql',
     generalize: {
         by: 'leisure',
         values: [
@@ -64,4 +44,22 @@ export default asLayerObject(withSortKeys(directives), {
         'fill-antialias': false,
     },
     filter: ['==', ["geometry-type"], 'Polygon'],
+    directives: withSortKeys([
+        {
+            filter: ['==', ['get', 'leisure'], 'golf_course'],
+            'fill-color': theme.leisureGolfCourseBackgroundFillColor,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'sports_centre'],
+            'fill-color': theme.leisureSportsCentreBackgroundFillColor,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'garden'],
+            'fill-color': theme.leisureGardenBackgroundFillColor,
+        },
+        {
+            filter: ['==', ['get', 'leisure'], 'park'],
+            'fill-color': theme.leisureParkBackgroundFillColor,
+        },
+    ]),
 });

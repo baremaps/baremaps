@@ -76,7 +76,7 @@ export default {
       "tasks": [
         {
           "type": "ExecuteSqlScript",
-          "file": "layers/ocean/create.sql",
+          "file": "queries/ocean.sql",
           "database": config.database,
         },
       ]

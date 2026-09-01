@@ -14,25 +14,23 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: ['==', ['geometry-type'], 'Polygon'],
-        'fill-color': theme.aerowayPolygonColor,
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'aeroway_polygon',
     type: 'fill',
     sourceLayer: 'aeroway',
     sourceQueries: [
         {"minzoom": 13, "maxzoom": 20, "from": "osm_aeroway"},
     ],
-    sourceSchema: 'layers/aeroway/create.sql',
     layout: {
         visibility: 'visible',
     },
     paint: {
         'fill-antialias': true,
     },
+    directives: withSortKeys([
+        {
+            filter: ['==', ['geometry-type'], 'Polygon'],
+            'fill-color': theme.aerowayPolygonColor,
+        },
+    ]),
 });

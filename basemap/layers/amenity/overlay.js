@@ -14,31 +14,7 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
-let directives = [
-    {
-        filter: [
-            'all',
-            ['!=', ['get', 'layer'], '-1'],
-            ['any',
-                ['==', ['get', 'amenity'], 'bicycle_parking'],
-                ['==', ['get', 'amenity'], 'motorcycle_parking'],
-                ['==', ['get', 'amenity'], 'parking'],
-            ],
-        ],
-        'fill-color': theme.amenityParkingOverlayFillColor,
-    },
-    {
-        filter: [
-            'all',
-            ['!=', ['get', 'layer'], '-1'],
-            ['==', ['get', 'amenity'], 'parking_space'],
-        ],
-        'fill-color': theme.amenityParkingOverlayFillColor,
-        'fill-outline-color': theme.amenityParkingOverlayOutlineColor,
-    },
-];
-
-export default asLayerObject(withSortKeys(directives), {
+export default asLayerObject({
     id: 'amenity_overlay',
     type: 'fill',
     sourceLayer: 'amenity',
@@ -49,4 +25,27 @@ export default asLayerObject(withSortKeys(directives), {
         'fill-antialias': true,
     },
     filter: ['==', ["geometry-type"], 'Polygon'],
+    directives: withSortKeys([
+        {
+            filter: [
+                'all',
+                ['!=', ['get', 'layer'], '-1'],
+                ['any',
+                    ['==', ['get', 'amenity'], 'bicycle_parking'],
+                    ['==', ['get', 'amenity'], 'motorcycle_parking'],
+                    ['==', ['get', 'amenity'], 'parking'],
+                ],
+            ],
+            'fill-color': theme.amenityParkingOverlayFillColor,
+        },
+        {
+            filter: [
+                'all',
+                ['!=', ['get', 'layer'], '-1'],
+                ['==', ['get', 'amenity'], 'parking_space'],
+            ],
+            'fill-color': theme.amenityParkingOverlayFillColor,
+            'fill-outline-color': theme.amenityParkingOverlayOutlineColor,
+        },
+    ]),
 });

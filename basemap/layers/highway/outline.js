@@ -15,17 +15,19 @@ import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
 export default asLayerObject({
-    id: 'bridge_outline',
+    id: 'highway_outline',
     sourceLayer: 'highway',
     type: 'line',
     layout: {
         visibility: 'visible',
-        'line-cap': 'butt',
-        'line-join': 'miter',
+        'line-cap': 'round',
+        'line-join': 'round',
     },
-    filter: ['all',
+    filter: [
+        'all',
         ['==', ['geometry-type'], 'LineString'],
-        ['==', ['get', 'bridge'], 'yes']
+        ['!=', ['get', 'bridge'], 'yes'],
+        ['!=', ['get', 'tunnel'], 'yes'],
     ],
     directives: withSortKeys([
         {
@@ -34,9 +36,9 @@ export default asLayerObject({
                 ['==', ['get', 'highway'], 'motorway'],
                 ['==', ['get', 'highway'], 'motorway_link'],
             ],
-            'line-color': theme.highwayMotorwayBridgeOutlineColor,
+            'line-color': theme.highwayMotorwayOutlineColor,
             'line-gap-width-stops': theme.highwayMotorwayLineWidth,
-            'line-width': 1,
+            'line-width-stops': theme.highwayOutlineWidth,
         },
         {
             filter: [
@@ -44,9 +46,9 @@ export default asLayerObject({
                 ['==', ['get', 'highway'], 'trunk'],
                 ['==', ['get', 'highway'], 'trunk_link'],
             ],
-            'line-color': theme.highwayTrunkBridgeOutlineColor,
+            'line-color': theme.highwayTrunkOutlineColor,
             'line-gap-width-stops': theme.highwayTrunkLineWidth,
-            'line-width': 1,
+            'line-width-stops': theme.highwayOutlineWidth,
         },
         {
             filter: [
@@ -54,9 +56,9 @@ export default asLayerObject({
                 ['==', ['get', 'highway'], 'primary'],
                 ['==', ['get', 'highway'], 'primary_link'],
             ],
-            'line-color': theme.highwayPrimaryBridgeOutlineColor,
+            'line-color': theme.highwayPrimaryOutlineColor,
             'line-gap-width-stops': theme.highwayPrimaryLineWidth,
-            'line-width': 1,
+            'line-width-stops': theme.highwayOutlineWidth,
         },
         {
             filter: [
@@ -64,9 +66,9 @@ export default asLayerObject({
                 ['==', ['get', 'highway'], 'secondary'],
                 ['==', ['get', 'highway'], 'secondary_link'],
             ],
-            'line-color': theme.highwaySecondaryBridgeOutlineColor,
+            'line-color': theme.highwaySecondaryOutlineColor,
             'line-gap-width-stops': theme.highwaySecondaryLineWidth,
-            'line-width': 1,
+            'line-width-stops': theme.highwayOutlineWidth,
         },
         {
             filter: [
@@ -74,43 +76,49 @@ export default asLayerObject({
                 ['==', ['get', 'highway'], 'tertiary'],
                 ['==', ['get', 'highway'], 'tertiary_link'],
             ],
-            'line-color': theme.highwayTertiaryBridgeOutlineColor,
+            'line-color': theme.highwayTertiaryOutlineColor,
             'line-gap-width-stops': theme.highwayTertiaryLineWidth,
-            'line-width': 1,
+            'line-width-stops': theme.highwayOutlineWidth,
+        },
+        {
+            filter: ['==', ['get', 'highway'], 'busway'],
+            'line-color': theme.highwayBuswayOutlineColor,
+            'line-gap-width-stops': theme.highwayBuswayLineWidth,
+            'line-width-stops': theme.highwayOutlineWidth,
         },
         {
             filter: ['==', ['get', 'highway'], 'unclassified'],
-            'line-color': theme.highwayUnclassifiedBridgeOutlineColor,
+            'line-color': theme.highwayUnclassifiedOutlineColor,
             'line-gap-width-stops': theme.highwayUnclassifiedLineWidth,
-            'line-width': 1,
+            'line-width-stops': theme.highwayOutlineWidth,
         },
         {
             filter: ['==', ['get', 'highway'], 'residential'],
-            'line-color': theme.highwayResidentialBridgeOutlineColor,
+            'line-color': theme.highwayResidentialOutlineColor,
             'line-gap-width-stops': theme.highwayResidentialLineWidth,
-            'line-width': 1,
+            'line-width-stops': theme.highwayOutlineWidth,
         },
         {
             filter: ['==', ['get', 'highway'], 'living_street'],
-            'line-color': theme.highwayLivingStreetBridgeOutlineColor,
+            'line-color': theme.highwayLivingStreetOutlineColor,
             'line-gap-width-stops': theme.highwayLivingStreetLineWidth,
-            'line-width': 1,
+            'line-width-stops': theme.highwayOutlineWidth,
         },
         {
             filter: ['==', ['get', 'highway'], 'service'],
-            'line-color': theme.highwayServiceBridgeOutlineColor,
+            'line-color': theme.highwayServiceOutlineColor,
             'line-gap-width-stops': theme.highwayServiceLineWidth,
-            'line-width': 1,
+            'line-width-stops': theme.highwayOutlineWidth,
         },
         {
             filter: [
                 'all',
                 ['==', ['get', 'highway'], 'pedestrian'],
-                ['!=', ['geometry-type'], 'Polygon'],
+                ['!=', ['get', 'area'], 'yes'],
             ],
-            'line-color': theme.highwayOutlinePedestrianBridgeLineColor,
+            'line-color': theme.highwayPedestrianOutlineColor,
             'line-gap-width-stops': theme.highwayPedestrianLineWidth,
-            'line-width': 1,
+            'line-width-stops': theme.highwayOutlineWidth,
         },
     ]),
 });

@@ -36,14 +36,19 @@ class MapCompilerTest {
   }
 
   private static MapSpec spec(String layers, boolean featureIds) {
+    return read("""
+        {"name":"test","source":{"minzoom":0,"maxzoom":16,"featureIds":%s},"layers":[%s]}
+        """.formatted(featureIds, layers));
+  }
+
+  /** Reads a whole map document, the way the configuration reader does. */
+  private static MapSpec read(String document) {
     var mapper = JsonMapper.builder()
         .addModule(Expressions.createModule())
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         .build();
     try {
-      return mapper.readValue("""
-          {"name":"test","minzoom":0,"maxzoom":16,"feature_ids":%s,"layers":[%s]}
-          """.formatted(featureIds, layers), MapSpec.class);
+      return mapper.readValue(document, MapSpec.class);
     } catch (Exception e) {
       throw new IllegalArgumentException(e);
     }
@@ -195,13 +200,26 @@ class MapCompilerTest {
     assertTrue(message.contains("sourceLayer"), message);
   }
 
+  /**
+   * The tile properties moved into the source, and a map that still declares them at the top level
+   * would otherwise load, ignore them and cover the default zoom range from nowhere.
+   */
   @Test
-  void collectsTheSchemasInTheOrderTheyAreDeclared() {
-    var spec = spec(
-        layer("a", "building", BUILDING_SOURCE + ",\"sourceSchema\":\"b.sql\"") + ","
-            + layer("b", "leisure",
-                "\"sourceQueries\":[{\"minzoom\":1,\"maxzoom\":20,\"from\":\"osm_leisure\"}],"
-                    + "\"sourceSchema\":\"l.sql\""));
-    assertEquals(List.of("b.sql", "l.sql"), MapCompiler.schemas(spec));
+  void refusesTheTilePropertiesAtTheTopLevel() {
+    var error = assertThrows(Exception.class, () -> read("""
+        {"name":"test","tilejson":"http://localhost/tiles.json","layers":[]}
+        """));
+    var message = error.getCause() == null ? error.getMessage() : error.getCause().getMessage();
+    assertTrue(message.contains("source.url"), message);
+  }
+
+  /** An omitted source is the defaults, so that reading the format tells the whole story. */
+  @Test
+  void fillsInTheSourceDefaults() {
+    var source = read("{\"name\":\"test\",\"layers\":[]}").source();
+    assertEquals("baremaps", source.id());
+    assertEquals(0, source.minzoom());
+    assertEquals(20, source.maxzoom());
+    assertFalse(source.featureIds());
   }
 }

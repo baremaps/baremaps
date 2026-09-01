@@ -20,7 +20,6 @@ export default {
     sourceQueries: [
         {"minzoom": 13, "maxzoom": 20, "from": "osm_building"},
     ],
-    sourceSchema: 'layers/building/create.sql',
     layout: {
         visibility: 'visible',
     },

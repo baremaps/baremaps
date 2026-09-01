@@ -52,7 +52,9 @@ max_wal_senders = 0
 Assuming that the necessary requirements have been installed, the database can be populated with the following commands.
 
 ```
-// This command creates the database schema
+// This command creates the database schema. It drops the tables an import writes
+// into, so it refuses to run against a database that already holds data unless
+// you pass --force.
 baremaps map create --map map.js
 
 // This command imports the data into the database
@@ -88,11 +90,48 @@ baremaps map dev --log-level DEBUG \
 
 ## Editing the map
 
-`map.js` holds a few properties of the map as a whole and its layers, in the
-order they are painted. Baremaps derives both
+`map.js` describes the map once, and baremaps derives both
 [the style](https://maplibre.org/maplibre-style-spec/) and
 [the tileset](https://github.com/mapbox/tilejson-spec/tree/master/2.2.0) from
-it.
+it. The document has three parts, and every property belongs to exactly one of
+them:
+
+```
+export default {
+    // How the map presents itself, in the style specification's own vocabulary.
+    name: 'OpenStreetMap Vecto',
+    center: [0, 0],
+    zoom: 2,
+    sprite: 'https://www.baremaps.com/assets/icons/icons',
+    glyphs: 'https://www.baremaps.com/assets/fonts/{fontstack}/{range}.pbf',
+
+    // The tiles the layers read, which is that specification's vector source.
+    source: {
+        url: 'http://localhost:9000/tiles.json',
+        tiles: ['http://localhost:9000/tiles/{z}/{x}/{y}.mvt'],
+        bounds: [-180, -85, 180, 85],
+        minzoom: 0,
+        maxzoom: 16,
+        attribution: '© OpenStreetMap',
+    },
+
+    // What the tiles are built out of, which the browser never sees.
+    database: 'jdbc:postgresql://localhost:5432/baremaps',
+    schema: ['queries/initialize.sql', /* ... */],
+
+    // The layers, bottom to top.
+    layers: [background, /* ... */],
+};
+```
+
+`url`, `tiles`, `bounds`, `minzoom`, `maxzoom` and `attribution` mean inside
+`source` what they mean in the style specification, and are written back out
+unchanged. There is one source and every layer reads it, so it needs no name of
+its own: `id` defaults to `baremaps`, `minzoom` to 0 and `maxzoom` to 20, and
+`featureIds` is off by default, because a style cannot draw with a feature
+identifier and identifiers compress badly. These properties used to sit at the
+top level, where they read as properties of the map rather than of its tiles; a
+map that still declares them there is refused rather than quietly ignored.
 
 A layer is a MapLibre style layer that also says where its features come from:
 
@@ -104,15 +143,43 @@ export default {
     sourceQueries: [
         {minzoom: 13, maxzoom: 20, from: 'osm_building'},
     ],
-    sourceSchema: 'layers/building/create.sql',
     paint: { /* ... */ },
 };
 ```
 
-Everything about a subject therefore lives with it: open `layers/building/` to
-work on buildings. A source layer usually feeds several layers — nine draw from
-`highway`, seven from `point` — so exactly one of them carries `sourceQueries`,
-and the compiler refuses a source layer declared twice or not at all.
+A layer that draws more than one feature class declares them as `directives`,
+one per class, and `asLayerObject` merges them into the `filter`, `layout` and
+`paint` of a single style layer. They are the layer's bulk, but they belong to
+it, so they are nested inside it rather than declared beside it:
+
+```
+export default asLayerObject({
+    id: 'railway_tunnel',
+    type: 'line',
+    sourceLayer: 'railway',
+    filter: ['==', ['get', 'tunnel'], 'yes'],
+    directives: withSortKeys([
+        {filter: ['==', ['get', 'railway'], 'subway'],
+         'line-color': theme.railwayTunnelColor,
+         'line-width-stops': theme.railwaySubwayLineWidth},
+        // ...
+    ]),
+});
+```
+
+The layer's own `filter` narrows what it draws at all; each directive's `filter`
+picks the class it applies to, and their order decides which wins where two
+match. `withSortKeys` derives the `fill-sort-key` and `line-sort-key` that keep
+that order on screen, and `withSymbolSortKeys` does the same for labels. The
+wrapper is written out at each layer rather than applied for it, because which
+one a layer wants does not follow from what it draws.
+
+A layer module lives at `layers/<topic>/<name>.js` and
+`map.js` imports it under the two joined by an underscore, so a binding can be
+read off a path and a path off a binding. A source layer usually feeds several
+layers — nine draw from `highway`, seven from `point` — so exactly one of them
+carries `sourceQueries`, and the compiler refuses a source layer declared twice
+or not at all.
 
 A query names the relation and, optionally, a `filter`, written in the same
 expression language the style filters in:
@@ -141,6 +208,39 @@ level, so a tile carries what is drawn and nothing else. Adding a directive that
 reads a new tag is enough to make the tiles carry it, and removing the last
 directive that reads one is enough to make them stop.
 
+### Where the sql lives
+
+`layers/` holds JavaScript and nothing else. Every script that has to run before
+the layers do lives in `queries/`, and `map.js` lists them in the order they run:
+
+```
+queries/initialize.sql   extensions
+queries/functions.sql    the functions the queries call
+queries/header.sql       the tables an import writes into
+queries/node.sql
+queries/way.sql
+queries/relation.sql
+queries/member.sql
+queries/linestring.sql
+queries/views.sql        one view per source layer
+queries/point.sql        the zoom chain the point layer is read from
+```
+
+`queries/views.sql` holds one view per source layer, which is the relation a
+layer names in `sourceQueries`. A generalized layer's chain of levels is named
+after that relation too, so the name is the handle rather than an alias. Most of
+the views are one filter on `osm_way`, and keeping them side by side rather than
+one per directory is what makes a subject filtered unlike its neighbours visible
+instead of buried.
+
+Two scripts do not fit that shape and keep their own file. `point.sql` builds
+twenty views rather than one, a chain of zoom levels each holding the kinds of
+point worth drawing at it. `ocean.sql` reads the tables the shapefile import
+creates, so `import.js` runs it there rather than with the rest.
+
+`queries/assertions.sql` and `queries/statistics.sql` are run by hand and belong
+to no pipeline.
+
 The keys this format defines are camelCase; the ones that pass through to a
 specification keep its spelling, which is why the property names inside `layout`
 and `paint` are untouched and the style is written back out with `source-layer`.
@@ -149,12 +249,52 @@ A layer pasted from a style is refused rather than quietly ignored.
 Anything the compiler can work out is left out. No layer names the source it
 reads, because there is only one; the style version, the `sources` block and the
 zoom range of each query are filled in the same way. What cannot be derived
-stays declared: `simplify`, a tolerance in tile pixels, and `feature_ids`, off by
-default because a style cannot draw with a feature identifier and identifiers
-compress badly.
+stays declared, such as `simplify`, a tolerance in tile pixels.
 
-`baremaps map compile --map map.js --style style.json --tileset tileset.json`
-writes out what was derived, which is useful for reviewing it.
+### Generalizing
+
+A source layer too dense to draw when the map zooms out declares how it is
+thinned, and baremaps builds and names the levels it is then read from. The
+query above them names the relation once, `from: 'osm_leisure'`, and never a
+level.
+
+```
+generalize: {
+    by: 'leisure',
+    values: ['park', 'pitch', 'garden', /* ... */],
+},
+```
+
+Below zoom 13, neighbouring areas sharing that value are dilated until they
+touch, merged, eroded back and simplified, one level reading the one above it.
+
+Line work is thinned differently, because two roads that meet are already one
+line after the first pass and merging again gains nothing. `kind: 'lines'`
+merges once into a single relation that every level then simplifies out of,
+dropping what is too short to see, and narrows the classes as the map zooms out:
+
+```
+generalize: {
+    kind: 'lines',
+    by: 'highway',
+    values: ['motorway', 'trunk', 'primary', /* ... */],
+    minzoom: {motorway: 4, trunk: 6, primary: 6, residential: 11, /* ... */},
+},
+```
+
+`minzoom` is the lowest zoom each value is still drawn at: a motorway is worth a
+pixel at zoom 4 and a residential street is not. A value with no entry is drawn
+to the bottom of the chain, which is the lowest zoom the layer is queried at.
+
+What survives and how much detail it loses stays declared, because it is a
+judgement about the map. Everything else follows: that a level exists, what it
+is called, that each reads the right input, and therefore the order they are
+built and refreshed in. `refresh.js` refreshes the chain in dependency order
+without being told about it.
+
+`baremaps map compile --map map.js --style style.json --tileset tileset.json
+--sql generalize.sql` writes out what was derived, which is useful for reviewing
+it.
 
 The tileset format that `map.js` replaces is still accepted: pass `--tileset`
 and `--style` instead of `--map`.

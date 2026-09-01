@@ -36,11 +36,11 @@ import theme from './theme.js';
 import map from './map.js';
 import {Color} from './utils/color.js';
 
-// The style the map describes, which is the document without its recipe. This mirrors what
-// MapCompiler derives, so that the spec check below validates what MapLibre is actually served.
 // The style the map describes, derived the way MapCompiler derives it: the map-wide properties a
-// renderer uses, and the layers with the source filled in and the tileset extensions dropped.
-const source = map.source ?? 'baremaps';
+// renderer uses, and the layers with the source filled in and the tileset extensions dropped. This
+// mirrors what MapCompiler does, so that the spec check below validates what MapLibre is served.
+const source = map.source ?? {};
+const id = source.id ?? 'baremaps';
 const style = {
     version: 8,
     name: map.name,
@@ -48,9 +48,9 @@ const style = {
     zoom: map.zoom,
     sprite: map.sprite,
     glyphs: map.glyphs,
-    sources: {[source]: {type: 'vector', url: map.tilejson}},
+    sources: {[id]: {type: 'vector', url: source.url}},
     layers: map.layers.map(({sourceQueries, sourceSchema, sourceLayer, ...layer}) =>
-        ({...layer, 'source-layer': sourceLayer, source: layer.source ?? source})),
+        ({...layer, 'source-layer': sourceLayer, source: layer.source ?? id})),
 };
 
 const root = dirname(fileURLToPath(import.meta.url));

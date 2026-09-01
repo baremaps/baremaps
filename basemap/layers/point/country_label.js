@@ -14,19 +14,7 @@
 import theme from "../../theme.js";
 import {asLayerObject, withSymbolSortKeys} from "../../utils/utils.js";
 
-let directives = [
-    {
-        filter: [
-            'all',
-            ['==', ['get', 'place'], 'country']
-        ],
-        'text-size': 16,
-        'text-color': theme.placeCountryTextColor,
-        'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
-    },
-];
-
-export default asLayerObject(withSymbolSortKeys(directives), {
+export default asLayerObject({
     id: 'country_label',
     type: 'symbol',
     sourceLayer: 'point',
@@ -41,4 +29,15 @@ export default asLayerObject(withSymbolSortKeys(directives), {
         'text-halo-color': theme.placeCountryTextHaloColor,
         'text-halo-width': 1,
     },
+    directives: withSymbolSortKeys([
+        {
+            filter: [
+                'all',
+                ['==', ['get', 'place'], 'country']
+            ],
+            'text-size': 16,
+            'text-color': theme.placeCountryTextColor,
+            'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
+        },
+    ]),
 });
