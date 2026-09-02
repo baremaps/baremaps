@@ -50,6 +50,13 @@ const landInstitution = 'rgb(241, 238, 228)';
 // which is darker than either by a wide margin.
 const building = 'rgb(230, 229, 227)';
 const buildingOutline = 'rgb(188, 186, 184)';
+// A building on land that is worked, traded on or farmed, one step off the neutral above and
+// no further. These are read in quantity and against each other, so what tells them apart is
+// which way each leans, warm for trade, cool for industry, earth for farming, and not how dark
+// it is: a building that darkens with its zoning reads as a taller building.
+const buildingCommercial = 'rgb(234, 226, 216)';
+const buildingIndustrial = 'rgb(224, 227, 230)';
+const buildingAgricultural = 'rgb(232, 226, 211)';
 
 // Water is the most saturated thing on the map, being the thing a reader finds first.
 const water = 'rgb(159, 218, 244)';
@@ -145,8 +152,11 @@ export default {
     barrierHedgeLineColor: greenDeep,
     barrierWallLineColor: 'rgb(206, 208, 212)',
     boundaryAdminLevelLineColor: 'rgb(192, 186, 196)',
+    buildingAgriculturalFillColor: buildingAgricultural,
     buildingCemeteryTextColor: greenInk,
+    buildingCommercialFillColor: buildingCommercial,
     buildingFillColor: building,
+    buildingIndustrialFillColor: buildingIndustrial,
     buildingNumberTextColor: 'rgb(152, 150, 144)',
     buildingNumberTextHaloColor: halo,
     buildingOutlineColor: buildingOutline,

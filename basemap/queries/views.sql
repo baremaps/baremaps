@@ -15,8 +15,10 @@
 -- One view per source layer: where each layer's features come from.
 --
 -- A layer names one of these in its `sourceQueries`, and a generalized layer's chain of zoom
--- levels is named after it too, so the name is the handle rather than an alias. They read the base
--- tables and never each other, so the order below is alphabetical rather than a dependency.
+-- levels is named after it too, so the name is the handle rather than an alias. Most read the base
+-- tables and nothing else, so the order below is alphabetical rather than a dependency. The
+-- buildings at the end are the exception: a building is coloured by the land it stands on, so it
+-- reads the landuse, and the two are therefore written in the order they have to be created in.
 --
 -- Most are one filter on osm_way, and are kept side by side rather than each in its own file so
 -- that a subject styled differently from its neighbours is visible instead of buried.
@@ -117,54 +119,109 @@ SELECT id, tags, geom FROM osm_relation
 WHERE geom IS NOT NULL AND tags ? 'tourism';
 
 -- A building carries the height the style extrudes it by under any of several tags, in metres or
--- in levels. Deriving it here rather than in the style keeps that spelling out of every layer that
--- reads it. A building below ground is dropped: `layer` is negative and nothing above it would be
--- drawn over it.
+-- in levels, and it carries the zoning of the land it stands on, which is not on the building at
+-- all. Deriving both here rather than in the style keeps that spelling out of every layer that
+-- reads them. A building below ground is dropped: `layer` is negative and nothing above it would
+-- be drawn over it.
+--
+-- The buildings are named apart from the view the layers read because two things need them: that
+-- view, and the zoning join it reads, which has to see the same buildings without reading the view
+-- its own result is joined into. A building is identified by which element it is as well as by its
+-- id, way ids and relation ids being drawn from separate sequences that overlap.
 
-CREATE OR REPLACE VIEW osm_building AS
-SELECT
-    id,
-    tags || jsonb_build_object(
-        'extrusion:base',
-        CASE
-            WHEN tags ? 'min_height' THEN convert_to_number(tags ->> 'min_height', 0)
-            WHEN tags ? 'building:min_height' THEN convert_to_number(tags ->> 'building:min_height', 0)
-            WHEN tags ? 'building:min_level' THEN convert_to_number(tags ->> 'building:min_level', 0) * 3
-            ELSE 0
-        END,
-        'extrusion:height',
-        CASE
-            WHEN tags ? 'height' THEN convert_to_number(tags ->> 'height', 6)
-            WHEN tags ? 'building:height' THEN convert_to_number(tags ->> 'building:height', 6)
-            WHEN tags ? 'building:levels' THEN convert_to_number(tags ->> 'building:levels', 2) * 3
-            ELSE 6
-        END) AS tags,
-    geom
-FROM osm_way
+CREATE OR REPLACE VIEW osm_building_element AS
+SELECT 'way' AS element, id, tags, geom FROM osm_way
 WHERE (tags ? 'building' OR tags ? 'building:part')
   AND NOT EXISTS (SELECT 1 FROM osm_member_tag
                   WHERE member_ref = osm_way.id
                     AND tag_key IN ('building', 'building:part'))
   AND (NOT tags ? 'layer' OR convert_to_number(tags ->> 'layer', 0) >= 0)
-UNION
+UNION ALL
+SELECT 'relation' AS element, id, tags, geom FROM osm_relation
+WHERE (tags ? 'building' OR tags ? 'building:part')
+  AND (NOT tags ? 'layer' OR convert_to_number(tags ->> 'layer', 0) >= 0);
+
+-- The zoning a building stands on, resolved once rather than per tile.
+--
+-- OpenStreetMap has no zoning, so `landuse` stands in for it: it is what says that one part of a
+-- town is industry and another is housing, and it is the only thing in the data that does. What a
+-- point-in-polygon costs is the reason this is a table and not a join in the tile query: answering
+-- it while a tile is built takes a dense tile from twenty milliseconds to several hundred, and
+-- answering it once takes the same tile back to twenty.
+--
+-- Landuse polygons are subdivided first. A forest or a farm is one polygon of many thousand
+-- vertices, and a bounding box test that hits it hands the whole outline to the point test; cut
+-- into pieces small enough that the box means something, the index does the work it is there for.
+-- The parts carry the area of the polygon they came from, because that is what ranks them: a
+-- building standing on a retail park inside an industrial estate is on the retail park, and the
+-- smaller area is the one that says so.
+
+DROP MATERIALIZED VIEW IF EXISTS osm_zoning_part CASCADE;
+
+CREATE MATERIALIZED VIEW osm_zoning_part AS
 SELECT
-    id,
-    tags || jsonb_build_object(
+    tags ->> 'landuse' AS zoning,
+    ST_Area(geom) AS area,
+    ST_Subdivide(geom, 128) AS geom
+FROM osm_landuse
+WHERE geom IS NOT NULL AND ST_Dimension(geom) = 2;
+
+CREATE INDEX IF NOT EXISTS osm_zoning_part_geom_index ON osm_zoning_part USING GIST(geom);
+
+DROP MATERIALIZED VIEW IF EXISTS osm_building_zoning CASCADE;
+
+CREATE MATERIALIZED VIEW osm_building_zoning AS
+SELECT DISTINCT ON (building.id, building.element)
+    building.element,
+    building.id,
+    zone.zoning
+FROM (
+    SELECT element, id, ST_PointOnSurface(geom) AS geom
+    FROM osm_building_element
+    WHERE geom IS NOT NULL AND ST_Dimension(geom) = 2
+) AS building
+JOIN osm_zoning_part AS zone
+  ON zone.geom && building.geom AND ST_Intersects(zone.geom, building.geom)
+ORDER BY building.id, building.element, zone.area;
+
+-- The zoning is carried in the index rather than only pointed at by it, so that the lookup a tile
+-- makes for every building it draws is answered without reaching the table at all.
+
+CREATE UNIQUE INDEX IF NOT EXISTS osm_building_zoning_index
+    ON osm_building_zoning (id, element) INCLUDE (zoning);
+
+CREATE OR REPLACE VIEW osm_building AS
+SELECT
+    building.id,
+    building.tags || jsonb_build_object(
         'extrusion:base',
         CASE
-            WHEN tags ? 'min_height' THEN convert_to_number(tags ->> 'min_height', 0)
-            WHEN tags ? 'building:min_height' THEN convert_to_number(tags ->> 'building:min_height', 0)
-            WHEN tags ? 'building:min_level' THEN convert_to_number(tags ->> 'building:min_level', 0) * 3
+            WHEN building.tags ? 'min_height'
+                THEN convert_to_number(building.tags ->> 'min_height', 0)
+            WHEN building.tags ? 'building:min_height'
+                THEN convert_to_number(building.tags ->> 'building:min_height', 0)
+            WHEN building.tags ? 'building:min_level'
+                THEN convert_to_number(building.tags ->> 'building:min_level', 0) * 3
             ELSE 0
         END,
         'extrusion:height',
         CASE
-            WHEN tags ? 'height' THEN convert_to_number(tags ->> 'height', 6)
-            WHEN tags ? 'building:height' THEN convert_to_number(tags ->> 'building:height', 6)
-            WHEN tags ? 'building:levels' THEN convert_to_number(tags ->> 'building:levels', 2) * 3
+            WHEN building.tags ? 'height'
+                THEN convert_to_number(building.tags ->> 'height', 6)
+            WHEN building.tags ? 'building:height'
+                THEN convert_to_number(building.tags ->> 'building:height', 6)
+            WHEN building.tags ? 'building:levels'
+                THEN convert_to_number(building.tags ->> 'building:levels', 2) * 3
             ELSE 6
-        END) AS tags,
-    geom
-FROM osm_relation
-WHERE (tags ? 'building' OR tags ? 'building:part')
-  AND (NOT tags ? 'layer' OR convert_to_number(tags ->> 'layer', 0) >= 0);
+        END)
+    -- A building on no zoning carries no zoning key, rather than one holding null: a key that is
+    -- always present answers `tags ? 'zoning'` for every building and would quietly defeat the
+    -- test a query uses to skip features it cannot draw.
+    || CASE
+           WHEN zoning.zoning IS NULL THEN '{}'::jsonb
+           ELSE jsonb_build_object('zoning', zoning.zoning)
+       END AS tags,
+    building.geom
+FROM osm_building_element AS building
+LEFT JOIN osm_building_zoning AS zoning
+       ON zoning.id = building.id AND zoning.element = building.element;

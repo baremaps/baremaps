@@ -68,13 +68,16 @@ baremaps workflow execute --file refresh.js
 
 The database can periodically be updated with the following commands. 
 The update workflow will download the latest changes from OpenStreetMap (osc.xml) and apply them to the database.
-Refreshing the materialized views is costly and only necessary if the low zoom levels need to be updated, therefore it is optional.
+Refreshing the materialized views is costly, so it is a separate command. The low zoom levels
+are read from those views, and so is the zoning a building is coloured by, so an update that is
+not followed by a refresh leaves both showing the map as it stood at the last one: buildings
+added since are drawn, in the colour of a building on no zoning at all.
 
 ```
 // This command updates the database
 baremaps workflow execute --file update.js
 
-// This command refreshes the materialized views (optional)
+// This command refreshes the materialized views
 baremaps workflow execute --file refresh.js
 ```
 
@@ -239,6 +242,14 @@ after that relation too, so the name is the handle rather than an alias. Most of
 the views are one filter on `osm_way`, and keeping them side by side rather than
 one per directory is what makes a subject filtered unlike its neighbours visible
 instead of buried.
+
+The buildings at the end of that file are the one place it holds more than a
+filter. A building is coloured by the land it stands on, which is not a fact
+the building carries: it is a point-in-polygon against the landuse, and asking
+it while a tile is built costs more than everything else the tile does. So it
+is answered once into a materialized view and read back by a lookup, and the
+landuse is subdivided into a second one first, because a bounding box around a
+whole forest excludes nothing.
 
 Two scripts do not fit that shape and keep their own file. `point.sql` builds
 twenty views rather than one, a chain of zoom levels each holding the kinds of
