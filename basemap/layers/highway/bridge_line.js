@@ -15,11 +15,10 @@ import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
 export default asLayerObject({
-    id: 'bridge_line',
+    id: 'highway_bridge_line',
     sourceLayer: 'highway',
     type: 'line',
     layout: {
-        visibility: 'visible',
         'line-cap': 'butt',
         'line-join': 'miter',
     },
@@ -34,7 +33,7 @@ export default asLayerObject({
                 ['==', ['get', 'highway'], 'pedestrian'],
                 ['!=', ['get', 'area'], 'yes'],
             ],
-            'line-color': theme.highwayPedestrianLineColor,
+            'line-color': theme.highwayPedestrianBridgeLineColor,
             'line-width-stops': theme.highwayPedestrianLineWidth,
         },
         {
@@ -142,15 +141,6 @@ export default asLayerObject({
             filter: ['==', ['get', 'highway'], 'raceway'],
             'line-color': theme.highwayRacewayBridgeLineColor,
             'line-width-stops': theme.highwayRacewayLineWidth,
-        },
-        {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'pedestrian'],
-                ['!=', ['geometry-type'], 'Polygon'],
-            ],
-            'line-color': theme.highwayPedestrianBridgeLineColor,
-            'line-width-stops': theme.highwayPedestrianLineWidth,
         },
     ]),
 });

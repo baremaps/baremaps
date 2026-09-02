@@ -22,7 +22,6 @@ export default asLayerObject({
         {"minzoom": 13, "maxzoom": 20, "from": "osm_attraction"},
     ],
     layout: {
-        visibility: 'visible',
         'line-cap': 'round',
         'line-join': 'round',
     },

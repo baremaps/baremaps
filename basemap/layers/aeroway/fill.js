@@ -15,17 +15,13 @@ import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
 export default asLayerObject({
-    id: 'aeroway_polygon',
+    id: 'aeroway_fill',
     type: 'fill',
     sourceLayer: 'aeroway',
     sourceQueries: [
         {"minzoom": 13, "maxzoom": 20, "from": "osm_aeroway"},
     ],
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
-        'fill-antialias': true,
     },
     directives: withSortKeys([
         {

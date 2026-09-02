@@ -15,13 +15,12 @@ import theme from "../../theme.js";
 import {asLayerObject, withSymbolSortKeys} from "../../utils/utils.js";
 
 export default asLayerObject({
-    id: 'country_label',
+    id: 'point_country_label',
     type: 'symbol',
     sourceLayer: 'point',
     'minzoom': 1,
     'maxzoom': 9,
     layout: {
-        visibility: 'visible',
         'text-font': ['Noto Sans Regular'],
         'text-field': ['get', 'name'],
     },

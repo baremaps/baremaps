@@ -22,9 +22,6 @@ export default asLayerObject({
     sourceQueries: [
         {"minzoom": 14, "maxzoom": 20, "from": "osm_man_made"},
     ],
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
         'fill-antialias': false,
     },

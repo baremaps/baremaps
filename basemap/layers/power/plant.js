@@ -11,25 +11,19 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  **/
-
 import theme from "../../theme.js";
 
 export default {
-    id: 'man_made_pier_label',
-    type: 'symbol',
-    filter: ['all', ['==', ['get', 'man_made'], 'pier']],
-    sourceLayer: 'man_made',
-    layout: {
-        'text-field': ['get', 'name'],
-        'text-font': ['Noto Sans Regular'],
-        'symbol-placement': 'line-center',
-        'text-size': 11,
-        visibility: 'visible',
-    },
-    minzoom: 15,
+    id: 'power_plant',
+    type: 'fill',
+    sourceLayer: 'power',
+    sourceQueries: [
+        {"minzoom": 13, "maxzoom": 20, "from": "osm_power"},
+    ],
     paint: {
-        'text-color': theme.manMadePierTextColor,
-        'text-halo-color': theme.manMadePierTextHaloColor,
-        'text-halo-width': 1.2,
+        'fill-antialias': false,
+        'fill-color': theme.powerPlantBackgroundFillColor,
+        'fill-outline-color': theme.powerPlantBackgroundOutlineColor,
     },
+    filter: ['any', ['==', ['get', 'power'], 'plant'], ['==', ['get', 'power'], 'substation']],
 }

@@ -15,12 +15,9 @@ import {asLayerObject} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
 export default asLayerObject({
-    id: 'amenity_fill_2',
+    id: 'amenity_fountain',
     type: 'fill',
     sourceLayer: 'amenity',
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
         'fill-antialias': false,
     },

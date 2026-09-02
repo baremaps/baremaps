@@ -16,11 +16,10 @@ import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
 export default asLayerObject({
-    id: 'tunnel_line',
+    id: 'highway_tunnel_line',
     sourceLayer: 'highway',
     type: 'line',
     layout: {
-        visibility: 'visible',
         'line-cap': 'square',
         'line-join': 'miter',
     },
@@ -36,7 +35,7 @@ export default asLayerObject({
                 ['==', ['get', 'highway'], 'pedestrian'],
                 ['!=', ['get', 'area'], 'yes'],
             ],
-            'line-color': theme.highwayPedestrianLineColor,
+            'line-color': theme.highwayPedestrianTunnelLineColor,
             'line-width-stops': theme.highwayPedestrianLineWidth,
         },
         {
@@ -66,8 +65,8 @@ export default asLayerObject({
             'line-width-stops': theme.highwayMinorLineWidth,
         },
         {
-            filter: ['all', ['==', ['get', 'highway'], 'track']],
-            'line-color': theme.highwayTrackLineColor,
+            filter: ['==', ['get', 'highway'], 'track'],
+            'line-color': theme.highwayTrackTunnelLineColor,
             'line-width-stops': theme.highwayMinorLineWidth,
         },
         {
@@ -136,23 +135,9 @@ export default asLayerObject({
             'line-width-stops': theme.highwayServiceLineWidth,
         },
         {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'pedestrian'],
-                ['!=', ['geometry-type'], 'Polygon'],
-            ],
-            'line-color': theme.highwayPedestrianTunnelLineColor,
-            'line-width-stops': theme.highwayPedestrianLineWidth,
-        },
-        {
             filter: ['==', ['get', 'highway'], 'raceway'],
             'line-color': theme.highwayRacewayTunnelLineColor,
             'line-width-stops': theme.highwayRacewayLineWidth,
-        },
-        {
-            filter: ['==', ['get', 'highway'], 'track'],
-            'line-color': theme.highwayTrackTunnelLineColor,
-            'line-width-stops': theme.highwayMinorLineWidth,
         },
     ]),
 });

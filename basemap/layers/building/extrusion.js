@@ -14,7 +14,7 @@
 import theme from "../../theme.js";
 
 export default {
-    id: 'building-extrusion',
+    id: 'building_extrusion',
     type: 'fill-extrusion',
     sourceLayer: 'building',
     filter: ['all',
@@ -22,9 +22,6 @@ export default {
         ['!=', ['get', 'building'], 'no'],
         ['!=', ['get', 'building:part'], 'no']
     ],
-    layout: {
-        visibility: 'visible',
-    },
     minzoom: 15,
     paint: {
         "fill-extrusion-base": [

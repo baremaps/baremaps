@@ -24,9 +24,6 @@ export default {
         ["==", ["get", "power"], "catenary_mast"]
     ],
     sourceLayer: "point",
-    "layout": {
-        "visibility": "visible"
-    },
     "paint": {
         'circle-pitch-alignment': 'map',
         "circle-color": theme.powerTowerCircleColor,

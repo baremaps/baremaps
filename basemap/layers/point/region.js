@@ -24,14 +24,13 @@ import theme from "../../theme.js";
  * a map of a city: the name of a canton over a street corner locates nothing.
  */
 export default {
-    id: 'region_label',
+    id: 'point_region',
     type: 'symbol',
     sourceLayer: 'point',
     minzoom: 4,
     maxzoom: 11,
     filter: ['in', ['get', 'place'], ['literal', ['state', 'region', 'province']]],
     layout: {
-        visibility: 'visible',
         'text-font': ['Noto Sans Regular'],
         'text-field': ['get', 'name'],
         'text-size': 12,

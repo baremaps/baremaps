@@ -16,7 +16,7 @@ import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
 export default asLayerObject({
-    id: 'natural',
+    id: 'natural_background',
     type: 'fill',
     sourceLayer: 'natural',
     sourceQueries: [
@@ -39,9 +39,6 @@ export default asLayerObject({
             'sand',
             'scree'
         ],
-    },
-    layout: {
-        visibility: 'visible',
     },
     paint: {
         'fill-antialias': false,

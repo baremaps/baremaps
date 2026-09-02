@@ -29,17 +29,13 @@ import {asLayerObject, withSymbolSortKeys} from "../../utils/utils.js";
  * the one with the lower `symbol-sort-key`, which is the more populous of the two.
  */
 export default asLayerObject({
-    id: 'point_label',
+    id: 'point_place',
     type: 'symbol',
     sourceLayer: 'point',
-    'minzoom': 2,
-    'maxzoom': 24,
+    minzoom: 2,
     layout: {
-        visibility: 'visible',
         'text-font': ['Noto Sans Regular'],
         'text-field': ['get', 'name'],
-        'icon-size': 1,
-        'text-optional': true,
     },
     paint: {
         'text-halo-color': theme.placeTextHaloColor,

@@ -33,7 +33,6 @@ export default {
     minzoom: 13,
     filter: ['==', ['get', 'index'], 'yes'],
     layout: {
-        visibility: 'visible',
         // One label at the middle of each contour rather than one every so many pixels along it.
         // A contour is cut at the edge of the tile that carries it, so the pieces are short and
         // uneven, and spacing labels along them leaves the short pieces unlabelled.

@@ -30,7 +30,6 @@ export default asLayerObject({
     sourceLayer: 'railway',
     'type': 'line',
     'layout': {
-        'visibility': 'visible',
         'line-cap': 'round',
         'line-join': 'round',
     },

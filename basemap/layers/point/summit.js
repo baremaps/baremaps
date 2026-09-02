@@ -38,9 +38,7 @@ export default {
         ['has', 'name'],
     ],
     layout: {
-        visibility: 'visible',
         'icon-image': 'peak',
-        'icon-size': 1,
         'icon-anchor': 'bottom',
         'text-field': [
             'case',

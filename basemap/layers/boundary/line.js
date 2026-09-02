@@ -31,7 +31,7 @@ import theme from "../../theme.js";
  * would say the same thing again, and at a width of one pixel it says it as a dotted smear.
  */
 export default asLayerObject({
-    id: 'boundary',
+    id: 'boundary_line',
     type: 'line',
     sourceLayer: 'boundary',
     sourceQueries: [
@@ -50,7 +50,6 @@ export default asLayerObject({
         filter: ['==', ['get', 'boundary'], 'administrative'],
     },
     layout: {
-        visibility: 'visible',
         'line-cap': 'round',
         'line-join': 'round',
     },

@@ -31,9 +31,6 @@ export default asLayerObject({
     source: 'terrain',
     sourceLayer: 'contour',
     minzoom: 12,
-    layout: {
-        visibility: 'visible',
-    },
     directives: withSortKeys([
         {
             filter: ['==', ['get', 'index'], 'yes'],

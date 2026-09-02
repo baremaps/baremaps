@@ -11,16 +11,24 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  **/
+
 import theme from "../../theme.js";
 
-export default [
-    {
-        id: 'barrier_guard_rail',
-        type: 'line',
-        filter: ['all', ['==', ['get', 'barrier'], 'guard_rail']],
-        sourceLayer: 'barrier',
-        paint: {
-            'line-color': theme.barrierGuardRailBackgroundLineColor,
-        },
+export default {
+    id: 'man_made_pier_label',
+    type: 'symbol',
+    filter: ['all', ['==', ['get', 'man_made'], 'pier']],
+    sourceLayer: 'man_made',
+    layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Noto Sans Regular'],
+        'symbol-placement': 'line-center',
+        'text-size': 11,
     },
-]
+    minzoom: 15,
+    paint: {
+        'text-color': theme.manMadePierTextColor,
+        'text-halo-color': theme.manMadePierTextHaloColor,
+        'text-halo-width': 1.2,
+    },
+}

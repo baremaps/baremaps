@@ -19,9 +19,6 @@ export default asLayerObject({
     id: 'leisure_overlay',
     type: 'fill',
     sourceLayer: 'leisure',
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
         'fill-antialias': false,
     },

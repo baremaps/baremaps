@@ -11,11 +11,11 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  **/
-import {asLayerObject, withSortKeys} from '../../utils/utils.js';
+import {asLayerObject, withSymbolSortKeys} from '../../utils/utils.js';
 import theme from '../../theme.js';
 
 export default asLayerObject({
-    id: 'icon',
+    id: 'point_icon',
     type: 'symbol',
     sourceLayer: 'point',
     sourceQueries: [
@@ -32,8 +32,6 @@ export default asLayerObject({
     // style reads at that zoom.
     'minzoom': 16,
     layout: {
-        visibility: 'visible',
-        'icon-size': 1,
         'icon-anchor': 'bottom',
         'text-font': ['Noto Sans Regular'],
         'text-size': 11,
@@ -43,8 +41,6 @@ export default asLayerObject({
         'text-max-width': 5,
     },
     paint: {
-        'icon-opacity': 1,
-        'icon-translate-anchor': 'map',
         'icon-halo-color': theme.pointIconHaloColor,
         'icon-halo-width': 1,
         'text-halo-width': 1,
@@ -53,8 +49,15 @@ export default asLayerObject({
     /**
      * These directives are based on the following source:
      * https://wiki.openstreetmap.org/wiki/OpenStreetMap_Carto/Symbols
+     *
+     * The order they are written in is the order they win in. Where two icons want the same piece
+     * of the screen MapLibre keeps the one with the lower `symbol-sort-key`, and this layer had
+     * none: which of a bus stop and a bakery survived was decided by the order the two happened to
+     * come out of the database, so it changed between tiles and between imports of the same
+     * extract. The classes below are grouped by subject, and within the list the earlier a class is
+     * written the more likely it is to be the one drawn.
      */
-    directives: withSortKeys([
+    directives: withSymbolSortKeys([
         // Gastronomy
         {
             'filter': [
@@ -191,12 +194,6 @@ export default asLayerObject({
 
         // Historical objects
         {
-            'filter': ['==', ['get', 'historic'], 'memorial'],
-            'icon-image': 'memorial',
-            'icon-color': theme.historyIconColor,
-            'text-color': theme.historyIconColor
-        },
-        {
             'filter': ['==', ['get', 'historic'], 'archaeological_site'],
             'icon-image': 'archaeological_site',
             'icon-color': theme.historyIconColor,
@@ -211,12 +208,6 @@ export default asLayerObject({
         {
             'filter': ['==', ['get', 'historic'], 'monument'],
             'icon-image': 'monument',
-            'icon-color': theme.historyIconColor,
-            'text-color': theme.historyIconColor
-        },
-        {
-            'filter': ['==', ['get', 'historic'], 'castle'],
-            'icon-image': 'castle',
             'icon-color': theme.historyIconColor,
             'text-color': theme.historyIconColor
         },
@@ -258,7 +249,7 @@ export default asLayerObject({
         },
         {
             'filter': [
-                'any',
+                'all',
                 ['==', ['get', 'historic'], 'memorial'],
                 ['==', ['get', 'memorial'], 'stone']
             ],
@@ -337,6 +328,21 @@ export default asLayerObject({
         {
             'filter': ['==', ['get', 'man_made'], 'obelisk'],
             'icon-image': 'obelisk',
+            'icon-color': theme.historyIconColor,
+            'text-color': theme.historyIconColor
+        },
+        // A memorial or a castle that says nothing more about itself, below the kinds of each that
+        // do. Written above them, these two claimed the plaques, the statues, the busts, the
+        // palaces and the manors before their own directives were reached.
+        {
+            'filter': ['==', ['get', 'historic'], 'memorial'],
+            'icon-image': 'memorial',
+            'icon-color': theme.historyIconColor,
+            'text-color': theme.historyIconColor
+        },
+        {
+            'filter': ['==', ['get', 'historic'], 'castle'],
+            'icon-image': 'castle',
             'icon-color': theme.historyIconColor,
             'text-color': theme.historyIconColor
         },
@@ -585,7 +591,7 @@ export default asLayerObject({
         },
         {
             'filter': [
-                'any',
+                'all',
                 ['==', ['get', 'tourism'], 'information'],
                 ['==', ['get', 'information'], 'office']
             ],
@@ -595,7 +601,7 @@ export default asLayerObject({
         },
         {
             'filter': [
-                'any',
+                'all',
                 ['==', ['get', 'tourism'], 'information'],
                 ['==', ['get', 'information'], 'terminal']
             ],
@@ -605,7 +611,7 @@ export default asLayerObject({
         },
         {
             'filter': [
-                'any',
+                'all',
                 ['==', ['get', 'tourism'], 'information'],
                 ['==', ['get', 'information'], 'audioguide']
             ],
@@ -758,12 +764,6 @@ export default asLayerObject({
 
         // Transportation
         {
-            'filter': ['==', ['get', 'amenity'], 'parking'],
-            'icon-image': 'parking',
-            'icon-color': theme.transportationIconColor,
-            'text-color': theme.transportationIconColor
-        },
-        {
             'filter': [
                 'any',
                 ['all',
@@ -776,6 +776,12 @@ export default asLayerObject({
                 ]
             ],
             'icon-image': 'parking_subtle',
+            'icon-color': theme.transportationIconColor,
+            'text-color': theme.transportationIconColor
+        },
+        {
+            'filter': ['==', ['get', 'amenity'], 'parking'],
+            'icon-image': 'parking',
             'icon-color': theme.transportationIconColor,
             'text-color': theme.transportationIconColor
         },
@@ -1760,9 +1766,27 @@ export default asLayerObject({
             'icon-color': theme.manMadeIconColor,
             'text-color': theme.manMadeIconColor,
         },
+        // A tower named by both its purpose and its construction is the narrowest thing said about
+        // it, so these two come before the directives that name only one of the pair.
         {
-            'filter': ['==', ['get', 'man_made'], 'tower'],
-            'icon-image': 'tower_generic',
+            'filter': [
+                'all',
+                ['==', ['get', 'man_made'], 'tower'],
+                ['==', ['get', 'tower:type'], 'communication'],
+                ['==', ['get', 'tower:construction'], 'lattice']
+            ],
+            'icon-image': 'tower_lattice_communication',
+            'icon-color': theme.manMadeIconColor,
+            'text-color': theme.manMadeIconColor,
+        },
+        {
+            'filter': [
+                'all',
+                ['==', ['get', 'man_made'], 'tower'],
+                ['==', ['get', 'tower:type'], 'lighting'],
+                ['==', ['get', 'tower:construction'], 'lattice']
+            ],
+            'icon-image': 'tower_lattice_lighting',
             'icon-color': theme.manMadeIconColor,
             'text-color': theme.manMadeIconColor,
         },
@@ -1778,7 +1802,7 @@ export default asLayerObject({
                 ['==', ['get', 'power'], 'generator'],
                 ['any',
                     ['==', ['get', 'generator:source'], 'wind'],
-                    ['==', ['get', 'generator:method'], 'wind_turbine)']
+                    ['==', ['get', 'generator:method'], 'wind_turbine']
                 ]
             ],
             'icon-image': 'generator_wind',
@@ -1800,12 +1824,6 @@ export default asLayerObject({
         {
             'filter': ['==', ['get', 'man_made'], 'water_tower'],
             'icon-image': 'water_tower',
-            'icon-color': theme.manMadeIconColor,
-            'text-color': theme.manMadeIconColor,
-        },
-        {
-            'filter': ['==', ['get', 'man_made'], 'mast'],
-            'icon-image': 'mast',
             'icon-color': theme.manMadeIconColor,
             'text-color': theme.manMadeIconColor,
         },
@@ -1886,17 +1904,6 @@ export default asLayerObject({
         {
             'filter': [
                 'all',
-                ['==', ['get', 'man_made'], 'tower'],
-                ['==', ['get', 'tower:type'], 'communication'],
-                ['==', ['get', 'tower:construction'], 'lattice']
-            ],
-            'icon-image': 'tower_lattice_communication',
-            'icon-color': theme.manMadeIconColor,
-            'text-color': theme.manMadeIconColor,
-        },
-        {
-            'filter': [
-                'all',
                 ['==', ['get', 'man_made'], 'mast'],
                 ['==', ['get', 'tower:type'], 'lighting']
             ],
@@ -1954,17 +1961,6 @@ export default asLayerObject({
             'filter': [
                 'all',
                 ['==', ['get', 'man_made'], 'tower'],
-                ['==', ['get', 'tower:type'], 'lighting'],
-                ['==', ['get', 'tower:construction'], 'lattice']
-            ],
-            'icon-image': 'tower_lattice_lighting',
-            'icon-color': theme.manMadeIconColor,
-            'text-color': theme.manMadeIconColor,
-        },
-        {
-            'filter': [
-                'all',
-                ['==', ['get', 'man_made'], 'tower'],
                 ['==', ['get', 'tower:construction'], 'dish']
             ],
             'icon-image': 'tower_dish',
@@ -1978,6 +1974,23 @@ export default asLayerObject({
                 ['==', ['get', 'tower:construction'], 'dome']
             ],
             'icon-image': 'tower_dome',
+            'icon-color': theme.manMadeIconColor,
+            'text-color': theme.manMadeIconColor,
+        },
+        // A tower or a mast that says nothing more about itself. Written below every kind of
+        // tower and not above them: a chain answers with its first hit, and a directive asking
+        // only for `man_made=tower` claims the communication towers, the lattice towers, the
+        // watchtowers and the cooling towers before any of them is reached, leaving fourteen
+        // sprites in the sheet that nothing ever drew.
+        {
+            'filter': ['==', ['get', 'man_made'], 'tower'],
+            'icon-image': 'tower_generic',
+            'icon-color': theme.manMadeIconColor,
+            'text-color': theme.manMadeIconColor,
+        },
+        {
+            'filter': ['==', ['get', 'man_made'], 'mast'],
+            'icon-image': 'mast',
             'icon-color': theme.manMadeIconColor,
             'text-color': theme.manMadeIconColor,
         },

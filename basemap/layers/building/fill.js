@@ -30,17 +30,13 @@ import theme from "../../theme.js";
  * has by default rather than given a fourth.
  */
 export default {
-    id: 'building',
+    id: 'building_fill',
     type: 'fill',
     sourceLayer: 'building',
     sourceQueries: [
         {"minzoom": 13, "maxzoom": 20, "from": "osm_building"},
     ],
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
-        'fill-antialias': true,
         'fill-color': [
             'match', ['get', 'zoning'],
             ['commercial', 'retail'],

@@ -22,9 +22,6 @@ export default asLayerObject({
         {"minzoom": 0, "maxzoom": 10, "from": "osm_ocean_simplified"},
         {"minzoom": 10, "maxzoom": 20, "from": "osm_ocean"},
     ],
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
         'fill-antialias': false,
     },

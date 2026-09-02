@@ -17,9 +17,6 @@ export default {
     id: 'natural_tree',
     type: 'circle',
     sourceLayer: 'point',
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
         'circle-pitch-alignment': 'map',
         'circle-color': theme.naturalTreeCircleColor,

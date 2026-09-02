@@ -24,7 +24,6 @@ export default asLayerObject({
     layout: {
         'line-cap': 'round',
         'line-join': 'round',
-        visibility: 'visible',
     },
     filter: ['==', ['geometry-type'], 'LineString'],
     directives: withSortKeys([

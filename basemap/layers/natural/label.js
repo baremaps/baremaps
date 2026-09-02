@@ -34,7 +34,6 @@ export default asLayerObject({
     minzoom: 13,
     filter: ['==', ['geometry-type'], 'Polygon'],
     layout: {
-        visibility: 'visible',
         // Italic throughout: physical geography is set in italic by a convention old enough
         // that a reader follows it without being told, and `waterway_label` already does.
         'text-font': ['Noto Sans Italic'],

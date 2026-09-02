@@ -19,9 +19,6 @@ export default asLayerObject({
     id: 'landuse_overlay',
     type: 'fill',
     sourceLayer: 'landuse',
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
         'fill-antialias': false,
     },

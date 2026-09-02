@@ -14,19 +14,24 @@
 import theme from "../../theme.js";
 
 export default {
-    id: 'power_plant',
+    id: 'highway_pedestrian_area',
+    sourceLayer: 'highway',
     type: 'fill',
-    sourceLayer: 'power',
-    sourceQueries: [
-        {"minzoom": 13, "maxzoom": 20, "from": "osm_power"},
+    filter: [
+        'all',
+        ['has', 'area'], // Some pedestrian areas are not closed polygons, hence the need for this filter
+        [
+            'any',
+            ['==', ['get', 'highway'], 'pedestrian'],
+            ['==', ['get', 'highway'], 'path'],
+            ['==', ['get', 'highway'], 'sidewalk'],
+            ['==', ['get', 'highway'], 'crossing'],
+            ['==', ['get', 'highway'], 'steps'],
+            ['==', ['get', 'highway'], 'footway'],
+        ],
     ],
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
         'fill-antialias': false,
-        'fill-color': theme.powerPlantBackgroundFillColor,
-        'fill-outline-color': theme.powerPlantBackgroundOutlineColor,
+        'fill-color': theme.pedestrianAreaFillColor,
     },
-    filter: ['any', ['==', ['get', 'power'], 'plant'], ['==', ['get', 'power'], 'substation']],
 }

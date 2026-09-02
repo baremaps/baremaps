@@ -59,9 +59,6 @@ export default asLayerObject({
             'village_green'
         ],
     },
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
         'fill-antialias': false,
     },

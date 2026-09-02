@@ -17,11 +17,6 @@ import theme from '../../theme.js';
 export default {
     id: 'background',
     type: 'background',
-    layout: {
-        visibility: 'visible',
-    },
-    minzoom: 0,
-    maxzoom: 24,
     paint: {
         'background-color': theme.backgroundColor,
     },

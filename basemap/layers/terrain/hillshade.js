@@ -31,9 +31,6 @@ export default asLayerObject({
     type: 'fill',
     source: 'terrain',
     sourceLayer: 'hillshade',
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
         // The levels abut, and antialiasing every shared edge draws a seam along all of them.
         'fill-antialias': false,

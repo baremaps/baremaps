@@ -11,45 +11,28 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  **/
+
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
 export default asLayerObject({
-    id: 'route_ferry',
+    id: 'man_made_pier_line',
     type: 'line',
-    sourceLayer: 'route',
-    sourceQueries: [
-        {"minzoom": 9, "maxzoom": 13, "from": "osm_route", "filter": ["has", "route"]},
-        {"minzoom": 13, "maxzoom": 20, "from": "osm_way", "filter": ["has", "route"]},
-    ],
-    generalize: {
-        kind: 'lines',
-        by: 'route',
-        values: [
-            'bus',
-            'ferry',
-            'funicular',
-            'light_rail',
-            'railway',
-            'road',
-            'route',
-            'subway',
-            'train',
-            'tram',
-            'trolleybus'
-        ],
-    },
+    sourceLayer: 'man_made',
     layout: {
         'line-cap': 'round',
         'line-join': 'round',
-        visibility: 'visible',
     },
-    filter: ['==', ['geometry-type'], 'LineString'],
+    minzoom: 12,
     directives: withSortKeys([
         {
-            filter: ['==', ['get', 'route'], 'ferry'],
-            'line-color': theme.routeFerryLineColor,
-            'line-width': 1
-        },
+            filter: [
+                'all',
+                ['==', ["geometry-type"], 'LineString'],
+                ['==', ['get', 'man_made'], 'pier'],
+            ],
+            'line-color': theme.manMadePierLineColor,
+            'line-width-stops': theme.manMadePierLineWidth,
+        }
     ]),
 });

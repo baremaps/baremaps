@@ -19,13 +19,11 @@ export default {
     sourceLayer: 'building',
     minzoom: 16,
     layout: {
-        'text-allow-overlap': false,
         'text-anchor': 'center',
         'text-field': ['get', 'addr:housenumber'],
         'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 0],
         'text-size': 10,
-        visibility: 'visible',
     },
     paint: {
         'text-color': theme.buildingNumberTextColor,

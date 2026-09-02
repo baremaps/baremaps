@@ -15,7 +15,7 @@ import theme from "../../theme.js";
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 
 export default asLayerObject({
-    "id": "waterway",
+    id: 'waterway_line',
     "type": "line",
     sourceLayer: "waterway",
     sourceQueries: [
@@ -44,7 +44,6 @@ export default asLayerObject({
     },
     filter: ['==', ['geometry-type'], 'LineString'],
     layout: {
-        visibility: 'visible',
         'line-cap': 'round',
         'line-join': 'round',
     },

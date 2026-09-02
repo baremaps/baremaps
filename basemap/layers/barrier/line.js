@@ -22,7 +22,6 @@ export default asLayerObject({
     ],
     type: 'line',
     layout: {
-        visibility: 'visible',
         'line-cap': 'round',
         'line-join': 'round',
     },
@@ -51,6 +50,13 @@ export default asLayerObject({
             'line-color': theme.barrierCityWallLineColor,
             'line-width-stops': theme.barrierCityWallLineWidth,
         },
-
+        {
+            // Drawn here rather than in a layer of its own. A guard rail had a module and a theme
+            // colour and no place in the map, the layer never having been added to the list that
+            // paints them, so the colour was maintained for years and never once drawn.
+            filter: ['==', ['get', 'barrier'], 'guard_rail'],
+            'line-color': theme.barrierGuardRailBackgroundLineColor,
+            'line-width-stops': theme.barrierFenceLineWidth,
+        },
     ]),
 });

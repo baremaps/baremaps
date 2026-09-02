@@ -22,9 +22,6 @@ export default {
         ["==", ["get", "aerialway"], "station"],
     ],
     sourceLayer: "point",
-    "layout": {
-        "visibility": "visible"
-    },
     "paint": {
         'circle-pitch-alignment': 'map',
         "circle-color": theme.powerTowerCircleColor,

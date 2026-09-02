@@ -26,13 +26,17 @@
  * attributes the tiles carry are read off the layers that use them, per zoom level, so adding a
  * directive that reads a new tag is all it takes to make the tiles carry it.
  *
- * A layer module lives at `layers/<topic>/<name>.js` and is imported under the two joined by an
- * underscore, so a name can be read off a path and a path off a name.
+ * A layer module lives at `layers/<topic>/<name>.js`, is imported under the two joined by an
+ * underscore, and gives its layer that same name as its id, so a name can be read off a path and a
+ * path off a name. The id is the handle everything outside this map holds the layer by, from
+ * `setPaintProperty` to the `beforeId` someone inserts a layer of their own at, so it is fixed by
+ * the module rather than chosen, and `validate.js` reports the two drifting apart. A module named
+ * `style.js` is the only layer its topic has and takes the topic alone as its name.
  */
 import config from "./config.js";
 
 import background from "./layers/background/style.js";
-import power_background from "./layers/power/background.js";
+import power_plant from "./layers/power/plant.js";
 import aeroway_fill from "./layers/aeroway/fill.js";
 import landuse_background from "./layers/landuse/background.js";
 import leisure_background from "./layers/leisure/background.js";
@@ -45,14 +49,14 @@ import leisure_overlay from "./layers/leisure/overlay.js";
 import ocean_overlay from "./layers/ocean/overlay.js";
 import terrain_hillshade from "./layers/terrain/hillshade.js";
 import terrain_contour from "./layers/terrain/contour.js";
-import terrain_contour_label from "./layers/terrain/label.js";
+import terrain_contour_label from "./layers/terrain/contour_label.js";
 import natural_line from "./layers/natural/line.js";
 import barrier_line from "./layers/barrier/line.js";
 import waterway_line from "./layers/waterway/line.js";
 import waterway_area from "./layers/waterway/area.js";
-import man_made_fill from "./layers/man_made/fill.js";
-import man_made_line from "./layers/man_made/line.js";
-import man_made_label from "./layers/man_made/label.js";
+import man_made_bridge from "./layers/man_made/bridge.js";
+import man_made_pier_line from "./layers/man_made/pier_line.js";
+import man_made_pier_label from "./layers/man_made/pier_label.js";
 import amenity_fountain from "./layers/amenity/fountain.js";
 import railway_tunnel from "./layers/railway/tunnel.js";
 import highway_tunnel_outline from "./layers/highway/tunnel_outline.js";
@@ -60,7 +64,7 @@ import highway_tunnel_line from "./layers/highway/tunnel_line.js";
 import building_fill from "./layers/building/fill.js";
 import building_number from "./layers/building/number.js";
 import highway_construction_line from "./layers/highway/construction_line.js";
-import highway_fill from "./layers/highway/fill.js";
+import highway_pedestrian_area from "./layers/highway/pedestrian_area.js";
 import highway_outline from "./layers/highway/outline.js";
 import highway_line from "./layers/highway/line.js";
 import railway_line from "./layers/railway/line.js";
@@ -69,7 +73,7 @@ import highway_bridge_outline from "./layers/highway/bridge_outline.js";
 import highway_bridge_line from "./layers/highway/bridge_line.js";
 import highway_label from "./layers/highway/label.js";
 import aeroway_line from "./layers/aeroway/line.js";
-import route from "./layers/route/style.js";
+import route_ferry from "./layers/route/ferry.js";
 import aerialway_line from "./layers/aerialway/line.js";
 import aerialway_circle from "./layers/aerialway/circle.js";
 import power_cable from "./layers/power/cable.js";
@@ -144,7 +148,7 @@ export default {
     // buildings, roads and bridges stack in that sequence whichever subject they belong to.
     layers: [
         background,
-        power_background,
+        power_plant,
         aeroway_fill,
         landuse_background,
         leisure_background,
@@ -164,9 +168,9 @@ export default {
         barrier_line,
         waterway_line,
         waterway_area,
-        man_made_fill,
-        man_made_line,
-        man_made_label,
+        man_made_bridge,
+        man_made_pier_line,
+        man_made_pier_label,
         amenity_fountain,
         railway_tunnel,
         highway_tunnel_outline,
@@ -174,7 +178,7 @@ export default {
         building_fill,
         building_number,
         highway_construction_line,
-        highway_fill,
+        highway_pedestrian_area,
         highway_outline,
         highway_line,
         railway_line,
@@ -183,7 +187,7 @@ export default {
         highway_bridge_line,
         highway_label,
         aeroway_line,
-        route,
+        route_ferry,
         aerialway_line,
         aerialway_circle,
         power_cable,

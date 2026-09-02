@@ -20,7 +20,6 @@ export default {
     layout: {
         'line-cap': 'round',
         'line-join': 'round',
-        visibility: 'visible',
     },
     paint: {
         'line-width': ['interpolate', ['exponential', 1.2], ['zoom'], 4, 0, 20, 4],

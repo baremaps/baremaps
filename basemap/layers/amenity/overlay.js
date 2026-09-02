@@ -18,11 +18,7 @@ export default asLayerObject({
     id: 'amenity_overlay',
     type: 'fill',
     sourceLayer: 'amenity',
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
-        'fill-antialias': true,
     },
     filter: ['==', ["geometry-type"], 'Polygon'],
     directives: withSortKeys([

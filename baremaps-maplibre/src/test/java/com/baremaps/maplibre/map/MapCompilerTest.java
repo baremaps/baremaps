@@ -164,6 +164,29 @@ class MapCompilerTest {
   }
 
   @Test
+  void startsALayerWhereTheFeaturesItReadsBegin() {
+    // The second layer declares nothing: it reads the building source layer, so it begins where
+    // the queries for that source layer begin rather than at zoom zero.
+    var style = MapCompiler.style(spec(building("") + "," + layer("b", "building", "")));
+    assertEquals(13, style.getLayers().get(0).getMinzoom());
+    assertEquals(13, style.getLayers().get(1).getMinzoom());
+  }
+
+  @Test
+  void keepsTheZoomALayerNamesForItself() {
+    var style = MapCompiler.style(spec(building("\"minzoom\":16")));
+    assertEquals(16, style.getLayers().get(0).getMinzoom(),
+        "a layer starting later than its data does is a decision, not an omission");
+  }
+
+  @Test
+  void leavesALayerReadingNoSourceLayerAlone() {
+    var style = MapCompiler.style(spec(building("") + ","
+        + "{\"id\":\"b\",\"type\":\"background\"}"));
+    assertNull(style.getLayers().get(1).getMinzoom());
+  }
+
+  @Test
   void dropsTheTilesetExtensionsFromTheStyle() throws Exception {
     var style = MapCompiler.style(spec(building("")));
     var json = JsonMapper.builder().build().writeValueAsString(style);

@@ -20,11 +20,13 @@ export default {
     filter: ['==', ['get', 'waterway'], 'river'],
     sourceLayer: 'waterway',
     layout: {
-        visibility: 'visible',
         'text-font': ['Noto Sans Italic'],
         'text-field': ['get', 'name'],
         'text-size': 11,
         'symbol-placement': 'line',
+        // A river bends more than a road does, so a name that will not sit along it is better
+        // dropped than wrapped around the meander the default angle allows.
+        'text-max-angle': 30,
     },
     paint: {
         'text-color': theme.waterwayTextColor,

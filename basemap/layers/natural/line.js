@@ -19,7 +19,6 @@ export default asLayerObject({
     sourceLayer: 'natural',
     type: 'line',
     layout: {
-        visibility: 'visible',
         'line-cap': 'round',
         'line-join': 'round',
     },

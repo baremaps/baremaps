@@ -16,7 +16,7 @@ import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
 export default asLayerObject({
-    id: 'leisure',
+    id: 'leisure_background',
     type: 'fill',
     sourceLayer: 'leisure',
     sourceQueries: [
@@ -36,9 +36,6 @@ export default asLayerObject({
             'swimming_pool',
             'track'
         ],
-    },
-    layout: {
-        visibility: 'visible',
     },
     paint: {
         'fill-antialias': false,

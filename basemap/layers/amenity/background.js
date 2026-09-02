@@ -25,9 +25,6 @@ export default asLayerObject({
         // Every amenity that survives the area threshold is worth merging, so no value is named.
         by: 'amenity',
     },
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
         'fill-antialias': false,
     },

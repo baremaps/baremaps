@@ -53,6 +53,26 @@ if (map.terrain) {
         attribution: map.terrain.attribution,
     };
 }
+/**
+ * The zoom each source layer's features begin at, read off the queries it is declared with.
+ * MapCompiler gives a layer that names no minzoom the one belonging to what it reads, so the same
+ * is done here for the checks below to see the style MapLibre is served.
+ */
+const floors = {};
+const terrainId = map.terrain ? (map.terrain.id ?? 'terrain') : null;
+for (const layer of map.layers) {
+    if (!layer.sourceLayer) continue;
+    let floor;
+    if (terrainId && layer.source === terrainId) {
+        floor = map.terrain.minzoom ?? 0;
+    } else if (layer.sourceQueries) {
+        floor = Math.min(...layer.sourceQueries.map((query) => query.minzoom ?? 0));
+    } else {
+        continue;
+    }
+    floors[layer.sourceLayer] = Math.min(floors[layer.sourceLayer] ?? floor, floor);
+}
+
 const style = {
     version: 8,
     name: map.name,
@@ -62,7 +82,12 @@ const style = {
     glyphs: map.glyphs,
     sources,
     layers: map.layers.map(({sourceQueries, sourceSchema, sourceLayer, ...layer}) =>
-        ({...layer, 'source-layer': sourceLayer, source: layer.source ?? id})),
+        ({
+            ...layer,
+            'source-layer': sourceLayer,
+            source: layer.source ?? id,
+            minzoom: layer.minzoom ?? (floors[sourceLayer] || undefined),
+        })),
 };
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -83,13 +108,13 @@ const parityGroups = [
     {
         name: 'highway line',
         attribute: 'highway',
-        layers: ['highway_line', 'tunnel_line', 'bridge_line'],
+        layers: ['highway_line', 'highway_tunnel_line', 'highway_bridge_line'],
         accept: [],
     },
     {
         name: 'highway outline',
         attribute: 'highway',
-        layers: ['highway_outline', 'tunnel_outline', 'bridge_outline'],
+        layers: ['highway_outline', 'highway_tunnel_outline', 'highway_bridge_outline'],
         accept: [],
     },
 ];
@@ -353,26 +378,136 @@ function checkLegacyFilters() {
 }
 
 /**
- * A `case` returns its first matching branch, so a filter repeated later in the
- * same chain is dead. Two directives for one feature class usually means an
- * edit landed in the wrong group rather than that the second was meant to lose.
+ * The tests a compiled chain makes, in the order it makes them.
+ *
+ * A directive list compiles to a `case` of filters, a `match` of values, or the two nested inside
+ * one another where the list mixes the shapes. All three answer with their first hit and fall
+ * through to what follows, so reading them as one ordered list is what says which directive a
+ * feature reaches.
+ */
+function claims(node, found = []) {
+    if (!Array.isArray(node)) return found;
+    if (node[0] === 'match' && Array.isArray(node[1]) && node[1][0] === 'get') {
+        for (let i = 2; i < node.length - 1; i += 2) {
+            for (const value of [node[i]].flat()) found.push(`${node[1][1]}=${value}`);
+        }
+        claims(node[node.length - 1], found);
+    } else if (node[0] === 'case') {
+        for (let i = 1; i < node.length - 1; i += 2) {
+            found.push(JSON.stringify(node[i]));
+        }
+        claims(node[node.length - 1], found);
+    }
+    return found;
+}
+
+/**
+ * The ways a feature can satisfy a test, each as the attribute values it would have to carry.
+ *
+ * A test is read as a disjunction of conjunctions, which is the shape a directive filter takes: an
+ * `any` offers alternatives, an `all` combines them, and an `==` pins one attribute. Anything else,
+ * a negation above all, constrains a feature without pinning an attribute and asks for nothing
+ * here, which is the safe direction: a test read as asking for less is never reported.
+ */
+function alternatives(filter) {
+    const nothing = [new Set()];
+    if (!Array.isArray(filter)) return nothing;
+    const [operator, left, right] = filter;
+    if (operator === 'any') {
+        return filter.slice(1).flatMap(alternatives);
+    }
+    if (operator === 'all') {
+        let combined = nothing;
+        for (const child of filter.slice(1)) {
+            const next = [];
+            for (const one of combined) {
+                for (const other of alternatives(child)) {
+                    next.push(new Set([...one, ...other]));
+                }
+            }
+            // A filter whose alternatives multiply out of hand is left saying nothing rather than
+            // enumerated, the check being an aid and not a solver.
+            if (next.length > 32) return nothing;
+            combined = next;
+        }
+        return combined;
+    }
+    if (operator === '==' && Array.isArray(left) && left[0] === 'get' &&
+        (typeof right === 'string' || typeof right === 'number')) {
+        return [new Set([`${left[1]}=${right}`])];
+    }
+    return nothing;
+}
+
+/** Whether every way of satisfying the second test already satisfies the first. */
+function covers(earlier, later) {
+    if (earlier.length === 0 || earlier.some((one) => one.size === 0)) return false;
+    return later.every((one) => earlier.some((other) => [...other].every((want) => one.has(want))));
+}
+
+/**
+ * A directive that asks for everything an earlier one asks for, and more, is the narrower of the
+ * two and comes second, so the chain answers with the earlier one and the narrower never draws.
+ *
+ * This is how a special case is lost: the tunnel colour of a track, written below the directive
+ * that gives every track the colour it has in the open, or the lattice tower written below the one
+ * that gives every tower the generic tower icon. Both leave a theme colour or a sprite that nothing
+ * reaches, which nothing else reports, because each directive is well formed on its own.
+ */
+function checkNarrowedDirectives() {
+    for (const layer of style.layers) {
+        const reported = new Set();
+        for (const expression of expressionsOf(layer)) {
+            walk(expression, (node) => {
+                if (node[0] !== 'case' && node[0] !== 'match') return;
+                const seen = [];
+                for (const claim of claims(node)) {
+                    const wants = claim.startsWith('[')
+                        ? alternatives(JSON.parse(claim))
+                        : [new Set([claim])];
+                    for (const earlier of seen) {
+                        if (!covers(earlier.wants, wants)) continue;
+                        const message = `${layer.id}: a directive matched by ` +
+                            `${describe(wants)} is written below one matched by ` +
+                            `${describe(earlier.wants)}, which answers first`;
+                        if (!reported.has(message)) {
+                            reported.add(message);
+                            warn('narrowed', message);
+                        }
+                    }
+                    seen.push({wants});
+                }
+            });
+        }
+    }
+}
+
+/** Name a set of alternatives the way the directive that produced it reads. */
+function describe(wants) {
+    return wants.map((one) => [...one].sort().join(' and ')).join(' or ');
+}
+
+/**
+ * A chain answers with its first hit, so a test repeated further down it is dead. Two directives
+ * for one feature class usually means an edit landed in the wrong group rather than that the
+ * second was meant to lose.
  */
 function checkShadowedDirectives() {
     for (const layer of style.layers) {
         const reported = new Set();
         for (const expression of expressionsOf(layer)) {
             walk(expression, (node) => {
-                if (node[0] !== 'case') return;
+                if (node[0] !== 'case' && node[0] !== 'match') return;
                 const seen = new Map();
-                for (let i = 1; i < node.length - 1; i += 2) {
-                    const filter = JSON.stringify(node[i]);
-                    const position = (i + 1) / 2;
-                    if (!seen.has(filter)) {
-                        seen.set(filter, position);
+                let position = 0;
+                for (const claim of claims(node)) {
+                    position += 1;
+                    if (!seen.has(claim)) {
+                        seen.set(claim, position);
                         continue;
                     }
-                    const message = `${layer.id}: directive ${position} repeats the filter of ` +
-                        `directive ${seen.get(filter)} and can never apply: ${filter}`;
+                    const message = `${layer.id}: directive ${position} repeats the test of ` +
+                        `directive ${seen.get(claim)} and can never apply: ${claim}`;
                     if (!reported.has(message)) {
                         reported.add(message);
                         error('shadowed', message);
@@ -394,6 +529,11 @@ function coverage(layer, attribute) {
                 values.add(right);
             } else if (op === 'in' && Array.isArray(right) && right[0] === 'literal') {
                 for (const value of right[1]) values.add(value);
+            } else if (op === 'match') {
+                // A branch label is one value or the list of values that share the branch.
+                for (let i = 2; i < node.length - 1; i += 2) {
+                    for (const value of [node[i]].flat()) values.add(value);
+                }
             }
         });
     }
@@ -428,6 +568,120 @@ function checkParity() {
     }
 }
 
+/**
+ * A layer's id is the name it is known by everywhere: to `setPaintProperty` and `moveLayer`, to a
+ * `beforeId` someone inserts their own layer at, and to anyone reading a tile in a debugger. So it
+ * is fixed rather than chosen, and it is the module that defines it, `<topic>_<name>` read off the
+ * path, or the topic alone where the module is the topic's only one and is named `style.js`.
+ *
+ * The ids drifted from that once already, leaving `tunnel_line` and `bridge_line` for two layers
+ * that draw highways, `icon` for one that draws points, and `amenity_fill_2` for the fountains.
+ * Nothing said which module to open for any of them.
+ */
+function checkLayerNames(files) {
+    const ids = new Map();
+    for (const file of files) {
+        const source = readFileSync(join(root, file), 'utf8');
+        for (const match of source.matchAll(/^\s*['"]?id['"]?:\s*['"]([^'"]+)['"]/gm)) {
+            ids.set(match[1], file);
+        }
+    }
+    for (const [id, file] of ids) {
+        const [, topic, module] = file.match(/^layers\/([^/]+)\/(.+)\.js$/);
+        const wanted = module === 'style' ? topic : `${topic}_${module}`;
+        if (id !== wanted) {
+            error('layer-name', `${file} defines '${id}', but a module at that path is named ` +
+                `'${wanted}'. Rename the layer, or the module if the layer is better named.`);
+        }
+    }
+}
+
+/**
+ * Properties whose value is what the renderer would have done anyway.
+ *
+ * A style is read to find out what someone decided, so a property that restates a default is a
+ * decision that was never made, sitting where one would be looked for. `visibility: 'visible'`
+ * stood on all fifty-seven layers.
+ */
+const defaults = {
+    visibility: 'visible',
+    'fill-antialias': true,
+    'icon-size': 1,
+    'icon-opacity': 1,
+    'text-opacity': 1,
+    'line-opacity': 1,
+    'fill-opacity': 1,
+    'icon-allow-overlap': false,
+    'text-allow-overlap': false,
+};
+
+/*
+ * `line-cap`, `line-join` and `symbol-placement` are deliberately not in that table. Their defaults
+ * are `butt`, `miter` and `point`, and a layer writing one of those down is saying it differs from
+ * the layer beside it: the bridges are square-ended where the roads they carry are round. Removing
+ * the words would leave the difference true and unstated.
+ */
+
+function checkDefaults() {
+    for (const layer of style.layers) {
+        if (layer.minzoom === 0) {
+            warn('default', `${layer.id}: minzoom 0 is the zoom a layer starts at anyway`);
+        }
+        if (layer.maxzoom === 24) {
+            warn('default', `${layer.id}: maxzoom 24 is the zoom a layer ends at anyway`);
+        }
+        for (const section of ['layout', 'paint']) {
+            for (const [property, value] of Object.entries(layer[section] ?? {})) {
+                if (property in defaults && value === defaults[property]) {
+                    error('default', `${layer.id}: ${property} is set to ${JSON.stringify(value)}, ` +
+                        `which is what it is when nothing sets it`);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A symbol layer drawing more than one class of thing decides which of two labels survives where
+ * they collide, and decides it with `symbol-sort-key`. Without one the winner is whichever feature
+ * the tile happens to hold first, which changes between tiles and between imports, so a label
+ * appears and disappears as the map is panned.
+ */
+function checkSymbolSortKeys() {
+    for (const layer of style.layers) {
+        if (layer.type !== 'symbol') continue;
+        const classes = claims(layer.paint?.['text-color'] ?? layer.layout?.['icon-image'] ?? []).length;
+        if (classes > 1 && layer.layout?.['symbol-sort-key'] === undefined) {
+            error('symbol-sort-key', `${layer.id}: draws ${classes} classes of symbol and gives no ` +
+                `symbol-sort-key, so which one survives a collision is undecided`);
+        }
+    }
+}
+
+/**
+ * How far a chain is walked before it answers.
+ *
+ * A `case` is a linear scan, so a feature is tested against every branch above the one that holds
+ * its answer. A `match` is a lookup and costs the same whatever it holds, so only the `case` links
+ * are counted. The icon layer was one `case` of two hundred and fifty six.
+ */
+function checkChainLength() {
+    const limit = 12;
+    for (const layer of style.layers) {
+        let longest = 0;
+        for (const expression of expressionsOf(layer)) {
+            walk(expression, (node) => {
+                if (node[0] !== 'case') return;
+                longest = Math.max(longest, (node.length - 2) / 2);
+            });
+        }
+        if (longest > limit) {
+            warn('chain', `${layer.id}: a case runs to ${longest} branches, each one a comparison ` +
+                `made before the next. Tests on one attribute belong in a match, which is a lookup`);
+        }
+    }
+}
+
 /** A layer module that nothing imports is dead weight and drifts unnoticed. */
 function checkOrphans(files) {
     // A layer module is reached through the topic that owns it, and a topic imports its layers by a
@@ -442,11 +696,27 @@ function checkOrphans(files) {
     scan('map.js');
 
     for (const file of files) {
-        if (!imported.has(file)) {
-            warn('orphan', `${file} is never imported by map.js`);
+        if (imported.has(file) || kept[file]) continue;
+        warn('orphan', `${file} is never imported by map.js`);
+    }
+    for (const file of Object.keys(kept)) {
+        if (imported.has(file)) {
+            warn('orphan', `${file} is listed as deliberately unused but map.js imports it`);
+        } else if (!files.includes(file)) {
+            warn('orphan', `${file} is listed as deliberately unused but does not exist`);
         }
     }
 }
+
+/**
+ * Modules kept out of the map on purpose, each with the reason. An orphan is normally a layer left
+ * behind by an edit, so one that is meant to sit outside the map says so here rather than being
+ * reported for as long as it exists.
+ */
+const kept = {
+    'layers/building/extrusion.js':
+        'draws buildings in three dimensions, which this map does not; kept for a style that does',
+};
 
 function checkDuplicateLayerIds() {
     const seen = new Set();
@@ -531,8 +801,13 @@ await checkThemeClamping();
 checkUnsatisfiableFilters();
 checkLegacyFilters();
 checkShadowedDirectives();
+checkNarrowedDirectives();
 checkParity();
 checkOrphans(files);
+checkLayerNames(files);
+checkDefaults();
+checkSymbolSortKeys();
+checkChainLength();
 checkDuplicateLayerIds();
 checkSources();
 await checkSpec();

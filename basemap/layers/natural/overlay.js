@@ -18,9 +18,6 @@ export default asLayerObject({
     id: 'natural_overlay',
     type: 'fill',
     sourceLayer: 'natural',
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
         'fill-antialias': false,
     },

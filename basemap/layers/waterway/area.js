@@ -14,12 +14,9 @@
 import theme from "../../theme.js";
 
 export default {
-    id: 'waterway_polygon',
+    id: 'waterway_area',
     sourceLayer: 'waterway',
     type: 'fill',
-    layout: {
-        visibility: 'visible',
-    },
     filter: ['==', ['geometry-type'], 'Polygon'],
     paint: {
         'fill-antialias': false,

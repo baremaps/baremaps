@@ -85,6 +85,7 @@ public final class MapCompiler {
           .setAttribution(terrain.attribution()));
     }
 
+    var floors = floors(spec);
     var layers = new ArrayList<StyleLayer>();
     for (var layer : spec.layers()) {
       layers.add(new StyleLayer()
@@ -95,7 +96,7 @@ public final class MapCompiler {
           .setSource(layer.getSource() == null ? source.id() : layer.getSource())
           .setSourceLayer(layer.getSourceLayer())
           .setLayout(layer.getLayout())
-          .setMinzoom(layer.getMinzoom())
+          .setMinzoom(minzoom(layer, floors))
           .setMaxzoom(layer.getMaxzoom())
           .setPaint(layer.getPaint()));
     }
@@ -109,6 +110,55 @@ public final class MapCompiler {
         .setGlyphs(spec.glyphs())
         .setSources(sources)
         .setLayers(layers);
+  }
+
+  /**
+   * The zoom each layer starts at: the one it names, or the one its features begin at.
+   *
+   * <p>
+   * A layer with no minzoom is built and evaluated at every zoom the map has, including the ones
+   * below the first tile that could hold anything it draws. That is a bucket assembled and a
+   * filter run over an empty source layer, per tile, to draw nothing, and forty-one of this
+   * basemap's fifty-seven layers were in that position.
+   *
+   * <p>
+   * The answer is already written down: the queries a source layer is declared with say the zoom
+   * its features start at, and a layer cannot draw what the tiles do not carry. So it is read off
+   * them rather than repeated on every layer, where the two would drift. A layer that names its
+   * own minzoom keeps it, that being a cartographic decision to start later than the data does.
+   */
+  private static Map<String, Integer> floors(MapSpec spec) {
+    var floors = new HashMap<String, Integer>();
+    var terrain = spec.terrain();
+    for (var layer : spec.layers()) {
+      if (layer.getSourceLayer() == null) {
+        continue;
+      }
+      // A layer reading the terrain reads tiles traced from elevation, so its features begin where
+      // that source begins rather than where a query does.
+      if (terrain != null && terrain.id().equals(layer.getSource())) {
+        floors.merge(layer.getSourceLayer(), terrain.minzoom(), Math::min);
+      } else if (layer.getSourceQueries() != null) {
+        var floor = layer.getSourceQueries().stream()
+            .map(query -> query.minzoom() == null ? 0 : query.minzoom())
+            .min(Integer::compare)
+            .orElse(0);
+        floors.merge(layer.getSourceLayer(), floor, Math::min);
+      }
+    }
+    return floors;
+  }
+
+  /**
+   * The zoom a layer starts at, which is the one it names when it names one. A floor of zero is
+   * left off: it is where a layer starts anyway, and writing it down says a decision was made.
+   */
+  private static Integer minzoom(MapLayer layer, Map<String, Integer> floors) {
+    if (layer.getMinzoom() != null) {
+      return layer.getMinzoom();
+    }
+    var floor = floors.get(layer.getSourceLayer());
+    return floor == null || floor == 0 ? null : floor;
   }
 
   /**

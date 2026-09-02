@@ -28,7 +28,6 @@ export default asLayerObject({
     minzoom: 13,
     filter: ['==', ['geometry-type'], 'Polygon'],
     layout: {
-        visibility: 'visible',
         'text-font': ['Noto Sans Regular'],
         'text-field': ['get', 'name'],
         'text-size': 11,

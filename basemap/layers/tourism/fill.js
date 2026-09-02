@@ -30,9 +30,6 @@ export default asLayerObject({
     sourceQueries: [
         {"minzoom": 13, "maxzoom": 20, "from": "osm_tourism"},
     ],
-    layout: {
-        visibility: 'visible',
-    },
     paint: {
         'fill-antialias': false,
     },

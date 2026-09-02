@@ -16,7 +16,7 @@ import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
 export default asLayerObject({
-    id: 'tunnel_outline',
+    id: 'highway_tunnel_outline',
     sourceLayer: 'highway',
     sourceQueries: [
         // Below 13 the generalized levels; at 13 the classes worth drawing when they stop being
@@ -62,7 +62,6 @@ export default asLayerObject({
     },
     type: 'line',
     layout: {
-        visibility: 'visible',
         'line-cap': 'square',
         'line-join': 'miter',
     },
@@ -120,6 +119,15 @@ export default asLayerObject({
             ],
             'line-color': theme.highwayTertiaryTunnelOutlineColor,
             'line-gap-width-stops': theme.highwayTertiaryLineWidth,
+            'line-width': 1,
+        },
+        {
+            // A busway keeps the casing it has in the open. The tunnel and bridge colours are
+            // named per road class and there is no busway among them, and a class with no casing
+            // at all reads as a gap in the road rather than as a busway.
+            filter: ['==', ['get', 'highway'], 'busway'],
+            'line-color': theme.highwayBuswayOutlineColor,
+            'line-gap-width-stops': theme.highwayBuswayLineWidth,
             'line-width': 1,
         },
         {

@@ -27,7 +27,6 @@ export default asLayerObject({
     sourceLayer: 'highway',
     type: 'line',
     layout: {
-        visibility: 'visible',
         'line-cap': 'round',
         'line-join': 'round',
     },
