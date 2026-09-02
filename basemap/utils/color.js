@@ -44,17 +44,31 @@ class Color {
         return new RGB(gray, gray, gray, rgb.a);
     }
 
+    /**
+     * Lightens by a fraction of the distance left to white rather than by a fixed
+     * amount of lightness, and darkens by a fraction of the distance left to black.
+     *
+     * A theme is a transform applied to every colour of the default one, so the
+     * transform has to leave the colours as distinguishable as it found them. Adding
+     * a constant does not: a map is mostly pale, and its background, its minor roads
+     * and its landuse fills all sit above 0.9 lightness, so adding 0.1 to each of
+     * them ran 43 of them into the clamp and out the other side as the same pure
+     * white. The light theme lost the road network into its background, and the dark
+     * theme, which inverts it, lost the same 43 into pure black.
+     *
+     * Scaling the remaining distance cannot reach either end, so no two colours ever
+     * arrive at the same one. `lighten(0.1)` still reads as a tenth lighter, which is
+     * what the caller asks for; it is a tenth of the room the colour has left.
+     */
     lighten(amount) {
         let hsl = this.toHSL();
-        hsl.l += amount;
-        hsl.l = Math.min(hsl.l, 1);
+        hsl.l += amount * (1 - hsl.l);
         return hsl.toRGB();
     }
 
     darken(amount) {
         let hsl = this.toHSL();
-        hsl.l -= amount;
-        hsl.l = Math.max(hsl.l, 0);
+        hsl.l -= amount * hsl.l;
         return hsl.toRGB();
     }
 
@@ -100,15 +114,33 @@ class Color {
         return rgb;
     }
 
+    /**
+     * Pushes each channel away from mid-grey along a curve that steepens the middle
+     * of the scale and flattens towards its ends, rather than along the straight
+     * line that has to be clipped where it leaves the scale.
+     *
+     * The straight line is the reason a contrast theme is worth less than it looks:
+     * a map's paler colours are bunched near the top of the scale, so raising the
+     * contrast sends them past white and the clip returns them all as white. The
+     * background, the residential and living streets and the parking overlay came
+     * back as one colour, which is the opposite of what the theme is asked for.
+     *
+     * `factor` keeps its meaning, as the slope the curve has at mid-grey, and the
+     * curve reaches an end of the scale only for a channel that started there.
+     */
     contrast(factor) {
         factor = (1 + factor) ** 2;
         let rgb = this.toRGB();
-        let r = ((rgb.r / 255.0 - 0.5) * factor + 0.5) * 255.0;
-        let g = ((rgb.g / 255.0 - 0.5) * factor + 0.5) * 255.0;
-        let b = ((rgb.b / 255.0 - 0.5) * factor + 0.5) * 255.0;
-        r = Math.max(0, Math.min(255, r));
-        g = Math.max(0, Math.min(255, g));
-        b = Math.max(0, Math.min(255, b));
+        let curve = (value) => {
+            let v = value / 255.0;
+            if (v <= 0 || v >= 1) {
+                return value;
+            }
+            return 255.0 * v ** factor / (v ** factor + (1 - v) ** factor);
+        };
+        let r = curve(rgb.r);
+        let g = curve(rgb.g);
+        let b = curve(rgb.b);
         return new RGB(r, g, b, rgb.a);
     }
 

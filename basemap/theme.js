@@ -37,6 +37,7 @@ import grayscale from './themes/grayscale.js';
 import light from './themes/light.js';
 import protanomaly from './themes/protanomaly.js';
 import protanopia from './themes/protanopia.js';
+import soft from './themes/soft.js';
 import transportation from './themes/transportation.js';
 import tritanomaly from './themes/tritanomaly.js';
 import tritanopia from './themes/tritanopia.js';
@@ -53,6 +54,7 @@ const themes = {
     light,
     protanomaly,
     protanopia,
+    soft,
     transportation,
     tritanomaly,
     tritanopia,
@@ -91,7 +93,7 @@ if (!Object.prototype.hasOwnProperty.call(themes, name)) {
  * terrain pressed into the ground rather than standing out of it. White adds light and a neutral
  * dark adds shadow whatever they are drawn over, so they hold across every theme unchanged.
  */
-const fixed = Object.fromEntries(Object.entries(defaultTheme)
+export const fixed = Object.fromEntries(Object.entries(defaultTheme)
     .filter(([key]) => key.startsWith('terrainHillshade')));
 
 export default {...themes[name], ...fixed};

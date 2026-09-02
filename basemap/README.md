@@ -427,16 +427,38 @@ baremaps dem serve --pmtiles data/mapterhorn.pmtiles --pmtiles-maxzoom 12
 ## Selecting a theme
 
 The colours of the style are held in `themes/`, separately from the rules that use
-them. `themes/default.js` lists every colour; the others are derived from it by a
-transform, so `themes/dark.js` is the light theme inverted and the colour-vision
-themes apply the corresponding confusion matrix. Deriving them means a colour
-added to the default theme appears in all of them.
+them. `themes/default.js` lists every colour, and most of the others are derived
+from it by a transform, so `themes/dark.js` is the light theme inverted and the
+colour-vision themes apply the corresponding confusion matrix. Deriving them means
+a colour added to the default theme appears in all of them.
 
-The hillshade colours are the exception, and `theme.js` holds them out of every
-derivation. They are not the colour of anything, they are the light falling on
-it, and inverting a map does not move the sun: derived, they would turn the lit
-slopes dark and the shaded ones light, which reads as terrain pressed into the
-ground rather than standing out of it.
+`themes/soft.js` is the exception, a palette rather than a transform: a map in the
+manner of the mobile maps of the last decade, with a warm off-white ground under
+the towns, a bright blue for the water, yellow-greens for the open country, a road
+network ranked by how dark its grey is rather than by hue, and grey labels. No transform reaches it, because the
+difference is not in the colours but in what the map chooses to colour at all:
+OpenStreetMap Carto gives every land use a hue of its own, where this one spends
+its saturation on the water, the countryside and the points of interest and flattens
+the built-up land uses into the ground, so that a label laid over it stays the
+loudest thing on the screen. Its colours are sampled rather than guessed at, which
+is what a screen map wants: not a drained map, a map that spends its colour in
+fewer places. A palette states every colour itself, and `validate.js` reports one
+that leaves a key to be inherited, that key being a single feature drawn in another
+map's colours.
+
+The hillshade colours are held out of all of this, `theme.js` taking them from the
+default theme whichever theme is selected. They are not the colour of anything,
+they are the light falling on it, and inverting a map does not move the sun:
+derived, they would turn the lit slopes dark and the shaded ones light, which
+reads as terrain pressed into the ground rather than standing out of it.
+
+A transform has to hand back colours as distinguishable as it was given, which is
+why the ones in `utils/color.js` move a colour by a fraction of the distance it
+has left rather than by a fixed amount. A map is mostly pale, so a transform that
+adds a fixed amount of lightness runs its colours into the top of the scale and
+holds them there: the background, the minor roads and the landuse fills arrive as
+one white, and the theme derived from that one inherits one black. `validate.js`
+reports a theme that does this.
 
 `BAREMAPS_THEME` selects the one the style is built with, naming a file in
 `themes/` without its extension. It defaults to `default`, and an unknown name
@@ -472,6 +494,9 @@ It reports as errors:
 * a theme value that is neither a colour nor a `[zoom, value, ...]` stop array,
   or a colour that does not survive a round-trip through `utils/color.js` and so
   would be silently dropped by any theme derived from it,
+* a derived theme that pushes a colour to pure white or pure black where the
+  theme it derives from held it off that end, which is how a transform loses the
+  distinctions it was given,
 * a filter that can never match, such as an `all` requiring one tag to hold two
   different values,
 * a directive whose filter repeats an earlier one in the same layer, which a
@@ -481,7 +506,8 @@ It reports as errors:
   rejects.
 
 It reports as warnings a theme key that nothing references, a layer module that
-`map.js` does not import, and any divergence between the layer groups listed in
+`map.js` does not import, a palette theme that leaves one of its colours to the
+theme it imports, and any divergence between the layer groups listed in
 `parityGroups`.
 
 That last check is worth explaining. The road, tunnel and bridge layers repeat

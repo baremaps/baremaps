@@ -15,16 +15,31 @@
 import style from './default.js';
 import {Color} from "../utils/color.js";
 
+/**
+ * The theme picks the network out by the name of the key, which is the only thing that says what a
+ * colour is for. A halo is the exception: it is not the colour of the thing it surrounds, it is
+ * what holds a label off the map behind it, and every halo of the style is the same white for that
+ * reason. `highwayLabelHaloColor` is filed under a road without being one, so darkening it with
+ * the network left the road labels the only ones ringed in grey, one of nine.
+ */
+function emphasized(key) {
+    const name = key.toLowerCase();
+    if (name.includes("halo")) {
+        return false;
+    }
+    return name.includes("highway")
+        || name.includes("tunnel")
+        || name.includes("bridge")
+        || name.includes("rail")
+        || name.includes("ferry");
+}
+
 export default Object.entries(style).reduce((acc, [key, value]) => {
     let color = Color.fromString(value);
     if (color == null) {
         acc[key] = value;
         return acc;
-    } else if (key.toLowerCase().includes("highway")
-        || key.toLowerCase().includes("tunnel")
-        || key.toLowerCase().includes("bridge")
-        || key.toLowerCase().includes("rail")
-        || key.toLowerCase().includes("ferry")) {
+    } else if (emphasized(key)) {
         acc[key] = color.darken(0.2).toString();
         return acc;
     } else {

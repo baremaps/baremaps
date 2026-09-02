@@ -32,7 +32,7 @@ import {existsSync, readFileSync, readdirSync, statSync} from 'fs';
 import {join, dirname} from 'path';
 import {fileURLToPath} from 'url';
 
-import theme from './theme.js';
+import theme, {fixed} from './theme.js';
 import map from './map.js';
 import {Color} from './utils/color.js';
 
@@ -95,6 +95,12 @@ const parityGroups = [
 ];
 
 // --- helpers ---------------------------------------------------------------
+
+/** Every theme file, paired with its source, which says which colours it names itself. */
+function themeFiles() {
+    return readdirSync(join(root, 'themes')).filter((file) => file.endsWith('.js')).sort()
+        .map((file) => [file, readFileSync(join(root, 'themes', file), 'utf8')]);
+}
 
 function layerFiles() {
     const files = [];
@@ -201,6 +207,83 @@ async function checkThemeValues() {
         if (missing.length) {
             error('theme-value', `${label} is missing ${missing.length} keys held by the active theme: ` +
                 missing.slice(0, 5).join(', ') + (missing.length > 5 ? ', ...' : ''));
+        }
+    }
+}
+
+/** The theme keys a theme file writes out itself, as opposed to the ones it derives or inherits. */
+function statedKeys(source) {
+    return new Set([...source.matchAll(/^\s+([A-Za-z][A-Za-z0-9_]*):/gm)].map((match) => match[1]));
+}
+
+/**
+ * A theme that names any colour has to name them all. Such a theme is a palette rather than a
+ * transform: it does not follow the default theme, it answers it colour by colour, and a colour it
+ * leaves out does not fall back to something neutral, it arrives from the default theme with the
+ * hue that theme chose for a reason this one does not share. One key inherited into a palette is a
+ * single feature drawn in another map's colours, which is the kind of thing that goes unseen until
+ * someone finds it on a tile.
+ *
+ * The hillshade is not counted, `theme.js` holding those colours out of every theme.
+ */
+function checkThemePalettes(sources) {
+    const colours = Object.keys(theme).filter((key) => typeof theme[key] === 'string');
+    const derived = Object.keys(fixed);
+
+    for (const [name, source] of sources) {
+        const named = statedKeys(source);
+        if (!colours.some((key) => named.has(key))) continue;
+
+        const missing = colours.filter((key) => !named.has(key) && !derived.includes(key));
+        if (missing.length) {
+            warn('theme-palette', `themes/${name}: names ${named.size} colours of its own but leaves ` +
+                `${missing.length} to the theme it imports: ` +
+                missing.slice(0, 5).join(', ') + (missing.length > 5 ? ', ...' : ''));
+        }
+    }
+}
+
+/**
+ * A derived theme is one transform applied to every colour of the theme it is derived from, and the
+ * transform has to hand back colours as distinguishable as it was given. What breaks that is a
+ * transform that runs its colours off an end of the scale, where the clamp holds them: a map is
+ * mostly pale, so lightening it by a fixed amount pressed the background, the minor roads and the
+ * landuse fills into one pure white, and the theme derived from that one inherited one pure black.
+ * The style still built, every value still named a colour, and the map came out with its roads
+ * indistinguishable from the ground they cross.
+ *
+ * A colour its parent already holds at an end stays there and is not reported, and a channel within
+ * a step of one counts as already there, that step being rounding rather than something an eye
+ * separates. Nor is a colour the theme names itself: a palette that asks for white is answering for
+ * that colour, where a transform reaches every colour of a map its author never enumerated.
+ */
+async function checkThemeClamping() {
+    const names = readdirSync(join(root, 'themes')).filter((file) => file.endsWith('.js')).sort();
+    const clamped = (colour) => {
+        const {r, g, b} = colour.toRGB();
+        return (r >= 254 && g >= 254 && b >= 254) || (r <= 1 && g <= 1 && b <= 1);
+    };
+
+    for (const name of names) {
+        const source = readFileSync(join(root, 'themes', name), 'utf8');
+        // The theme a theme derives from is the one it imports, and `themes/default.js` imports none.
+        const parent = source.match(/from\s+['"]\.\/([^'"]+\.js)['"]/)?.[1];
+        if (!parent) continue;
+
+        const values = (await import(`./themes/${name}`)).default;
+        const parentValues = (await import(`./themes/${parent}`)).default;
+        const named = statedKeys(source);
+        const lost = Object.keys(values).filter((key) => {
+            if (named.has(key)) return false;
+            const before = Color.fromString(parentValues[key]);
+            const after = Color.fromString(values[key]);
+            return before !== null && after !== null && !clamped(before) && clamped(after);
+        });
+
+        if (lost.length) {
+            error('theme-clamp', `themes/${name}: ${lost.length} colour(s) are driven to an end of the ` +
+                `scale that themes/${parent} kept off it, so they can no longer be told apart: ` +
+                lost.slice(0, 5).join(', ') + (lost.length > 5 ? ', ...' : ''));
         }
     }
 }
@@ -443,6 +526,8 @@ function checkSources() {
 const files = layerFiles();
 checkThemeReferences(files);
 await checkThemeValues();
+checkThemePalettes(themeFiles());
+await checkThemeClamping();
 checkUnsatisfiableFilters();
 checkLegacyFilters();
 checkShadowedDirectives();
