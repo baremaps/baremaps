@@ -17,19 +17,13 @@ export default {
     id: 'highway_label',
     type: 'symbol',
     sourceLayer: 'highway',
+    minzoom: 14,
     layout: {
         'symbol-placement': 'line',
         'text-anchor': 'center',
         'text-field': ['get', 'name'],
         'text-font': ['Noto Sans Regular'],
-        'text-size': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            0, 0,
-            10, 6,
-            24, 24
-        ],
+        'text-size': 11,
         visibility: 'visible',
     },
     paint: {

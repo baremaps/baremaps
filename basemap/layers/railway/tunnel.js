@@ -14,6 +14,10 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
+/**
+ * The railways under the ground, in the same three weights as the ones above it and one colour
+ * lighter. This layer carries the queries and the generalization for both.
+ */
 export default asLayerObject({
     'id': 'railway_tunnel',
     sourceLayer: 'railway',
@@ -30,6 +34,15 @@ export default asLayerObject({
             'subway',
             'tram'
         ],
+        // A main line is worth a pixel on a map of a country; a tramway is worth one on a map of
+        // the city it runs in.
+        minzoom: {
+            'rail': 7,
+            'light_rail': 11,
+            'monorail': 11,
+            'subway': 11,
+            'tram': 11,
+        },
         // A siding is a railway and a dry bed is a waterway; neither is worth generalizing.
         filter: ['!', ['has', 'service']],
     },
@@ -47,82 +60,28 @@ export default asLayerObject({
         {
             'filter': [
                 'all',
-                ['==', ['get', 'railway'], 'rail'],
+                ['in', ['get', 'railway'],
+                    ['literal', ['rail', 'narrow_gauge', 'preserved', 'funicular']]],
                 ['!', ['has', 'service']],
             ],
             'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayRailLineWidth,
+            'line-width-stops': theme.railwayLineWidth,
         },
         {
-            'filter': ['all',
-                ['==', ['get', 'railway'], 'rail'],
-                ['has', 'service']
+            'filter': ['in', ['get', 'railway'],
+                ['literal', ['subway', 'tram', 'light_rail', 'monorail']]],
+            'line-color': theme.railwayTunnelColor,
+            'line-width-stops': theme.railwayUrbanLineWidth,
+        },
+        {
+            'filter': ['any',
+                ['has', 'service'],
+                ['in', ['get', 'railway'],
+                    ['literal', ['turntable', 'construction', 'abandoned', 'disused',
+                        'miniature']]],
             ],
             'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayServiceLineWidth,
-        },
-        {
-            'filter': ['all',
-                ['==', ['get', 'railway'], 'turntable'],
-                ['has', 'service']
-            ],
-            'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayServiceLineWidth,
-        },
-        {
-            'filter': ['==', ['get', 'railway'], 'subway'],
-            'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwaySubwayLineWidth,
-        },
-        {
-            'filter': ['==', ['get', 'railway'], 'tram'],
-            'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayTramLineWidth,
-        },
-        {
-            'filter': ['==', ['get', 'railway'], 'preserved'],
-            'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayPreservedLineWidth,
-        },
-        {
-            'filter': ['==', ['get', 'railway'], 'funicular'],
-            'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayFunicularLineWidth,
-        },
-        {
-            'filter': ['==', ['get', 'railway'], 'monorail'],
-            'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayMonorailLineWidth,
-        },
-        {
-            'filter': ['==', ['get', 'railway'], 'light_rail'],
-            'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayLightRailLineWidth,
-        },
-        {
-            'filter': ['==', ['get', 'railway'], 'construction'],
-            'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayConstructionLineWidth,
-        },
-        {
-            'filter': ['==', ['get', 'railway'], 'abandoned'],
-            'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayAbandonedLineWidth,
-        },
-        {
-            'filter': ['==', ['get', 'railway'], 'disused'],
-            'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayDisusedLineWidth,
-        },
-        {
-            'filter': ['==', ['get', 'railway'], 'miniature'],
-            'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayMiniatureLineWidth,
-        },
-        {
-            'filter': ['==', ['get', 'railway'], 'narrow_gauge'],
-            'line-color': theme.railwayTunnelColor,
-            'line-width-stops': theme.railwayNarrowGaugeLineWidth,
+            'line-width-stops': theme.railwayMinorLineWidth,
         },
     ]),
 });

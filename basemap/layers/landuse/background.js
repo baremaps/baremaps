@@ -23,6 +23,9 @@ export default asLayerObject({
         {"minzoom": 1, "maxzoom": 20, "from": "osm_landuse"},
     ],
     generalize: {
+        // Every value a directive here or in `landuse_overlay` draws. A value left out of this
+        // list is drawn down to zoom 13 and then disappears, which reads as the land itself
+        // changing when the map zooms out.
         by: 'landuse',
         values: [
             'allotments',
@@ -47,7 +50,13 @@ export default asLayerObject({
             'greenfield',
             'landfill',
             'quarry',
-            'railway'
+            'railway',
+            'garages',
+            'military',
+            'pedestrian',
+            'recreation_ground',
+            'religious',
+            'village_green'
         ],
     },
     layout: {

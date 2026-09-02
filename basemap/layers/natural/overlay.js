@@ -43,15 +43,14 @@ export default asLayerObject({
             'fill-color': theme.naturalSandOverlayFillColor
         },
         {
-            filter: [
-                'all',
-                ['==', ['get', 'natural'], 'water'],
-                ['!=', ['get', 'water'], 'lake'],
-            ],
-            'fill-color': theme.naturalLakeOverlayFillColor
+            // Every kind of water, in one colour. A lake used to be drawn by `natural` and a pond
+            // by this layer, in the same blue: two rules, one result, and a lake that went under
+            // the grass drawn between them.
+            filter: ['==', ['get', 'natural'], 'water'],
+            'fill-color': theme.naturalWaterFillColor
         },
         {
-            filter: ['==', ['get', 'natural'], 'wetland'],
+            filter: ['in', ['get', 'natural'], ['literal', ['wetland', 'mud']]],
             'fill-color': theme.naturalWetlandOverlayFillColor
         },
     ]),

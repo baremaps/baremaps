@@ -14,6 +14,20 @@
 import theme from "../../theme.js";
 import {asLayerObject, withSymbolSortKeys} from "../../utils/utils.js";
 
+/**
+ * The names of inhabited places.
+ *
+ * Each class is one size and one colour, held at every zoom. A label said the same thing at zoom 6
+ * and at zoom 16, and the size it was drawn at was the only thing that changed; a city name that
+ * grows to sixty pixels as the map zooms in is a city name that is in the way. Which places are
+ * worth naming at a zoom is decided once, by the chain of views in `queries/point.sql`, and not a
+ * second time by a size that interpolates down to nothing.
+ *
+ * The classes are ordered by how many people the name stands for, and drawn in five weights of
+ * grey rather than five colours: they are the same kind of thing at different scales, and a hue
+ * would say they were different kinds. Where two labels compete for the same space MapLibre keeps
+ * the one with the lower `symbol-sort-key`, which is the more populous of the two.
+ */
 export default asLayerObject({
     id: 'point_label',
     type: 'symbol',
@@ -33,79 +47,43 @@ export default asLayerObject({
     },
     directives: withSymbolSortKeys([
         {
-            'filter': [
-                'all',
-                ['==', ['get', 'place'], 'city'],
-                ['==', ['get', 'capital'], 'yes'],
-            ],
+            filter: ['==', ['get', 'place'], 'city'],
             'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
-            'label-color': theme.placeIconColor,
-            'text-size-stops': [
-                0, 0,
-                10, 18,
-                24, 72
-            ],
+            'text-color': theme.placeCityTextColor,
+            'text-size': 15,
         },
         {
-            'filter': [
-                'all',
-                ['==', ['get', 'place'], 'city'],
-                ['!=', ['get', 'capital'], 'yes'],
-            ],
+            filter: ['==', ['get', 'place'], 'town'],
             'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
-            'label-color': [theme.placeCityCapitalTextColorOne, theme.placeCityCapitalTextColorTwo],
-            'text-size-stops': [
-                0, 0,
-                10, 16,
-                24, 64
-            ],
-        },
-        {
-            'filter': ['==', ['get', 'place'], 'town'],
-            'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
-            'label-color': [theme.placeTownTextColorOne, theme.placeTownTextColorTwo],
-            'text-size-stops': [
-                0, 0,
-                10, 14,
-                24, 56
-            ],
+            'text-color': theme.placeTownTextColor,
+            'text-size': 12.5,
         },
         {
             filter: ['==', ['get', 'place'], 'village'],
             'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
-            'label-color': theme.placeVillageTextColor,
-            'text-size-stops': [
-                0, 0,
-                10, 10,
-                24, 40
-            ],
+            'text-color': theme.placeVillageTextColor,
+            'text-size': 11,
         },
         {
-            filter: ['==', ['get', 'place'], 'locality'],
-            'label-color': theme.placeLocalityTextColor,
-            'text-size-stops': [
-                0, 0,
-                10, 8,
-                24, 32
+            // The parts of a city. They only reach the tiles where a city is large enough to have
+            // them, so no zoom range is needed here to keep them out of a map of the countryside.
+            filter: [
+                'in',
+                ['get', 'place'],
+                ['literal', ['suburb', 'quarter', 'neighbourhood']],
             ],
+            'text-color': theme.placeSuburbTextColor,
+            'text-size': 10.5,
         },
-        // {
-        //     filter: [
-        //         'in',
-        //         ['get', 'place'],
-        //         [
-        //             'literal', [
-        //                 'neighbourhood',
-        //                 'quarter',
-        //                 'hamlet',
-        //                 'isolated_dwelling',
-        //                 'islet'
-        //             ]
-        //         ]
-        //     ],
-        //     'text-size': 11,
-        //     'text-color': theme.placeTextColor,
-        // },
-
+        {
+            // The smallest places that carry a name, and the named places that hold nobody.
+            filter: [
+                'in',
+                ['get', 'place'],
+                ['literal', ['hamlet', 'isolated_dwelling', 'locality']],
+            ],
+            'text-color': theme.placeLocalityTextColor,
+            'text-size': 10,
+        },
     ]),
 });

@@ -57,5 +57,11 @@ export default asLayerObject({
             filter: ['==', ['get', 'amenity'], 'grave_yard'],
             'fill-color': theme.amenityGraveYardBackgroundFillColor,
         },
+        {
+            // The same grey as `landuse=religious`, which is the other way the same ground is
+            // tagged.
+            filter: ['==', ['get', 'amenity'], 'place_of_worship'],
+            'fill-color': theme.landuseReligiousBackgroundFillColor,
+        },
     ]),
 });

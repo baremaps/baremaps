@@ -31,7 +31,7 @@ export default asLayerObject({
             'nature_reserve',
             'park',
             'pitch',
-            'sport_center',
+            'sports_centre',
             'stadium',
             'swimming_pool',
             'track'

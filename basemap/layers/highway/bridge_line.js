@@ -38,53 +38,34 @@ export default asLayerObject({
             'line-width-stops': theme.highwayPedestrianLineWidth,
         },
         {
-            filter: ['==', ['get', 'highway'], 'bridleway'],
-            'line-color': theme.highwayDashBridlewayLineColor,
-            'line-width-stops': theme.highwayMinorLineWidth,
-        },
-        {
             filter: ['==', ['get', 'highway'], 'busway'],
             'line-color': theme.highwayBuswayDashColor,
             'line-width-stops': theme.highwayMinorLineWidth,
         },
         {
-            filter: [
-                'any',
-                ['==', ['get', 'highway'], 'cycleway'],
-                [
-                    'all',
-                    ['==', ['get', 'highway'], 'path'],
-                    ['==', ['get', 'bicycle'], 'designated'],
-                ],
-            ],
-            'line-color': theme.highwayCyclewayDashColor,
-            'line-width-stops': theme.highwayMinorLineWidth,
-        },
-        {
+            // Everything that is walked, ridden or cycled rather than driven, in one colour. Four
+            // hues on a line half a pixel wide told four things apart that the eye reads as one,
+            // and one of them was a saturated blue that outshouted the motorway beside it.
             filter: [
                 'any',
                 [
                     'in',
                     ['get', 'highway'],
-                    ['literal', ['sidewalk', 'crossing', 'steps']],
+                    ['literal', ['bridleway', 'crossing', 'cycleway', 'path', 'sidewalk',
+                        'steps']],
                 ],
                 [
                     'all',
                     ['==', ['get', 'highway'], 'footway'],
                     ['!=', ['get', 'access'], 'private'],
                 ],
-                [
-                    'all',
-                    ['==', ['get', 'highway'], 'path'],
-                    ['!=', ['get', 'bicycle'], 'designated'],
-                ],
             ],
-            'line-color': theme.highwayHighwayDashColor,
+            'line-color': theme.highwayPathLineColor,
             'line-width-stops': theme.highwayMinorLineWidth,
         },
         {
             filter: ['all', ['==', ['get', 'highway'], 'track']],
-            'line-color': theme.highwayTrackDashColor,
+            'line-color': theme.highwayTrackLineColor,
             'line-width-stops': theme.highwayMinorLineWidth,
         },
         {

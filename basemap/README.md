@@ -303,6 +303,22 @@ without being told about it.
 --sql generalize.sql` writes out what was derived, which is useful for reviewing
 it.
 
+It is also how a change to a `generalize` block is applied to a database that is
+already imported. `refresh.js` refreshes the levels, it does not redefine them,
+so a value added to `values` or a zoom changed in `minzoom` does not reach the
+map until the chain is rebuilt; `map create` would rebuild it, but it drops the
+tables the import wrote into on the way. Compile the sql and run the statements
+for the layer that changed:
+
+```
+baremaps map compile --map map.js --sql generalize.sql \
+  --style /dev/null --tileset /dev/null
+grep -A100 osm_boundary generalize.sql | psql "$BAREMAPS_URL"
+```
+
+The same holds for `queries/point.sql`, which defines materialized views rather
+than refreshing them: run the file itself.
+
 The tileset format that `map.js` replaces is still accepted: pass `--tileset`
 and `--style` instead of `--map`.
 

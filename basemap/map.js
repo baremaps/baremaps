@@ -77,12 +77,16 @@ import power_tower from "./layers/power/tower.js";
 import natural_tree from "./layers/natural/tree.js";
 import natural_trunk from "./layers/natural/trunk.js";
 import leisure_line from "./layers/leisure/line.js";
-import tourism_zoo_casing from "./layers/tourism/zoo_casing.js";
-import tourism_zoo_line from "./layers/tourism/zoo_line.js";
+import tourism_fill from "./layers/tourism/fill.js";
 import boundary_line from "./layers/boundary/line.js";
+import landuse_label from "./layers/landuse/label.js";
+import natural_label from "./layers/natural/label.js";
+import leisure_label from "./layers/leisure/label.js";
 import waterway_label from "./layers/waterway/label.js";
 import point_icon from "./layers/point/icon.js";
+import point_summit from "./layers/point/summit.js";
 import point_place from "./layers/point/place.js";
+import point_region from "./layers/point/region.js";
 import point_country_label from "./layers/point/country_label.js";
 
 export default {
@@ -150,6 +154,7 @@ export default {
         natural_overlay,
         amenity_overlay,
         leisure_overlay,
+        tourism_fill,
         // The relief and the contours shade the land cover drawn above, and are covered in turn by
         // the water and by everything linear: a road is not shaded and a lake has no contours.
         terrain_hillshade,
@@ -186,14 +191,17 @@ export default {
         natural_tree,
         natural_trunk,
         leisure_line,
-        tourism_zoo_casing,
-        tourism_zoo_line,
         boundary_line,
         // Among the labels, and first, so that a place name or a river wins where they compete.
         terrain_contour_label,
+        landuse_label,
+        natural_label,
+        leisure_label,
         waterway_label,
         point_icon,
+        point_summit,
         point_place,
+        point_region,
         point_country_label,
     ],
 };

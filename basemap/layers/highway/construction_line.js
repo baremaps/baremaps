@@ -14,132 +14,28 @@
 import theme from "../../theme.js";
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 
+/**
+ * The roads that are not roads yet.
+ *
+ * One grey line, whatever class is being built. A road under construction cannot be driven, so the
+ * class it will belong to when it opens is not what the reader needs from it; that it is there and
+ * closed is. Drawing it in the colour of the finished class said the opposite, and only the dash
+ * pattern took it back.
+ */
 export default asLayerObject({
     id: 'highway_construction_line',
     sourceLayer: 'highway',
     type: 'line',
     layout: {
         visibility: 'visible',
-        'line-cap': 'butt',
+        'line-cap': 'round',
         'line-join': 'round',
-    },
-    paint: {
-        'line-dasharray': [1, 1],
     },
     filter: ['==', ['geometry-type'], 'LineString'],
     directives: withSortKeys([
         {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'construction'],
-                ['!', ['has', 'construction']],
-            ],
+            filter: ['==', ['get', 'highway'], 'construction'],
             'line-color': theme.highwayDefaultConstructionLineColor,
-            'line-width-stops': theme.highwayConstructionLineWidth,
-        },
-        {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'construction'],
-                ['any',
-                    ['==', ['get', 'construction'], 'motorway'],
-                    ['==', ['get', 'construction'], 'motorway_link'],
-                ]
-            ],
-            'line-color': theme.highwayMotorwayConstructionLineColor,
-            'line-width-stops': theme.highwayConstructionLineWidth,
-        },
-        {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'construction'],
-                ['any',
-                    ['==', ['get', 'construction'], 'trunk'],
-                    ['==', ['get', 'construction'], 'trunk_link'],
-                ]
-            ],
-            'line-color': theme.highwayTrunkConstructionLineColor,
-            'line-width-stops': theme.highwayConstructionLineWidth,
-        },
-        {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'construction'],
-                ['any',
-                    ['==', ['get', 'construction'], 'primary'],
-                    ['==', ['get', 'construction'], 'primary_link'],
-                ]
-            ],
-            'line-color': theme.highwayPrimaryConstructionLineColor,
-            'line-width-stops': theme.highwayConstructionLineWidth,
-        },
-        {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'construction'],
-                ['any',
-                    ['==', ['get', 'construction'], 'secondary'],
-                    ['==', ['get', 'construction'], 'secondary_link'],
-                ]
-            ],
-            'line-color': theme.highwaySecondaryConstructionLineColor,
-            'line-width-stops': theme.highwayConstructionLineWidth,
-        },
-        {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'construction'],
-                ['any',
-                    ['==', ['get', 'construction'], 'tertiary'],
-                    ['==', ['get', 'construction'], 'tertiary_link'],
-                ]
-            ],
-            'line-color': theme.highwayTertiaryConstructionLineColor,
-            'line-width-stops': theme.highwayConstructionLineWidth,
-        },
-        {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'construction'],
-                ['==', ['get', 'construction'], 'unclassified'],
-            ],
-            'line-color': theme.highwayUnclassifiedConstructionLineColor,
-            'line-width-stops': theme.highwayConstructionLineWidth,
-        },
-        {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'construction'],
-                ['==', ['get', 'construction'], 'residential'],
-            ],
-            'line-color': theme.highwayResidentialConstructionLineColor,
-            'line-width-stops': theme.highwayConstructionLineWidth,
-        },
-        {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'construction'],
-                ['==', ['get', 'construction'], 'living_street'],
-            ],
-            'line-color': theme.highwayLivingStreetConstructionLineColor,
-            'line-width-stops': theme.highwayConstructionLineWidth,
-        },
-        {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'construction'],
-                ['==', ['get', 'construction'], 'service'],
-            ],
-            'line-color': theme.highwayServiceConstructionLineColor,
-            'line-width-stops': theme.highwayConstructionLineWidth,
-        },
-        {
-            filter: [
-                'all',
-                ['==', ['get', 'highway'], 'construction'],
-                ['==', ['get', 'construction'], 'raceway'],
-            ],
-            'line-color': theme.highwayRacewayConstructionLineColor,
             'line-width-stops': theme.highwayConstructionLineWidth,
         },
     ]),

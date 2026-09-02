@@ -19,7 +19,7 @@ export default asLayerObject({
     type: 'symbol',
     sourceLayer: 'point',
     'minzoom': 1,
-    'maxzoom': 6,
+    'maxzoom': 9,
     layout: {
         visibility: 'visible',
         'text-font': ['Noto Sans Regular'],
@@ -35,7 +35,7 @@ export default asLayerObject({
                 'all',
                 ['==', ['get', 'place'], 'country']
             ],
-            'text-size': 16,
+            'text-size': 15,
             'text-color': theme.placeCountryTextColor,
             'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
         },

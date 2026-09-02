@@ -25,7 +25,12 @@ export default asLayerObject({
         },
         {"minzoom": 2, "maxzoom": 20, "from": "osm_point_z$zoom", "drawable": true},
     ],
-    'minzoom': 14,
+    // From zoom 16 and not 14. This layer draws two hundred classes of point, and at 14 a city
+    // centre came out as a field of icons with the streets underneath them: the roads, the
+    // buildings and the street names were all there and none of them could be read. Raising it
+    // also empties the tiles at 14 and 15, because the attributes a tile carries are the ones the
+    // style reads at that zoom.
+    'minzoom': 16,
     layout: {
         visibility: 'visible',
         'icon-size': 1,
@@ -1078,13 +1083,8 @@ export default asLayerObject({
         //     'text-color': theme.defaultIconColor
         // },
 
-        // Nature
-        {
-            'filter': ['==', ['get', 'natural'], 'peak'],
-            'icon-image': 'peak',
-            'icon-color': theme.defaultIconColor,
-            'text-color': theme.defaultIconColor
-        },
+        // Nature. Summits are drawn by `point_summit`, which reaches lower than this layer does
+        // and carries their elevation.
         {
             'filter': ['==', ['get', 'natural'], 'spring'],
             'icon-image': 'spring',
@@ -1106,12 +1106,6 @@ export default asLayerObject({
         {
             'filter': ['==', ['get', 'natural'], 'saddle'],
             'icon-image': 'saddle',
-            'icon-color': theme.defaultIconColor,
-            'text-color': theme.defaultIconColor
-        },
-        {
-            'filter': ['==', ['get', 'natural'], 'volcano'],
-            'icon-image': 'peak',
             'icon-color': theme.defaultIconColor,
             'text-color': theme.defaultIconColor
         },

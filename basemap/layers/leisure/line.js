@@ -14,6 +14,14 @@
 import {asLayerObject, withSortKeys} from "../../utils/utils.js";
 import theme from "../../theme.js";
 
+/**
+ * The leisure features drawn as a line rather than filled.
+ *
+ * There is no geometry filter. A nature reserve is almost always mapped as a closed way, which
+ * arrives as a polygon, and this layer used to ask for LineStrings only: the boundary of a reserve
+ * was in every tile and drawn in none. A line layer paints the ring of a polygon, so dropping the
+ * test is all it takes to draw the edge of a reserve without filling it.
+ */
 export default asLayerObject({
     'id': 'leisure_line',
     sourceLayer: 'leisure',
@@ -23,7 +31,6 @@ export default asLayerObject({
         'line-cap': 'round',
         'line-join': 'round',
     },
-    'filter': ['==', ['geometry-type'], 'LineString'],
     directives: withSortKeys([
         {
             'filter': ['==', ['get', 'leisure'], 'nature_reserve'],

@@ -29,13 +29,10 @@ export default asLayerObject({
             'heath',
             'scrub',
             'wood',
-            'bay',
             'beach',
             'glacier',
             'mud',
             'shingle',
-            'shoal',
-            'strait',
             'water',
             'wetland',
             'bare_rock',
@@ -82,14 +79,6 @@ export default asLayerObject({
         {
             filter: ['==', ['get', 'natural'], 'shingle'],
             'fill-color': theme.naturalShingleBackgroundFillColor
-        },
-        {
-            filter: [
-                'all',
-                ['==', ['get', 'natural'], 'water'],
-                ['==', ['get', 'water'], 'lake'],
-            ],
-            'fill-color': theme.naturalWaterBackgroundFillColor,
         },
     ]),
 });

@@ -48,16 +48,33 @@ export default asLayerObject({
         'line-cap': 'round',
         'line-join': 'round',
     },
+    // Two widths, because a river and a roadside ditch were drawn as the same one-pixel line and
+    // the Rhine read as a drain. Both are solid; what separates them is weight, and what separates
+    // a watercourse in a culvert from one in the open is the paler colour it has always had.
     directives: withSortKeys([
+        {
+            "filter": ["all",
+                ["!", ["has", "tunnel"]],
+                ["in", ["get", "waterway"], ["literal", ["river", "canal"]]]],
+            "line-color": theme.waterwayLineColor,
+            "line-width-stops": theme.waterwayRiverLineWidth,
+        },
+        {
+            "filter": ["all",
+                ["has", "tunnel"],
+                ["in", ["get", "waterway"], ["literal", ["river", "canal"]]]],
+            "line-color": theme.waterwayTunnelColor,
+            "line-width-stops": theme.waterwayRiverLineWidth,
+        },
         {
             "filter": ["!", ["has", "tunnel"]],
             "line-color": theme.waterwayLineColor,
-            "line-width-stops": [4, 1, 14, 1],
+            "line-width-stops": theme.waterwayStreamLineWidth,
         },
         {
             "filter": ["has", "tunnel"],
             "line-color": theme.waterwayTunnelColor,
-            "line-width-stops": [4, 1, 14, 1],
+            "line-width-stops": theme.waterwayStreamLineWidth,
         },
     ]),
 });

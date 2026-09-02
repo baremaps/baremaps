@@ -76,7 +76,9 @@ CREATE
         (
             tags ->> 'place'
         )= ANY(
-            ARRAY [ 'region',
+            ARRAY [ 'country',
+            'state',
+            'region',
             'province',
             'district',
             'county',
@@ -84,7 +86,9 @@ CREATE
             'city',
             'town',
             'village',
+            'suburb',
             'quarter',
+            'neighbourhood',
             'hamlet' ]
         )
         OR(
@@ -121,14 +125,17 @@ CREATE
         (
             tags ->> 'place'
         )= ANY(
-            ARRAY [ 'region',
+            ARRAY [ 'country',
+            'state',
+            'region',
             'province',
             'district',
             'county',
             'municipality',
             'city',
             'town',
-            'village' ]
+            'village',
+            'suburb' ]
         )
         OR(
             tags ->> 'natural'

@@ -23,17 +23,7 @@ export default {
         visibility: 'visible',
         'text-font': ['Noto Sans Italic'],
         'text-field': ['get', 'name'],
-        'text-size': [
-            'interpolate',
-            ['exponential', 1.2],
-            ['zoom'],
-            12,
-            9,
-            15,
-            12,
-            18,
-            11,
-        ],
+        'text-size': 11,
         'symbol-placement': 'line',
     },
     paint: {
