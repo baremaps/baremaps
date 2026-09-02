@@ -15,10 +15,24 @@
 import style from './grayscale.js';
 import {Color} from "../utils/color.js";
 
+/**
+ * A label is not lightened with the map it lies on.
+ *
+ * The lightening is what makes this theme lighter than the grey one it is built from, and it is
+ * meant for the ground: the fills, the roads, the water. Applied to a label as well it lightens
+ * the ink, which is the opposite of what a lighter map wants, and it took eight of them under the
+ * contrast a reader needs for text this size. A halo is left alone for the same reason
+ * `transportation.js` leaves it alone, being neither ground nor ink but what holds them apart.
+ */
+const ink = (key) => /text|label/i.test(key) && !/halo/i.test(key);
+
 export default Object.entries(style).reduce((acc, [key, value]) => {
     let color = Color.fromString(value);
     if (color == null) {
         acc[key] = value;
+        return acc;
+    } else if (ink(key)) {
+        acc[key] = color.grayscale().toString();
         return acc;
     } else {
         acc[key] = color.grayscale().lighten(0.1).toString();

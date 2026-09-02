@@ -22,7 +22,7 @@ export default {
     layout: {
         'text-font': ['Noto Sans Italic'],
         'text-field': ['get', 'name'],
-        'text-size': 11,
+        'text-size': 12,
         'symbol-placement': 'line',
         // A river bends more than a road does, so a name that will not sit along it is better
         // dropped than wrapped around the meander the default angle allows.
@@ -31,6 +31,7 @@ export default {
     paint: {
         'text-color': theme.waterwayTextColor,
         'text-halo-color': theme.waterwayTextHaloColor,
-        'text-halo-width': 1.2,
+        'text-halo-width': 1.5,
+        'text-halo-blur': 0.5,
     },
 }

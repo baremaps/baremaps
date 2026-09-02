@@ -22,9 +22,13 @@
  *
  * The themes are imported statically rather than resolved on demand: Baremaps
  * evaluates this file as an ES module through GraalJS, and a static graph keeps
- * that working without relying on dynamic import or top-level await. Building
- * every theme costs a few thousand colour conversions, which is not measurable
- * against the rest of the build.
+ * that working without relying on dynamic import or top-level await. Every theme
+ * is therefore built, whichever one is asked for, so each has to be cheap. The
+ * ones that are not are the eight drawn for a reader with a colour vision
+ * deficiency, each of which measures the whole palette against a model of that
+ * reader's eye; those are written out by `generate.js` and are read here rather
+ * than worked out. The rest are a transform of a colour at a time, which is a
+ * few thousand conversions and not measurable against the rest of the build.
  */
 import achromatomaly from './themes/achromatomaly.js';
 import achromatopsia from './themes/achromatopsia.js';

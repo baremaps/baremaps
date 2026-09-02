@@ -56,7 +56,7 @@ export default {
         'text-anchor': 'center',
         'text-field': ['get', 'name'],
         'text-font': ['Noto Sans Regular'],
-        'text-size': 11,
+        'text-size': 12,
         // A name follows the road it names, and a road bends. Past this angle between two
         // characters the label is dropped rather than drawn around the corner, which is what the
         // default of 45 degrees lets it do on a hairpin.
@@ -65,6 +65,7 @@ export default {
     paint: {
         'text-color': theme.highwayLabelColor,
         'text-halo-color': theme.highwayLabelHaloColor,
-        'text-halo-width': 1.2,
+        'text-halo-width': 1.5,
+        'text-halo-blur': 0.5,
     },
 }

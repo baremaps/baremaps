@@ -26,7 +26,14 @@ import {asLayerObject, withSymbolSortKeys} from "../../utils/utils.js";
  * The classes are ordered by how many people the name stands for, and drawn in five weights of
  * grey rather than five colours: they are the same kind of thing at different scales, and a hue
  * would say they were different kinds. Where two labels compete for the same space MapLibre keeps
- * the one with the lower `symbol-sort-key`, which is the more populous of the two.
+ * the one with the lower `symbol-sort-key`, which is the place of higher rank.
+ *
+ * Every class is ranked by that one number and not by its own. The key read a population, which
+ * two thirds of the villages carry and almost none of the suburbs, the hamlets and the localities
+ * do: those classes tied at nothing, so which of a hundred localities a reader saw was whichever
+ * of them the collision grid reached first, and a city whose population is untagged sank below
+ * every village that has one. The rank a point carries answers for all five, and it is the same
+ * number that decided the point was worth a place in the tile at all.
  */
 export default asLayerObject({
     id: 'point_place',
@@ -34,31 +41,40 @@ export default asLayerObject({
     sourceLayer: 'point',
     minzoom: 2,
     layout: {
-        'text-font': ['Noto Sans Regular'],
         'text-field': ['get', 'name'],
+        // A district of a city is an area and a hamlet is a point, and the two are the same size
+        // in the same grey. Letters set apart are how a map has always said area, which is what
+        // `point_region` says it with too, and it costs no contrast to say it.
+        'text-letter-spacing': [
+            'match', ['get', 'place'],
+            ['suburb', 'quarter', 'neighbourhood'], 0.05,
+            0,
+        ],
     },
     paint: {
         'text-halo-color': theme.placeTextHaloColor,
-        'text-halo-width': 1,
+        'text-halo-width': 1.5,
+        'text-halo-blur': 0.5,
     },
     directives: withSymbolSortKeys([
         {
             filter: ['==', ['get', 'place'], 'city'],
-            'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
+            'symbol-sort-key': ['-', ['to-number', ['get', 'rank'], 0]],
+            'text-font': ['Noto Sans Bold'],
             'text-color': theme.placeCityTextColor,
             'text-size': 15,
         },
         {
             filter: ['==', ['get', 'place'], 'town'],
-            'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
+            'symbol-sort-key': ['-', ['to-number', ['get', 'rank'], 0]],
             'text-color': theme.placeTownTextColor,
-            'text-size': 12.5,
+            'text-size': 13.5,
         },
         {
             filter: ['==', ['get', 'place'], 'village'],
-            'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
+            'symbol-sort-key': ['-', ['to-number', ['get', 'rank'], 0]],
             'text-color': theme.placeVillageTextColor,
-            'text-size': 11,
+            'text-size': 12.5,
         },
         {
             // The parts of a city. They only reach the tiles where a city is large enough to have
@@ -68,8 +84,9 @@ export default asLayerObject({
                 ['get', 'place'],
                 ['literal', ['suburb', 'quarter', 'neighbourhood']],
             ],
+            'symbol-sort-key': ['-', ['to-number', ['get', 'rank'], 0]],
             'text-color': theme.placeSuburbTextColor,
-            'text-size': 10.5,
+            'text-size': 12,
         },
         {
             // The smallest places that carry a name, and the named places that hold nobody.
@@ -78,8 +95,9 @@ export default asLayerObject({
                 ['get', 'place'],
                 ['literal', ['hamlet', 'isolated_dwelling', 'locality']],
             ],
+            'symbol-sort-key': ['-', ['to-number', ['get', 'rank'], 0]],
             'text-color': theme.placeLocalityTextColor,
-            'text-size': 10,
+            'text-size': 12,
         },
     ]),
 });

@@ -49,5 +49,6 @@ export default {
         'text-color': theme.terrainContourTextColor,
         'text-halo-color': theme.terrainContourTextHaloColor,
         'text-halo-width': 1.2,
+        'text-halo-blur': 0.5,
     },
 };

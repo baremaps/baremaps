@@ -61,7 +61,7 @@ const buildingAgricultural = 'rgb(232, 226, 211)';
 // Water is the most saturated thing on the map, being the thing a reader finds first.
 const water = 'rgb(159, 218, 244)';
 const waterEdge = 'rgb(124, 198, 233)';
-const waterInk = 'rgb(64, 143, 196)';
+const waterInk = 'rgb(51, 120, 165)';
 
 // Four greens, yellow rather than blue, and told apart by depth: open country is the palest and
 // the most of what a reader sees outside a town, tended ground sits above it, and tree cover is
@@ -70,7 +70,7 @@ const greenField = 'rgb(221, 231, 179)';
 const green = 'rgb(198, 228, 164)';
 const greenDeep = 'rgb(190, 222, 158)';
 const greenEdge = 'rgb(176, 210, 144)';
-const greenInk = 'rgb(94, 134, 82)';
+const greenInk = 'rgb(87, 123, 76)';
 
 const sand = 'rgb(241, 234, 215)';
 const rock = 'rgb(230, 228, 220)';
@@ -108,9 +108,14 @@ const rail = 'rgb(186, 188, 192)';
 // Labels carry the map, so they are neutral and they descend by weight, not by hue. They are a
 // grey and not a black: a label darker than this stops reading as part of the map and starts
 // reading as something laid on top of it.
+//
+// The palest of the three is where the descent stops. A label is small text by any measure that
+// sets one, so it is held to 4.5:1 against the halo it is read against, and this grey clears that
+// with room to spare where the one it replaces did not. What the ramp cannot say in lightness a
+// label says in size, in weight, and in the letters of a district set apart.
 const ink = 'rgb(66, 68, 68)';
 const inkMuted = 'rgb(91, 93, 93)';
-const inkFaint = 'rgb(134, 136, 136)';
+const inkFaint = 'rgb(104, 106, 106)';
 const halo = 'rgba(255, 255, 255, 0.9)';
 
 // Points of interest are where the rest of the saturation goes: a handful of strong hues, each
@@ -141,7 +146,6 @@ export default {
     amenityParkingOverlayFillColor: 'rgb(236, 234, 226)',
     amenityParkingOverlayOutlineColor: 'rgb(224, 222, 214)',
     amenityPublicBathIconColor: iconBlue,
-    amenityPublicBathTextColor: inkMuted,
     amenitySchoolFillColor: landInstitution,
     amenityUniversityBackgroundFillColor: landInstitution,
     attractionWaterSlideLineColor: waterEdge,
@@ -157,7 +161,7 @@ export default {
     buildingCommercialFillColor: buildingCommercial,
     buildingFillColor: building,
     buildingIndustrialFillColor: buildingIndustrial,
-    buildingNumberTextColor: 'rgb(152, 150, 144)',
+    buildingNumberTextColor: 'rgb(116, 114, 108)',
     buildingNumberTextHaloColor: halo,
     buildingOutlineColor: buildingOutline,
     defaultIconColor: iconNeutral,
@@ -252,7 +256,7 @@ export default {
     landuseGreenfieldBackgroundFillColor: greenField,
     landuseGreenhouseHorticultureOverlayFillColor: greenField,
     landuseIndustrialBackgroundFillColor: landDim,
-    landuseIndustrialTextColor: 'rgb(130, 128, 122)',
+    landuseIndustrialTextColor: 'rgb(116, 114, 109)',
     landuseLandfillBackgroundFillColor: 'rgb(230, 228, 216)',
     landuseMeadowOverlayFillColor: green,
     landuseMilitaryOverlayFillColor: 'rgba(226, 172, 166, 0.18)',
@@ -260,7 +264,7 @@ export default {
     landusePedestrianBackgroundFillColor: 'rgb(240, 238, 230)',
     landusePlantNurseryBackgroundFillColor: greenDeep,
     landuseQuarryBackgroundFillColor: 'rgb(228, 226, 216)',
-    landuseQuarryTextColor: 'rgb(120, 118, 112)',
+    landuseQuarryTextColor: 'rgb(113, 111, 106)',
     landuseRailwayBackgroundFillColor: landDim,
     landuseRecreationGroundBackgroundFillColor: green,
     landuseReligiousBackgroundFillColor: 'rgb(237, 234, 224)',
@@ -309,7 +313,7 @@ export default {
     naturalBeachOverlayFillColor: sand,
     naturalCliffLineColor: 'rgb(200, 198, 190)',
     naturalGlacierBackgroundFillColor: ice,
-    naturalGlacierTextColor: 'rgb(118, 148, 164)',
+    naturalGlacierTextColor: 'rgb(89, 118, 134)',
     naturalGrasslandBackgroundFillColor: green,
     naturalHeathBackgroundFillColor: 'rgb(214, 224, 168)',
     naturalPeakIconColor: 'rgb(138, 126, 110)',
@@ -332,11 +336,12 @@ export default {
     placeCountryTextHaloColor: halo,
     placeLocalityTextColor: inkFaint,
     placeRegionTextColor: 'rgb(102, 104, 104)',
-    placeSuburbTextColor: 'rgb(112, 114, 114)',
+    placeSuburbTextColor: 'rgb(104, 106, 106)',
     placeTextHaloColor: halo,
     placeTownTextColor: 'rgb(78, 80, 80)',
     placeVillageTextColor: 'rgb(96, 98, 98)',
     pointIconHaloColor: halo,
+    pointTextColor: ink,
     pointTextHaloColor: halo,
     powerCableLineColor: 'rgb(212, 214, 218)',
     powerIconColor: iconNeutral,
@@ -352,14 +357,13 @@ export default {
     shopIconColor: iconMagenta,
     terrainContourIndexLineColor: 'rgba(186, 172, 138, 0.6)',
     terrainContourLineColor: 'rgba(198, 186, 156, 0.45)',
-    terrainContourTextColor: 'rgba(152, 138, 110, 1)',
+    terrainContourTextColor: 'rgba(125, 113, 88, 1)',
     terrainContourTextHaloColor: 'rgba(255, 255, 255, 0.9)',
     tourismAttractionFillColor: 'rgb(238, 232, 216)',
     tourismCampSiteFillColor: green,
     transportDefaultIconColor: iconViolet,
     transportationIconColor: iconBlue,
     waterIconColor: waterInk,
-    waterTextColor: waterInk,
     waterwayLineColor: water,
     waterwayTextColor: waterInk,
     waterwayTextHaloColor: halo,

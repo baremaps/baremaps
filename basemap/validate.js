@@ -34,7 +34,8 @@ import {fileURLToPath} from 'url';
 
 import theme, {fixed} from './theme.js';
 import map from './map.js';
-import {Color} from './utils/color.js';
+import {Color, RGB} from './utils/color.js';
+import {simulate, DICHROMACY, ANOMALY} from './utils/vision.js';
 
 // The style the map describes, derived the way MapCompiler derives it: the map-wide properties a
 // renderer uses, and the layers with the source filled in and the tileset extensions dropped. This
@@ -642,6 +643,194 @@ function checkDefaults() {
 }
 
 /**
+ * The values a compiled chain can answer with, the way `claims` reads the tests it makes them by.
+ *
+ * A directive list compiles to a `case`, a `match`, or the two nested; a property that varies with
+ * the zoom compiles to an `interpolate` or a `step`. All five hold their answers at known offsets
+ * and fall through to a last one. An expression that reads the feature answers with something this
+ * cannot know, and contributes nothing, which is the safe direction: a value never seen here is
+ * never reported.
+ */
+function answers(node, found = []) {
+    if (!Array.isArray(node)) {
+        found.push(node);
+        return found;
+    }
+    const last = () => answers(node[node.length - 1], found);
+    switch (node[0]) {
+        case 'literal':
+            found.push(node[1]);
+            return found;
+        case 'case':
+            for (let i = 2; i < node.length - 1; i += 2) answers(node[i], found);
+            return last();
+        case 'match':
+            for (let i = 3; i < node.length - 1; i += 2) answers(node[i], found);
+            return last();
+        case 'step':
+            answers(node[2], found);
+            for (let i = 4; i < node.length; i += 2) answers(node[i], found);
+            return found;
+        case 'interpolate':
+            for (let i = 4; i < node.length; i += 2) answers(node[i], found);
+            return found;
+        default:
+            return found;
+    }
+}
+
+/**
+ * The smallest a label is set.
+ *
+ * A label is small text by any measure that sets one, and below this it stops being text a reader
+ * can take in at a glance on a map they are also reading shapes off. The whole hierarchy used to
+ * live between ten and fifteen pixels, which left the classes at the bottom -- the hamlets, the
+ * street names, the two hundred classes of point -- unreadable to anyone who does not have the
+ * eyes the map was drawn with. What a class cannot say in size it says in weight, in colour, and
+ * in the letters of an area set apart.
+ *
+ * The exceptions are the two layers that are not read but consulted: a house number is looked up
+ * once the street is found, and a contour is a number a reader goes looking for on a line. Both
+ * are dense enough that setting them as text would bury the map under them.
+ */
+const TEXT_SIZE_FLOOR = 12;
+const REFERENCE_MARKS = new Set(['building_number', 'terrain_contour_label']);
+
+function checkLabelSizes() {
+    for (const layer of style.layers) {
+        if (layer.type !== 'symbol' || REFERENCE_MARKS.has(layer.id)) continue;
+        const size = layer.layout?.['text-size'];
+        if (size === undefined) continue;
+        // Zero is the value `mergeDirectives` falls through to where every class the layer draws
+        // names a size of its own, so it stands for nothing said rather than for a label set at
+        // nothing. No layer asks for one either way.
+        const sizes = answers(size).filter((value) => typeof value === 'number' && value > 0);
+        const smallest = Math.min(...sizes);
+        if (sizes.length && smallest < TEXT_SIZE_FLOOR) {
+            error('label-size', `${layer.id}: sets a label at ${smallest}px, under the ` +
+                `${TEXT_SIZE_FLOOR}px floor. A class that has to be told apart from the one above ` +
+                `it has weight, colour and letter-spacing to do it with`);
+        }
+    }
+}
+
+/**
+ * Whether the themes drawn for a reader with a colour vision deficiency actually work for them.
+ *
+ * Each of those themes takes the default palette and moves the colours that its reader would
+ * otherwise see as one, so the claim it makes is measurable: simulate that reader's vision over
+ * the theme built for them, and the labels the default palette draws apart should still be apart.
+ * `utils/vision.js` makes no guarantee of clearing them all -- separating one pair in lightness can
+ * push a colour into a third -- only of never coming out worse than it went in, so what is left is
+ * reported rather than assumed.
+ *
+ * The label colours and not the whole palette: an area is told apart by its edges, its pattern and
+ * the name written across it as well as by its fill, and two labels of the same colour have only
+ * their size and their letters left.
+ */
+const CONDITIONS = [
+    ['protanopia', 'protan', DICHROMACY],
+    ['protanomaly', 'protan', ANOMALY],
+    ['deuteranopia', 'deutan', DICHROMACY],
+    ['deuteranomaly', 'deutan', ANOMALY],
+    ['tritanopia', 'tritan', DICHROMACY],
+    ['tritanomaly', 'tritan', ANOMALY],
+];
+
+// A difference a reader notices at all, and the difference two colours of the palette they came
+// from had. Both are the thresholds `utils/vision.js` builds the themes to.
+const NOTICEABLE = 2.3;
+const DISTINCT = 5;
+
+async function checkVisionThemes() {
+    const base = (await import('./themes/default.js')).default;
+    const keys = Object.keys(base)
+        .filter((key) => /TextColor$|LabelColor$/.test(key) && Color.fromString(base[key]));
+
+    for (const [name, type, severity] of CONDITIONS) {
+        const values = (await import(`./themes/${name}.js`)).default;
+        const seen = keys.map((key) =>
+            simulate(Color.fromString(values[key]).toRGB(), type, severity));
+        const collisions = [];
+        for (let i = 0; i < keys.length; i++) {
+            for (let j = i + 1; j < keys.length; j++) {
+                const apart = Color.fromString(base[keys[i]]).difference(Color.fromString(base[keys[j]]));
+                if (apart < DISTINCT) continue;
+                if (seen[i].difference(seen[j]) >= NOTICEABLE) continue;
+                collisions.push(`${keys[i]} / ${keys[j]}`);
+            }
+        }
+        if (collisions.length) {
+            warn('vision', `themes/${name}.js: ${collisions.length} pair(s) of label colours this ` +
+                `reader cannot tell apart, which the default palette draws apart: ` +
+                collisions.slice(0, 3).join(', ') + (collisions.length > 3 ? ', ...' : ''));
+        }
+    }
+}
+
+/**
+ * What a label is read against.
+ *
+ * A glyph an eleventh of an inch tall is read against its halo and not against the ground the halo
+ * lies on, so the halo is composited over the background and the letter is measured against that.
+ * The floor is the one WCAG sets for text below 18.66px, which every label on this map is.
+ *
+ * This reads the theme the style is built with. `BAREMAPS_THEME=<name> node validate.js` measures
+ * another, and every theme but `default` and `soft` is one of those two transformed, so a colour
+ * that clears the floor in its parent can still be driven under it by a transform.
+ */
+const CONTRAST_FLOOR = 4.5;
+
+function luminance(color) {
+    const {r, g, b} = color.toRGB();
+    const channel = (value) => {
+        const v = value / 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+function contrastRatio(one, other) {
+    const [lighter, darker] = [luminance(one), luminance(other)].sort((a, b) => b - a);
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+/** A translucent colour laid over an opaque one, which is what a halo on the ground is. */
+function over(color, ground) {
+    const front = color.toRGB();
+    const back = ground.toRGB();
+    const alpha = front.a ?? 1;
+    return new RGB(
+        front.r * alpha + back.r * (1 - alpha),
+        front.g * alpha + back.g * (1 - alpha),
+        front.b * alpha + back.b * (1 - alpha));
+}
+
+function checkLabelContrast() {
+    const ground = Color.fromString(theme.backgroundColor);
+    if (!ground) return;
+    for (const layer of style.layers) {
+        if (layer.type !== 'symbol') continue;
+        const halo = Color.fromString(layer.paint?.['text-halo-color'] ?? '');
+        const read = halo ? over(halo, ground) : ground;
+        const reported = new Set();
+        for (const value of answers(layer.paint?.['text-color'] ?? [])) {
+            const color = typeof value === 'string' ? Color.fromString(value) : null;
+            if (!color || reported.has(value)) continue;
+            // A fully transparent colour is what `mergeDirectives` falls through to where every
+            // class the layer draws names one of its own: nothing said, and nothing drawn.
+            if ((color.toRGB().a ?? 1) === 0) continue;
+            const ratio = contrastRatio(color, read);
+            if (ratio < CONTRAST_FLOOR) {
+                reported.add(value);
+                warn('label-contrast', `${layer.id}: ${value} reads at ${ratio.toFixed(2)}:1 ` +
+                    `against its halo, under the ${CONTRAST_FLOOR}:1 a label of this size needs`);
+            }
+        }
+    }
+}
+
+/**
  * A symbol layer drawing more than one class of thing decides which of two labels survives where
  * they collide, and decides it with `symbol-sort-key`. Without one the winner is whichever feature
  * the tile happens to hold first, which changes between tiles and between imports, so a label
@@ -807,6 +996,9 @@ checkOrphans(files);
 checkLayerNames(files);
 checkDefaults();
 checkSymbolSortKeys();
+checkLabelSizes();
+checkLabelContrast();
+await checkVisionThemes();
 checkChainLength();
 checkDuplicateLayerIds();
 checkSources();

@@ -9,10 +9,21 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
+-- Every node that says something about itself, with the rank of the ones that name a place.
+--
+-- The rank is worked out here and carried as an attribute, so that the views below and the styles
+-- that read them are ranking places by the same number. A point that names no place carries no
+-- rank, and the views admit it by its class as before.
 CREATE
     OR REPLACE VIEW osm_point AS SELECT
         id,
-        tags,
+        CASE
+            WHEN tags ? 'place' THEN tags || jsonb_build_object(
+                'rank',
+                place_rank(tags)
+            )
+            ELSE tags
+        END AS tags,
         geom
     FROM
         osm_node
@@ -20,6 +31,18 @@ CREATE
         geom IS NOT NULL
         AND tags != '{}';
 
+-- The zooms a place is named at.
+--
+-- Which places a zoom is worth naming was a list of classes: every city on earth from zoom 3,
+-- every town in view from zoom 8, every village from zoom 11. A class is not a size, so the tiles
+-- carried far more names than the zoom could draw -- a tile over a city at zoom 10 held a hundred
+-- and sixty of them where twenty could be read -- and which of the hundred and sixty a reader saw
+-- was settled by whichever labels the collision grid reached first.
+--
+-- So a zoom asks for a rank instead. The ladder halves roughly every zoom, against tiles that
+-- quarter, so a place holds its place on the map for several zooms after it first appears and the
+-- names arrive at a pace a reader can follow. The classes remain in `place_rank`, which is where
+-- they say what they are worth; they no longer also say when they are seen.
 CREATE
     OR REPLACE VIEW osm_point_z20 AS SELECT
         *
@@ -74,23 +97,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= ANY(
-            ARRAY [ 'country',
-            'state',
-            'region',
-            'province',
-            'district',
-            'county',
-            'municipality',
-            'city',
-            'town',
-            'village',
-            'suburb',
-            'quarter',
-            'neighbourhood',
-            'hamlet' ]
-        )
+            tags ->> 'rank'
+        )::NUMERIC >= 400
         OR(
             tags ->> 'natural'
         )= ANY(
@@ -123,20 +131,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= ANY(
-            ARRAY [ 'country',
-            'state',
-            'region',
-            'province',
-            'district',
-            'county',
-            'municipality',
-            'city',
-            'town',
-            'village',
-            'suburb' ]
-        )
+            tags ->> 'rank'
+        )::NUMERIC >= 1500
         OR(
             tags ->> 'natural'
         )= ANY(
@@ -165,19 +161,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= ANY(
-            ARRAY [ 'country',
-            'state',
-            'region',
-            'province',
-            'district',
-            'county',
-            'municipality',
-            'city',
-            'town',
-            'village' ]
-        )
+            tags ->> 'rank'
+        )::NUMERIC >= 5000
         OR(
             tags ->> 'natural'
         )= ANY(
@@ -200,18 +185,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= ANY(
-            ARRAY [ 'country',
-            'state',
-            'region',
-            'province',
-            'district',
-            'county',
-            'municipality',
-            'city',
-            'town' ]
-        )
+            tags ->> 'rank'
+        )::NUMERIC >= 12000
         OR(
             tags ->> 'natural'
         )= ANY(
@@ -234,18 +209,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= ANY(
-            ARRAY [ 'country',
-            'state',
-            'region',
-            'province',
-            'district',
-            'county',
-            'municipality',
-            'city',
-            'town' ]
-        );
+            tags ->> 'rank'
+        )::NUMERIC >= 30000;
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_point_z8;
@@ -259,18 +224,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= ANY(
-            ARRAY [ 'country',
-            'state',
-            'region',
-            'province',
-            'district',
-            'county',
-            'municipality',
-            'city',
-            'town' ]
-        );
+            tags ->> 'rank'
+        )::NUMERIC >= 60000;
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_point_z7;
@@ -284,14 +239,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= ANY(
-            ARRAY [ 'country',
-            'city',
-            'sea',
-            'state',
-            'county' ]
-        );
+            tags ->> 'rank'
+        )::NUMERIC >= 120000;
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_point_z6;
@@ -305,14 +254,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= ANY(
-            ARRAY [ 'country',
-            'city',
-            'sea',
-            'state',
-            'county' ]
-        );
+            tags ->> 'rank'
+        )::NUMERIC >= 250000;
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_point_z5;
@@ -326,14 +269,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= ANY(
-            ARRAY [ 'country',
-            'city',
-            'sea',
-            'state',
-            'county' ]
-        );
+            tags ->> 'rank'
+        )::NUMERIC >= 500000;
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_point_z4;
@@ -347,12 +284,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= ANY(
-            ARRAY [ 'country',
-            'city',
-            'sea' ]
-        );
+            tags ->> 'rank'
+        )::NUMERIC >= 1000000;
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_point_z3;
@@ -366,12 +299,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= ANY(
-            ARRAY [ 'country',
-            'city',
-            'sea' ]
-        );
+            tags ->> 'rank'
+        )::NUMERIC >= 3000000;
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_point_z2;
@@ -385,8 +314,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= 'country';
+            tags ->> 'rank'
+        )::NUMERIC >= 3000000;
 
 DROP
     MATERIALIZED VIEW IF EXISTS osm_point_z1;
@@ -400,8 +329,8 @@ CREATE
         osm_point
     WHERE
         (
-            tags ->> 'place'
-        )= 'country';
+            tags ->> 'rank'
+        )::NUMERIC >= 3000000;
 
 DROP
     INDEX IF EXISTS osm_point_geom_z13_index;

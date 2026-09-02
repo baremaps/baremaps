@@ -23,12 +23,13 @@ export default {
         'text-field': ['get', 'name'],
         'text-font': ['Noto Sans Regular'],
         'symbol-placement': 'line-center',
-        'text-size': 11,
+        'text-size': 12,
     },
     minzoom: 15,
     paint: {
         'text-color': theme.manMadePierTextColor,
         'text-halo-color': theme.manMadePierTextHaloColor,
-        'text-halo-width': 1.2,
+        'text-halo-width': 1.5,
+        'text-halo-blur': 0.5,
     },
 }

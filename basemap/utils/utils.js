@@ -36,10 +36,36 @@ export function withSymbolSortKeys(directives) {
     return directives.map(withSymbolSortKey);
 }
 
+/**
+ * The order the directives of a symbol layer win in.
+ *
+ * Where two symbols want the same piece of the screen MapLibre keeps the one with the lower
+ * `symbol-sort-key`, so the key ranks the classes of a layer against each other. A directive says
+ * what its class is worth as a `priority`, a small number shared by every class of the same
+ * standing, and the position it is written in separates the classes inside that band.
+ *
+ * Both are needed and neither can do the other's work. The list is ordered by subject and by
+ * specificity, because the chain that picks an icon answers with its first hit and a class has to
+ * be written above the classes it would otherwise claim; so where a directive is written cannot
+ * also say how much of the screen it is worth. Read as a ranking, that order says the first
+ * subject written is the most important one, and the icon layer opens on the restaurants.
+ *
+ * A directive that declares a `symbol-sort-key` of its own keeps it, for a class ranked against
+ * the others of its kind by something its features carry rather than by a band: a population, an
+ * elevation.
+ */
 export function withSymbolSortKey(directive, index) {
-    return directive['symbol-sort-key'] ? directive : {
-        ...directive,
-        'symbol-sort-key': index,
+    // Absent means the directive does not carry the key, the way `mergeDirectives` reads it: a
+    // directive asking for the first sort key is asking for something.
+    if (directive['symbol-sort-key'] !== undefined) {
+        return directive;
+    }
+    const {priority, ...rest} = directive;
+    return {
+        ...rest,
+        // The band first and the position within it second. The stride is wider than any list of
+        // directives this is applied to, so no class reaches the band below by being written late.
+        'symbol-sort-key': priority === undefined ? index : priority * 1000 + index,
     };
 }
 
@@ -251,8 +277,22 @@ function iconColor(directives) {
  * style the specification rejects. Nothing reaches this today, every layer naming its font in
  * `layout`, so the wrong shape sat here unbuilt.
  */
+/**
+ * The font a directive asks its class to be set in.
+ *
+ * A font is named by a stack, which is a list, and a list at the head of an expression is read as a
+ * call: gathered into a chain unwrapped, `['Noto Sans Bold']` is an expression by that name and the
+ * style is rejected. So the stacks are wrapped, both the ones the directives name and the one they
+ * fall through to. Every other property gathered this way holds a number or a colour, which cannot
+ * be mistaken for a call and needs no wrapping.
+ */
 function textFont(directives) {
-    return mergeDirectives(directives, 'text-font', ['Noto Sans Regular'])
+    const stack = (font) =>
+        Array.isArray(font) && font[0] !== 'literal' ? ['literal', font] : font;
+    const named = directives.map((directive) => directive['text-font'] === undefined
+        ? directive
+        : {...directive, 'text-font': stack(directive['text-font'])});
+    return mergeDirectives(named, 'text-font', stack(['Noto Sans Regular']))
 }
 
 function textField(directives) {

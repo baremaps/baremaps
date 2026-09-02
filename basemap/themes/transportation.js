@@ -21,6 +21,10 @@ import {Color} from "../utils/color.js";
  * what holds a label off the map behind it, and every halo of the style is the same white for that
  * reason. `highwayLabelHaloColor` is filed under a road without being one, so darkening it with
  * the network left the road labels the only ones ringed in grey, one of nine.
+ *
+ * A label off the network is left at its own lightness for the same kind of reason. The
+ * lightening is for the ground this theme pushes back, and lightening a label lightens the ink
+ * instead, which took eight of them under the contrast text this size needs.
  */
 function emphasized(key) {
     const name = key.toLowerCase();
@@ -34,6 +38,9 @@ function emphasized(key) {
         || name.includes("ferry");
 }
 
+/** A label, which the lightening leaves alone. A halo is neither ground nor ink. */
+const ink = (key) => /text|label/i.test(key) && !/halo/i.test(key);
+
 export default Object.entries(style).reduce((acc, [key, value]) => {
     let color = Color.fromString(value);
     if (color == null) {
@@ -41,6 +48,9 @@ export default Object.entries(style).reduce((acc, [key, value]) => {
         return acc;
     } else if (emphasized(key)) {
         acc[key] = color.darken(0.2).toString();
+        return acc;
+    } else if (ink(key)) {
+        acc[key] = color.grayscale().toString();
         return acc;
     } else {
         acc[key] = color.grayscale().lighten(0.1).toString();

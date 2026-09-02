@@ -33,13 +33,14 @@ export default {
     layout: {
         'text-font': ['Noto Sans Regular'],
         'text-field': ['get', 'name'],
-        'text-size': 12,
+        'text-size': 13,
         'text-letter-spacing': 0.08,
-        'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
+        'symbol-sort-key': ['-', ['to-number', ['get', 'rank'], 0]],
     },
     paint: {
         'text-color': theme.placeRegionTextColor,
         'text-halo-color': theme.placeCountryTextHaloColor,
-        'text-halo-width': 1,
+        'text-halo-width': 1.5,
+        'text-halo-blur': 0.5,
     },
 };

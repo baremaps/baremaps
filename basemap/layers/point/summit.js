@@ -46,7 +46,7 @@ export default {
             ['get', 'name'],
         ],
         'text-font': ['Noto Sans Regular'],
-        'text-size': 10,
+        'text-size': 12,
         'text-anchor': 'top',
         // The icon and the name are placed together or not at all. Left optional, MapLibre drops
         // the name of a crowded summit and keeps its triangle, and a range comes out as a field of
@@ -64,6 +64,7 @@ export default {
         'icon-halo-width': 1,
         'text-color': theme.naturalPeakTextColor,
         'text-halo-color': theme.pointTextHaloColor,
-        'text-halo-width': 1,
+        'text-halo-width': 1.5,
+        'text-halo-blur': 0.5,
     },
 };

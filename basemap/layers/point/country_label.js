@@ -21,12 +21,13 @@ export default asLayerObject({
     'minzoom': 1,
     'maxzoom': 9,
     layout: {
-        'text-font': ['Noto Sans Regular'],
+        'text-font': ['Noto Sans Bold'],
         'text-field': ['get', 'name'],
     },
     paint: {
         'text-halo-color': theme.placeCountryTextHaloColor,
-        'text-halo-width': 1,
+        'text-halo-width': 1.5,
+        'text-halo-blur': 0.5,
     },
     directives: withSymbolSortKeys([
         {
@@ -34,9 +35,9 @@ export default asLayerObject({
                 'all',
                 ['==', ['get', 'place'], 'country']
             ],
-            'text-size': 15,
+            'text-size': 16,
             'text-color': theme.placeCountryTextColor,
-            'symbol-sort-key': ["-", ["to-number", ['get', 'population'], 0]],
+            'symbol-sort-key': ['-', ['to-number', ['get', 'rank'], 0]],
         },
     ]),
 });

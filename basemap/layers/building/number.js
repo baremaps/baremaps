@@ -29,6 +29,7 @@ export default {
         'text-color': theme.buildingNumberTextColor,
         'text-halo-color': theme.buildingNumberTextHaloColor,
         'text-halo-width': 1.2,
+        'text-halo-blur': 0.5,
     },
     filter: ['all',
       ['==', ['geometry-type'], 'Polygon'],

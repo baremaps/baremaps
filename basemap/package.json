@@ -6,7 +6,9 @@
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
-    "validate": "node validate.js"
+    "validate": "node validate.js",
+    "test": "node --test \"*.test.js\" \"utils/*.test.js\"",
+    "themes": "node generate.js"
   },
   "devDependencies": {
     "@maplibre/maplibre-gl-style-spec": "^26.4.1"

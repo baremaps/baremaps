@@ -38,12 +38,13 @@ export default asLayerObject({
         // that a reader follows it without being told, and `waterway_label` already does.
         'text-font': ['Noto Sans Italic'],
         'text-field': ['get', 'name'],
-        'text-size': 11,
+        'text-size': 12,
         'text-max-width': 6,
     },
     paint: {
         'text-halo-color': theme.pointTextHaloColor,
-        'text-halo-width': 1,
+        'text-halo-width': 1.5,
+        'text-halo-blur': 0.5,
     },
     directives: withSymbolSortKeys([
         {
