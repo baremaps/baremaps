@@ -132,7 +132,7 @@ export function asPaintProperty(directives = [], basePaint = {}) {
  * asks one per attribute it reads, and each is a lookup rather than a scan.
  */
 export function asFilterProperty(directives = [], filter = []) {
-    const claims = union(directives.map((directive) => directive['filter']).filter(Boolean));
+    const claims = claimed(directives);
     if (claims && filter.length > 0) {
         return ['all', filter, claims];
     } else if (claims) {
@@ -145,6 +145,36 @@ export function asFilterProperty(directives = [], filter = []) {
 }
 
 /** The disjunction of a list of tests, with those reading one attribute folded together. */
+/**
+ * What the directives claim, at the zoom each of them claims it from.
+ *
+ * A directive that names no `minzoom` is claimed wherever the layer draws, and a list of those is
+ * one gathered disjunction, which is what the layer had. A directive that names one is claimed from
+ * that zoom up, and the list is then a `step` holding a gathered disjunction per zoom: the classes
+ * of a layer need not all arrive at once.
+ *
+ * The alternative is a zoom test written into each directive's own filter, which would break the
+ * gathering: two hundred and fifty six tests, each on one attribute and a zoom, cannot be collected
+ * into one lookup per attribute. Grouped this way each zoom still asks one question per attribute
+ * it reads.
+ */
+function claimed(directives) {
+    const filters = (kept) => kept.map((directive) => directive['filter']).filter(Boolean);
+    const zooms = [...new Set(directives
+        .map((directive) => directive['minzoom'])
+        .filter((zoom) => zoom !== undefined))].sort((a, b) => a - b);
+    if (zooms.length < 2) {
+        return union(filters(directives));
+    }
+    const upTo = (zoom) => union(filters(directives
+        .filter((directive) => (directive['minzoom'] ?? zooms[0]) <= zoom)));
+    const step = ['step', ['zoom'], upTo(zooms[0])];
+    for (const zoom of zooms.slice(1)) {
+        step.push(zoom, upTo(zoom));
+    }
+    return step;
+}
+
 function union(filters) {
     const byAttribute = new Map();
     const rest = [];

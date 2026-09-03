@@ -27,6 +27,43 @@ import theme from '../../theme.js';
  * is the question the list the directives are written in cannot answer; ranking the classes of one
  * subject against each other is what their order inside a band already does.
  */
+/**
+ * The zoom each band arrives at.
+ *
+ * Two hundred and fifty six classes used to land on the map in one step at 16, and a city centre
+ * came out as a field of icons: three tiles over the old town of Zurich offer eleven hundred and
+ * eighty two of them, where a tile has room to draw perhaps thirty. Which thirty a reader saw was
+ * settled by the collision grid rather than by anything anyone chose.
+ *
+ * So they arrive over three zooms, the way the road names do in `highway/label.js`, and for the
+ * same reason: what a reader navigates by first, then what they are usually looking for, then the
+ * rest. Five hundred and seventy seven of those eleven hundred are shops and places to eat, and
+ * four hundred and eighty nine are street furniture -- benches, bins, bollards, gates, vending
+ * machines -- of which thirty six carry a name. The rest is the hundred and sixteen a stranger
+ * navigates by, which is about what a tile can hold.
+ *
+ * Each zoom quarters the ground a tile covers, so a band held back one zoom is drawn against four
+ * times the room: the shops arrive at 17 as roughly a hundred and forty to a tile, and the street
+ * furniture at 18 as thirty.
+ *
+ * A few classes arrive early despite this, and are meant to. What admits a feature to a zoom is a
+ * lookup gathered per attribute, so a class sharing an attribute value with an earlier band comes
+ * in with it: a street-side parking bay is admitted at 16 along with the car parks, because both
+ * are `amenity=parking`. The chain then answers with the narrower directive, so it is drawn as the
+ * quiet parking mark it should be rather than as a car park, and there are two of them in a tile
+ * over the old town. Separating them would mean asking each class its own question, which is the
+ * two hundred and fifty six comparisons the gathering exists to avoid.
+ */
+const ARRIVAL = {
+    interchange: 16,
+    emergency: 16,
+    civic: 16,
+    landmark: 16,
+    transport: 16,
+    commerce: 17,
+    detail: 18,
+};
+
 const PRIORITY = {
     // Where a journey changes mode. Few, named, and the thing a route is built out of.
     interchange: 0,
@@ -43,6 +80,22 @@ const PRIORITY = {
     // Street furniture and equipment, down to the bins and the bollards.
     detail: 6,
 };
+
+/**
+ * Gives each directive the zoom its band arrives at, which `asFilterProperty` gathers into a step.
+ *
+ * Read off the priority rather than written on each directive: the band already says what a class
+ * is worth, and when it is drawn follows from that. A class that wants a zoom of its own says so
+ * itself and keeps it.
+ */
+const BANDS = Object.fromEntries(Object.entries(PRIORITY).map(([band, value]) => [value, band]));
+
+function arriving(directives) {
+    return directives.map((directive) => directive['minzoom'] !== undefined ? directive : {
+        ...directive,
+        minzoom: ARRIVAL[BANDS[directive['priority']]],
+    });
+}
 
 export default asLayerObject({
     id: 'point_icon',
@@ -100,7 +153,7 @@ export default asLayerObject({
      * band at all left that to the order the two happened to come out of the database, which
      * changed between tiles and between imports of the same extract.
      */
-    directives: withSymbolSortKeys([
+    directives: withSymbolSortKeys(arriving([
         // Gastronomy
         {
             'filter': [
@@ -2098,5 +2151,5 @@ export default asLayerObject({
             'priority': PRIORITY.detail,
             'icon-color': theme.defaultIconColor,
         },
-    ]),
+    ])),
 });
