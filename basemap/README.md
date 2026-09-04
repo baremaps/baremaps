@@ -68,10 +68,10 @@ baremaps workflow execute --file refresh.js
 
 The database can periodically be updated with the following commands. 
 The update workflow will download the latest changes from OpenStreetMap (osc.xml) and apply them to the database.
-Refreshing the materialized views is costly, so it is a separate command. The low zoom levels
-are read from those views, and so is the zoning a building is coloured by, so an update that is
-not followed by a refresh leaves both showing the map as it stood at the last one: buildings
-added since are drawn, in the colour of a building on no zoning at all.
+Refreshing the materialized views is costly, so it is a separate command. Every layer reads a
+stored relation, which is what keeps a tile from repeating the work that does not depend on it,
+so an update that is not followed by a refresh changes nothing a reader sees: the map stands as
+it did at the last refresh, however many changes have been applied to the tables beneath it.
 
 ```
 // This command updates the database
