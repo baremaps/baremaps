@@ -24,7 +24,8 @@
  * A layer says how it is drawn and, for one layer per source layer, where its features come from;
  * everything else is worked out. Every layer reads the one source, so no layer names it. The
  * attributes the tiles carry are read off the layers that use them, per zoom level, so adding a
- * directive that reads a new tag is all it takes to make the tiles carry it.
+ * directive that reads a new tag is all it takes to make the tiles carry it. An attribute nothing
+ * draws with leaves no such trace, and is the one thing a layer states outright, as `attributes`.
  *
  * A layer module lives at `layers/<topic>/<name>.js`, is imported under the two joined by an
  * underscore, and gives its layer that same name as its id, so a name can be read off a path and a

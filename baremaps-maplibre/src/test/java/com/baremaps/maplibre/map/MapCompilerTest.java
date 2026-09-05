@@ -132,6 +132,49 @@ class MapCompilerTest {
         .startsWith("SELECT '{}'::jsonb AS tags"));
   }
 
+  /**
+   * An attribute nothing draws with reaches the tile because a layer asks for it, and reaches it
+   * the same way every other attribute does: through the projection, at the zoom levels the layer
+   * asking for it draws at.
+   */
+  @Test
+  void carriesTheAttributesALayerAsksFor() {
+    var queries =
+        queries(MapCompiler.tileset(spec(building("\"attributes\":[\"osm_id\"]"))), "building");
+    assertEquals(1, queries.size());
+    assertEquals("SELECT jsonb_build_object('building', tags -> 'building', "
+        + "'osm_id', tags -> 'osm_id') AS tags, geom AS geom FROM osm_building",
+        queries.get(0).getSql());
+  }
+
+  @Test
+  void carriesAnAttributeOnlyWhereTheLayerAskingForItDraws() {
+    var queries = queries(MapCompiler.tileset(spec(building("") + ","
+        + layer("b", "building", "\"minzoom\":15,\"attributes\":[\"osm_id\"],"
+            + "\"paint\":{\"fill-color\":\"#000\"}"))),
+        "building");
+    assertEquals(2, queries.size());
+    assertFalse(queries.get(0).getSql().contains("osm_id"));
+    assertEquals(15, queries.get(1).getMinzoom());
+    assertTrue(queries.get(1).getSql().contains("osm_id"));
+  }
+
+  /**
+   * A feature carrying only an identifier is still drawn as nothing, so a carried attribute cannot
+   * be what admits it. An identifier every feature has would otherwise admit every feature and
+   * leave the test with nothing to drop.
+   */
+  @Test
+  void doesNotAdmitAFeatureByAnAttributeNothingDrawsWith() {
+    var spec = spec(layer("a", "point",
+        "\"sourceQueries\":[{\"minzoom\":13,\"maxzoom\":20,\"from\":\"osm_point\","
+            + "\"drawable\":true}],\"attributes\":[\"osm_id\"],"
+            + "\"filter\":[\"has\",\"amenity\"]"));
+    var sql = queries(MapCompiler.tileset(spec), "point").get(0).getSql();
+    assertTrue(sql.contains("'osm_id', tags -> 'osm_id'"), "carried into the projection");
+    assertTrue(sql.endsWith("WHERE (tags ? 'amenity')"), "and left out of the drawable test");
+  }
+
   @Test
   void publishesTheDerivedAttributesAsFields() {
     assertEquals(Set.of("building"), MapCompiler.layers(MapCompiler.tileset(spec(building(""))))

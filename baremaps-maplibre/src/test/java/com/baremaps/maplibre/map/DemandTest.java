@@ -20,6 +20,8 @@ import com.baremaps.maplibre.expression.Expressions;
 import com.baremaps.maplibre.style.Style;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -140,5 +142,49 @@ class DemandTest {
         + "\"layout\":{\"text-field\":[\"get\",\"addr:housenumber\"]}}");
     assertEquals(Set.of("building"), Demand.of(style, 14).get("s").keys());
     assertEquals(Set.of("building", "addr:housenumber"), Demand.of(style, 15).get("s").keys());
+  }
+
+  @Test
+  void carriesTheAttributesALayerAsksFor() {
+    var style = style(layer("\"filter\":[\"has\",\"building\"]"));
+    var attributes = Demand.of(style, 14, Map.of("l", List.of("osm_id"))).get("s");
+    assertEquals(Set.of("building", "osm_id"), attributes.keys());
+    assertEquals(Set.of("osm_id"), attributes.carried());
+    assertEquals(Set.of("building"), attributes.drawn());
+  }
+
+  /**
+   * An attribute is carried where the layer asking for it draws, and nowhere else, so that asking
+   * for one costs bytes only where a reader can reach the feature it belongs to.
+   */
+  @Test
+  void carriesAnAttributeOnlyWhereTheLayerAskingForItDraws() {
+    var style = style(layer("\"minzoom\":15,\"filter\":[\"has\",\"building\"]"));
+    var carried = Map.of("l", List.of("osm_id"));
+    assertFalse(Demand.of(style, 14, carried).containsKey("s"));
+    assertEquals(Set.of("osm_id"), Demand.of(style, 15, carried).get("s").carried());
+  }
+
+  /**
+   * Carried is not the opposite of read but of drawn with: an attribute a second layer draws with
+   * is drawn with, and stays something a feature can be admitted by.
+   */
+  @Test
+  void doesNotCallAnAttributeCarriedWhenAnotherLayerDrawsWithIt() {
+    var style = style("{\"id\":\"a\",\"type\":\"fill\",\"source-layer\":\"s\"},"
+        + "{\"id\":\"b\",\"type\":\"symbol\",\"source-layer\":\"s\","
+        + "\"layout\":{\"text-field\":[\"get\",\"name\"]}}");
+    var attributes = Demand.of(style, 14, Map.of("a", List.of("name"))).get("s");
+    assertEquals(Set.of(), attributes.carried());
+    assertEquals(Set.of("name"), attributes.drawn());
+  }
+
+  /** Carrying an attribute says nothing about the values it takes, and unbinds none of them. */
+  @Test
+  void leavesTheValuesOfADrawnAttributeBoundWhenItIsAlsoCarried() {
+    var style = style(layer("\"filter\":[\"==\",[\"get\",\"power\"],\"plant\"]"));
+    var attributes = Demand.of(style, 14, Map.of("l", List.of("power"))).get("s");
+    assertTrue(attributes.isBounded("power"));
+    assertEquals(Set.of("plant"), attributes.values().get("power"));
   }
 }

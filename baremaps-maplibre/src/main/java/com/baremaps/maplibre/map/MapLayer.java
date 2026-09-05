@@ -60,6 +60,20 @@ public class MapLayer {
   @JsonProperty("generalize")
   private MapSpec.Generalize generalize;
 
+  /**
+   * The attributes the tiles must carry for this layer that the layer does not draw with.
+   *
+   * <p>
+   * Everything else a tile carries is read off the style, so nothing has to be listed twice and
+   * nothing is shipped that no longer has a reader. An attribute nothing draws with leaves no such
+   * trace: the identifier a click on a feature is turned into a link with, a reference a panel
+   * shows beside its name. It is named here so that it is asked for in one place, and it is asked
+   * for on a layer rather than on a source so that it is carried at the zoom levels that layer
+   * draws at, where a reader can reach the feature, and at no others.
+   */
+  @JsonProperty("attributes")
+  private List<String> attributes;
+
   @JsonProperty("layout")
   private Object layout;
 
@@ -153,6 +167,15 @@ public class MapLayer {
 
   public MapLayer setGeneralize(MapSpec.Generalize generalize) {
     this.generalize = generalize;
+    return this;
+  }
+
+  public List<String> getAttributes() {
+    return attributes;
+  }
+
+  public MapLayer setAttributes(List<String> attributes) {
+    this.attributes = attributes;
     return this;
   }
 

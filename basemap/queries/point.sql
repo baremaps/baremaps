@@ -9,20 +9,31 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- Every node that says something about itself, with the rank of the ones that name a place.
+-- Every node that says something about itself, with its identifier, and with the rank of the ones
+-- that name a place.
 --
 -- The rank is worked out here and carried as an attribute, so that the views below and the styles
 -- that read them are ranking places by the same number. A point that names no place carries no
 -- rank, and the views admit it by its class as before.
+--
+-- The identifier is carried as an attribute for the same reason: an attribute is what a tile is
+-- built out of, and the point layer asks for this one so that a reader who clicks a feature can be
+-- given the node it was drawn from. It is written as text because it is a name and not a quantity:
+-- nothing adds it up or compares it, and text arrives at the browser as the digits it went in as.
+-- It is not spelled `id`, which the tile store strips from the tags, that being the column it
+-- selects separately when a tileset asks for feature identifiers.
 CREATE
     OR REPLACE VIEW osm_point AS SELECT
         id,
-        CASE
-            WHEN tags ? 'place' THEN tags || jsonb_build_object(
+        tags || jsonb_build_object(
+            'osm_id',
+            id::TEXT
+        )|| CASE
+            WHEN tags ? 'place' THEN jsonb_build_object(
                 'rank',
                 place_rank(tags)
             )
-            ELSE tags
+            ELSE '{}'::JSONB
         END AS tags,
         geom
     FROM

@@ -108,6 +108,17 @@ export default asLayerObject({
         },
         {"minzoom": 2, "maxzoom": 20, "from": "osm_point_z$zoom", "drawable": true},
     ],
+    // The node each icon was drawn from, carried for whoever reads the tile rather than for the
+    // map: nothing here draws with it, and a click on a point has nowhere else to learn what it
+    // was drawn from. Every other attribute a tile carries is read off the style, so this is the
+    // one that has to be asked for.
+    //
+    // It is not free, and an identifier is the worst case for a tile: it is unique, so it neither
+    // repeats within the layer nor compresses, and it is paid once per feature rather than once
+    // per class. The z16 tile over the old town of Zurich carries 1051 points and grows from 12.4
+    // to 20.9 KB gzipped, about eight bytes each. It is carried from 16 because that is where this
+    // layer draws, so the zooms below are unchanged.
+    attributes: ['osm_id'],
     // From zoom 16 and not 14. This layer draws two hundred classes of point, and at 14 a city
     // centre came out as a field of icons with the streets underneath them: the roads, the
     // buildings and the street names were all there and none of them could be read. Raising it

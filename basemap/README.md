@@ -218,6 +218,41 @@ level, so a tile carries what is drawn and nothing else. Adding a directive that
 reads a new tag is enough to make the tiles carry it, and removing the last
 directive that reads one is enough to make them stop.
 
+An attribute nothing draws with leaves no such trace, so it is the one a layer
+has to ask for. `attributes` names the tags the tiles must carry for a layer
+beyond what it is drawn from:
+
+```
+export default asLayerObject({
+    id: 'point_icon',
+    sourceLayer: 'point',
+    attributes: ['osm_id'],
+    // ...
+});
+```
+
+That is how a click on a point can be turned into a link to the node it was
+drawn from, and how a panel shows a reference beside a name. It is asked for on
+a layer rather than on a source or a query so that it is carried at the zoom
+levels that layer draws at, where a reader can reach the feature, and at no
+others: `point_icon` starts at 16, so `osm_id` is in the tiles from 16 and the
+tiles below are unchanged. An attribute that is only carried does not make a
+feature drawable either, since a feature carrying an identifier and nothing else
+is still drawn as nothing.
+
+The tags themselves come from the queries, so a column has to be a tag before it
+can be carried: `queries/point.sql` writes the node's identifier into the tags as
+`osm_id`. `id` is not available as a tag name, being the column the tile store
+selects separately when `source.featureIds` is on. That flag is the other way to
+ship identifiers, as the feature id MapLibre exposes rather than as an
+attribute; it is all or nothing, applying to every layer at every zoom, where
+`attributes` is asked for one layer at a time.
+
+An identifier is the worst case for a tile, being unique, so it neither repeats
+within a layer nor compresses, and it is paid once per feature: the z16 tile over
+the old town of Zurich carries 1051 points and grows from 12.4 to 20.9 KB
+gzipped.
+
 ### Where the sql lives
 
 `layers/` holds JavaScript and nothing else. Every script that has to run before
@@ -322,8 +357,7 @@ tables the import wrote into on the way. Compile the sql and run the statements
 for the layer that changed:
 
 ```
-baremaps map compile --map map.js --sql generalize.sql \
-  --style /dev/null --tileset /dev/null
+baremaps map compile --map map.js --sql generalize.sql
 grep -A100 osm_boundary generalize.sql | psql "$BAREMAPS_URL"
 ```
 

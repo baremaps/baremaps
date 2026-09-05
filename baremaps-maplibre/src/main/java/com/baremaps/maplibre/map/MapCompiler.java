@@ -35,9 +35,9 @@ import java.util.TreeMap;
  * <p>
  * Both come from the same list of layers. The style is that list with the extensions dropped and
  * the properties every layer shares filled in; the tileset is the queries those layers declare,
- * with each one selecting the attributes the style reads at that zoom and no others. That last part
- * is the difference between a tile carrying what is drawn and a tile carrying whatever the database
- * held.
+ * with each one selecting the attributes the style reads at that zoom, plus the ones a layer asks
+ * to be carried without drawing with them, and no others. That last part is the difference between
+ * a tile carrying what is drawn and a tile carrying whatever the database held.
  *
  * <p>
  * A query is declared over a range of zoom levels, but what the style reads changes within that
@@ -117,15 +117,15 @@ public final class MapCompiler {
    *
    * <p>
    * A layer with no minzoom is built and evaluated at every zoom the map has, including the ones
-   * below the first tile that could hold anything it draws. That is a bucket assembled and a
-   * filter run over an empty source layer, per tile, to draw nothing, and forty-one of this
-   * basemap's fifty-seven layers were in that position.
+   * below the first tile that could hold anything it draws. That is a bucket assembled and a filter
+   * run over an empty source layer, per tile, to draw nothing, and forty-one of this basemap's
+   * fifty-seven layers were in that position.
    *
    * <p>
    * The answer is already written down: the queries a source layer is declared with say the zoom
    * its features start at, and a layer cannot draw what the tiles do not carry. So it is read off
-   * them rather than repeated on every layer, where the two would drift. A layer that names its
-   * own minzoom keeps it, that being a cartographic decision to start later than the data does.
+   * them rather than repeated on every layer, where the two would drift. A layer that names its own
+   * minzoom keeps it, that being a cartographic decision to start later than the data does.
    */
   private static Map<String, Integer> floors(MapSpec spec) {
     var floors = new HashMap<String, Integer>();
@@ -177,9 +177,10 @@ public final class MapCompiler {
 
     // The demand of every source layer, at every zoom the tileset covers. Computed once: reading it
     // walks the whole style, and every query below consults it.
+    var carried = carried(spec);
     var demand = new HashMap<Integer, Map<String, Demand.Attributes>>();
     for (int zoom = minzoom; zoom <= maxzoom; zoom++) {
-      demand.put(zoom, Demand.of(style, zoom));
+      demand.put(zoom, Demand.of(style, zoom, carried));
     }
 
     var generalized = new HashMap<String, MapLayer>();
@@ -251,6 +252,25 @@ public final class MapCompiler {
   }
 
   /**
+   * The attributes each layer asks the tiles to carry without drawing with them, keyed by layer id.
+   *
+   * <p>
+   * Everything else a tile carries is read off the style, because a style that stops reading an
+   * attribute is a style that no longer needs it shipped. An attribute nothing draws with has no
+   * such trace to be read, so it is the one thing a layer has to say out loud, and it says it where
+   * the rest of what that layer needs of the tiles is already decided.
+   */
+  private static Map<String, List<String>> carried(MapSpec spec) {
+    var carried = new HashMap<String, List<String>>();
+    for (var layer : spec.layers()) {
+      if (layer.getAttributes() != null && !layer.getAttributes().isEmpty()) {
+        carried.put(layer.getId(), layer.getAttributes());
+      }
+    }
+    return carried;
+  }
+
+  /**
    * The queries of every source layer, keyed in the order their source layers are first painted.
    *
    * <p>
@@ -315,32 +335,44 @@ public final class MapCompiler {
     int to = Math.min(query.maxzoom() == null ? maxzoom + 1 : query.maxzoom(), maxzoom + 1);
 
     var queries = new ArrayList<TilesetQuery>();
-    SortedSet<String> current = null;
+    Demand.Attributes current = null;
     int start = from;
     for (int zoom = from; zoom <= to; zoom++) {
       // One past the end closes the last run.
       var attributes = zoom < to ? demand.get(zoom).get(id) : null;
-      var keys = attributes == null ? null : attributes.keys();
-      if (current != null && current.equals(keys)) {
+      if (current != null && same(current, attributes)) {
         continue;
       }
       if (current != null) {
         queries.add(new TilesetQuery(start, zoom, sql(query, current, featureIds)));
       }
-      current = keys;
+      current = attributes;
       start = zoom;
-      if (keys != null) {
-        keys.forEach(key -> fields.put(key, "String"));
+      if (attributes != null) {
+        attributes.keys().forEach(key -> fields.put(key, "String"));
       }
     }
     return queries;
   }
 
   /**
-   * A feature carrying none of the attributes the style reads at this zoom cannot match any of its
-   * filters, so it can only be drawn as nothing. Asking for it costs a row in the query, a feature
-   * in the tile and bytes on the wire, and the set of attributes to test is the same one already
-   * derived for the projection.
+   * Whether two zoom levels compile to the same query, and so belong to the same run. What a query
+   * says of the demand is the attributes it projects and, where the query asks for it, which of
+   * them something is drawn with; two levels differing only in the values an attribute is compared
+   * against produce the same sql and are not worth splitting apart.
+   */
+  private static boolean same(Demand.Attributes left, Demand.Attributes right) {
+    return right != null
+        && left.keys().equals(right.keys())
+        && left.carried().equals(right.carried());
+  }
+
+  /**
+   * A feature carrying none of the attributes the style draws with at this zoom cannot match any of
+   * its filters, so it can only be drawn as nothing. Asking for it costs a row in the query, a
+   * feature in the tile and bytes on the wire, and the set of attributes to test is the same one
+   * already derived for the projection, less the ones carried for a reader: an identifier every
+   * feature has would otherwise admit every feature and leave nothing for this to drop.
    */
   private static String drawable(SortedSet<String> keys) {
     if (keys.isEmpty()) {
@@ -350,15 +382,15 @@ public final class MapCompiler {
         .collect(java.util.stream.Collectors.joining(" OR ")) + ")";
   }
 
-  private static String sql(MapSpec.Query query, SortedSet<String> keys, boolean featureIds) {
+  private static String sql(MapSpec.Query query, Demand.Attributes attributes, boolean featureIds) {
     var sql = new StringBuilder("SELECT ")
         .append(featureIds ? "id, " : "")
-        .append(tags(keys))
+        .append(tags(attributes.keys()))
         .append(" AS tags, ")
         .append(geom(query))
         .append(" AS geom FROM ")
         .append(query.from());
-    var condition = condition(query, keys);
+    var condition = condition(query, attributes);
     if (condition != null) {
       sql.append(" WHERE ").append(condition);
     }
@@ -370,7 +402,7 @@ public final class MapCompiler {
    * one. A query may carry both, for a filter that says most of it and a predicate that says the
    * rest.
    */
-  private static String condition(MapSpec.Query query, SortedSet<String> keys) {
+  private static String condition(MapSpec.Query query, Demand.Attributes attributes) {
     var parts = new ArrayList<String>();
     var filter = FilterCompiler.sql(query.filter(), "tags");
     if (filter != null) {
@@ -380,7 +412,7 @@ public final class MapCompiler {
       parts.add(query.where());
     }
     if (Boolean.TRUE.equals(query.drawable())) {
-      var drawable = drawable(keys);
+      var drawable = drawable(attributes.drawn());
       if (drawable != null) {
         parts.add(drawable);
       }

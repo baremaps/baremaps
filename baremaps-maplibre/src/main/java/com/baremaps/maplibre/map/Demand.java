@@ -28,6 +28,7 @@ import com.baremaps.maplibre.style.Style;
 import com.baremaps.maplibre.style.StyleLayer;
 import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -46,6 +47,12 @@ import java.util.TreeSet;
  * more than that pays for it in every tile, and one that ships less loses features. Deriving the
  * first from the second keeps the two in step, which hand maintenance does not: the basemap this
  * was written for shipped 922 distinct attributes on a layer whose style reads 40.
+ *
+ * <p>
+ * A layer may also ask for an attribute it does not draw with, for a reader rather than for the
+ * map: the identifier a click on a feature is turned into a link with. That is the one thing this
+ * cannot derive, there being nothing in the style to read it off, and it is still answered per zoom
+ * level, so such an attribute is carried where the layer asking for it draws and nowhere else.
  *
  * <p>
  * Two rules make the answer safe to act on.
@@ -87,14 +94,30 @@ public final class Demand {
   /**
    * The attributes one source layer must carry.
    *
-   * @param keys every attribute the style reads
+   * @param keys every attribute the tiles must carry
+   * @param carried the attributes among them that nothing is drawn with, asked for by a layer that
+   *        wants them in the tile for whoever reads it rather than for the map
    * @param values the values compared against, for those attributes compared only against literals;
    *        an attribute absent from this map is read in a way that admits any value
    */
-  public record Attributes(SortedSet<String> keys, SortedMap<String, SortedSet<String>> values) {
+  public record Attributes(SortedSet<String> keys, SortedSet<String> carried,
+      SortedMap<String, SortedSet<String>> values) {
 
     public boolean isBounded(String key) {
       return values.containsKey(key);
+    }
+
+    /**
+     * The attributes the style draws with, which is what it reads less what it only asks to be
+     * carried. A feature has to carry one of these to be drawn as anything at all, which is the
+     * question {@code drawable} asks; carrying an identifier and nothing else still draws nothing.
+     *
+     * @return the attributes something is drawn with
+     */
+    public SortedSet<String> drawn() {
+      var drawn = new TreeSet<>(keys);
+      drawn.removeAll(carried);
+      return Collections.unmodifiableSortedSet(drawn);
     }
   }
 
@@ -107,6 +130,27 @@ public final class Demand {
    * @return the attributes required of each source layer
    */
   public static SortedMap<String, Attributes> of(Style style, int zoom) {
+    return of(style, zoom, Map.of());
+  }
+
+  /**
+   * Returns what each source layer must carry for tiles at the given zoom, keyed by source layer,
+   * with the attributes some layers ask to be carried without drawing with them.
+   *
+   * <p>
+   * An attribute is carried where the layer that asks for it draws, and nowhere else. A layer that
+   * has faded out or has not arrived yet leaves nothing of it in the tile, the same way its filter
+   * and its labels do, so asking for one costs bytes only where a reader can reach the feature it
+   * belongs to.
+   *
+   * @param style the style
+   * @param zoom the zoom level of the tile
+   * @param carried the attributes each layer asks the tiles to carry without drawing with them,
+   *        keyed by layer id
+   * @return the attributes required of each source layer
+   */
+  public static SortedMap<String, Attributes> of(Style style, int zoom,
+      Map<String, ? extends Collection<String>> carried) {
     var builders = new TreeMap<String, Builder>();
     for (var layer : style.getLayers()) {
       var source = layer.getSourceLayer();
@@ -114,6 +158,10 @@ public final class Demand {
         continue;
       }
       var builder = builders.computeIfAbsent(source, key -> new Builder());
+      var extra = layer.getId() == null ? null : carried.get(layer.getId());
+      if (extra != null) {
+        extra.forEach(builder::carried);
+      }
       collect(expression(layer.getFilter()), builder);
       for (var value : properties(layer.getLayout()).values()) {
         collect(expression(value), builder);
@@ -385,9 +433,12 @@ public final class Demand {
     private final SortedSet<String> keys = new TreeSet<>();
     private final SortedMap<String, SortedSet<String>> values = new TreeMap<>();
     private final Set<String> unbounded = new HashSet<>();
+    private final Set<String> drawn = new HashSet<>();
+    private final SortedSet<String> carried = new TreeSet<>();
 
     void bounded(String key, String value) {
       keys.add(key);
+      drawn.add(key);
       if (!unbounded.contains(key)) {
         values.computeIfAbsent(key, ignored -> new TreeSet<>()).add(value);
       }
@@ -395,12 +446,28 @@ public final class Demand {
 
     void unbounded(String key) {
       keys.add(key);
+      drawn.add(key);
       unbounded.add(key);
       values.remove(key);
     }
 
+    /**
+     * Carrying an attribute says nothing about the values it takes, and asks nothing of them: an
+     * attribute that is also drawn with keeps the values its filters bound it to, and one that is
+     * only carried is absent from the map, which reads as admitting any value.
+     */
+    void carried(String key) {
+      keys.add(key);
+      carried.add(key);
+    }
+
     Attributes build() {
+      // An attribute a second layer draws with is drawn with, whichever order the two were seen
+      // in, so what is left carried is worked out at the end rather than as they arrive.
+      var only = new TreeSet<>(carried);
+      only.removeAll(drawn);
       return new Attributes(Collections.unmodifiableSortedSet(keys),
+          Collections.unmodifiableSortedSet(only),
           Collections.unmodifiableSortedMap(values));
     }
   }
