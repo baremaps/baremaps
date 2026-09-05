@@ -122,7 +122,6 @@ export default {
     // deep as the tiles go, there being no second pyramid left to stretch a shallower tile from.
     terrain: {
         dem: config.dem,
-        demMaxzoom: config.demMaxzoom,
         minzoom: 4,
         attribution: '\u00a9 <a href="https://mapterhorn.com/">Mapterhorn</a>',
     },

@@ -403,7 +403,6 @@ queried from the database, so they are declared beside the source rather than in
 ```
 terrain: {
     dem: 'data/mapterhorn.pmtiles',
-    demMaxzoom: 12,
     minzoom: 4,
     attribution: '© Mapterhorn',
 },
@@ -415,8 +414,12 @@ at the same zoom, through one style source. What this block says is where they a
 over which zoom levels, none of which the browser sees.
 
 `dem` names an archive of [terrarium][terrarium] encoded raster tiles, which is what
-[Mapterhorn][mapterhorn] publishes; `demMaxzoom` is the deepest level it holds, and `demTileSize`
-the side of one of its tiles, which defaults to 512 because that is what Mapterhorn ships.
+[Mapterhorn][mapterhorn] publishes, and is the only member this block needs. How deep that archive
+goes is stated in its own header and read from there; `demMaxzoom` is declared only to read less of
+it than it holds, and declaring more is refused rather than served as the sea level an absent tile
+reads as. `demTileSize` is the side of one of its tiles, which defaults to 512 because that is what
+Mapterhorn ships, and a tile that turns out to be another size is reported as such.
+
 `minzoom` is the first zoom the terrain is traced at, below which relief is noise, and `maxzoom`
 defaults to the source's: a tile that carries no terrain has none, there being no second pyramid
 left for a client to stretch a shallower tile from. `attribution` is added to the source's, the
@@ -429,10 +432,16 @@ pmtiles extract https://download.mapterhorn.com/planet.pmtiles data/mapterhorn.p
   --bbox=5.9,45.8,10.5,47.8 --maxzoom=12
 ```
 
-The whole planet is available too, and each additional zoom level roughly doubles it. `demMaxzoom`
-has to match what was extracted: past it the archive is sampled beyond its resolution, which is
-smooth rather than wrong, and below it the detail is downloaded and never read. A map that declares
-terrain and finds no archive at that path is refused rather than served without relief.
+The whole planet is available too, and each additional zoom level roughly doubles it. Extracting a
+deeper one is all it takes to use it: the archive says how deep it goes and the map follows. A map
+that declares terrain and finds no archive at that path is refused rather than served without
+relief.
+
+Past the depth of the archive there is nothing more to read, so a tile is traced from the grid the
+archive can fill rather than from an interpolation of it: the grid halves with every level, and the
+deepest tiles carry the relief the deepest traced level has rather than the shape of the archive's
+pixels drawn onto the hill. That is what a client used to arrive at by stretching a shallower tile,
+and it costs less work per tile rather than more.
 
 Two layers read it, and they read it as they read anything else: the source layers `hillshade` and
 `contour` are the two the terrain contributes to the tiles, and the compiler knows them by name as

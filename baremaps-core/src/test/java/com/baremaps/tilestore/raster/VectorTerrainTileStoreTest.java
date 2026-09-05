@@ -17,14 +17,17 @@ package com.baremaps.tilestore.raster;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.baremaps.dem.ElevationUtils;
+import com.baremaps.maplibre.map.MapSpec;
 import com.baremaps.maplibre.vectortile.VectorTileDecoder;
 import com.baremaps.pmtiles.Compression;
 import com.baremaps.pmtiles.PMTilesWriter;
 import com.baremaps.pmtiles.TileType;
 import com.baremaps.tilestore.TileCoord;
+import com.baremaps.tilestore.TileStoreException;
 import com.baremaps.tilestore.pmtiles.PMTilesStore;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -124,6 +127,34 @@ class VectorTerrainTileStoreTest {
       // The border covers the same ground whatever the grid is.
       assertEquals(4, store.grid(new TileCoord(8, 8, ZOOM + 3)).buffer());
     }
+  }
+
+  /**
+   * How deep the archive goes is the archive's answer: a map that does not name a depth reads it
+   * from the header rather than repeating it, and one that names a depth the archive does not reach
+   * is refused. Those levels hold no tiles, and a tile an archive does not hold reads as sea level,
+   * so the alternative is a mountain range quietly flattening out.
+   */
+  @Test
+  void readsTheDepthOfTheArchiveFromTheArchive() throws Exception {
+    var archive = directory.resolve("terrain.pmtiles");
+    write(archive);
+
+    try (var store = VectorTerrainTileStore.of(terrain(archive, null))) {
+      // The archive holds one level, ZOOM, so the level below it is traced at 2 samples per pixel
+      // and the one below that at half the grid.
+      assertEquals(TILE_SIZE, store.grid(new TileCoord(2, 2, ZOOM + 1)).size());
+      assertEquals(TILE_SIZE / 2, store.grid(new TileCoord(4, 4, ZOOM + 2)).size());
+    }
+
+    var error = assertThrows(TileStoreException.class,
+        () -> VectorTerrainTileStore.of(terrain(archive, ZOOM + 2)));
+    assertTrue(error.getMessage().contains("holds nothing below zoom " + ZOOM), error.getMessage());
+  }
+
+  /** A terrain declaration over an archive, reading it as deep as it is told to. */
+  private static MapSpec.Terrain terrain(Path archive, Integer demMaxzoom) {
+    return new MapSpec.Terrain(archive.toString(), TILE_SIZE, demMaxzoom, 0, 20, null);
   }
 
   /** Writes an archive holding one tile: a cone rising to 4000 meters at its centre. */

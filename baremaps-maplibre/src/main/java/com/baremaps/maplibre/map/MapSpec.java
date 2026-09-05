@@ -181,8 +181,10 @@ public record MapSpec(
    * @param dem the path of the archive of terrarium tiles the terrain is traced from
    * @param demTileSize the side of a tile of that archive, in pixels; defaults to 512, which is
    *        what Mapterhorn publishes
-   * @param demMaxzoom the deepest level that archive holds; defaults to 12, and a map that has a
-   *        deeper archive says so rather than losing the detail
+   * @param demMaxzoom the deepest level of that archive to read; defaults to the deepest one it
+   *        holds, which its own header states, and is declared only to stop shallower. Declaring a
+   *        level the archive does not reach is refused: those levels hold nothing, and nothing
+   *        reads as sea level
    * @param minzoom the lowest zoom level the terrain is traced at; defaults to 0
    * @param maxzoom the highest zoom level it is traced at; defaults to the source's, because a tile
    *        that carries no terrain has none to be stretched from a shallower one
@@ -216,12 +218,12 @@ public record MapSpec(
     public static final List<String> LAYERS = List.of(HILLSHADE, CONTOUR);
 
     private static final int DEFAULT_DEM_TILE_SIZE = 512;
-    private static final int DEFAULT_DEM_MAXZOOM = 12;
     private static final int DEFAULT_MINZOOM = 0;
 
     public Terrain {
       demTileSize = demTileSize == null ? DEFAULT_DEM_TILE_SIZE : demTileSize;
-      demMaxzoom = demMaxzoom == null ? DEFAULT_DEM_MAXZOOM : demMaxzoom;
+      // Left as it was declared: the default is the archive's own answer, which is read where the
+      // archive is opened rather than invented here.
       minzoom = minzoom == null ? DEFAULT_MINZOOM : minzoom;
       if (dem == null) {
         throw new IllegalArgumentException(

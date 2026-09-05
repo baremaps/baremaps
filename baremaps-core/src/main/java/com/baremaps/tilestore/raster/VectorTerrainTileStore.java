@@ -83,8 +83,20 @@ public class VectorTerrainTileStore extends RasterTileStore<ByteBuffer> {
               + "or remove the terrain block from the map.",
           dem));
     }
-    var elevation = new TerrariumElevationReader(
-        new PMTilesStore(dem), terrain.demTileSize(), terrain.demMaxzoom());
+    var archive = new PMTilesStore(dem);
+    // How deep the archive goes is something it states, so a map that does not say reads it rather
+    // than repeating it. A map that says more than the archive holds is refused: the levels past
+    // it hold no tiles, and a tile an archive does not hold reads as sea level, which would arrive
+    // as a mountain range quietly flattening out.
+    var demMaxzoom = terrain.demMaxzoom() == null ? archive.maxzoom() : terrain.demMaxzoom();
+    if (demMaxzoom > archive.maxzoom()) {
+      throw new TileStoreException(String.format(
+          "The map reads the terrain archive '%s' down to zoom %d, and it holds nothing "
+              + "below zoom %d. Remove 'terrain.demMaxzoom', which then follows the archive, "
+              + "or extract the archive deeper.",
+          dem, demMaxzoom, archive.maxzoom()));
+    }
+    var elevation = new TerrariumElevationReader(archive, terrain.demTileSize(), demMaxzoom);
     return new VectorTerrainTileStore(elevation, terrain.minzoom(), terrain.maxzoom());
   }
 

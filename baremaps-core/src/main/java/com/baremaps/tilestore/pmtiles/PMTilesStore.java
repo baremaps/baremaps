@@ -92,6 +92,22 @@ public class PMTilesStore implements TileStore<ByteBuffer> {
   }
 
   /**
+   * The deepest zoom level the archive holds, which its header states.
+   *
+   * <p>
+   * An archive knows how deep it goes, so a caller that has to know does not have to be told a
+   * second time by whoever configured it.
+   *
+   * @return the deepest zoom level
+   */
+  public int maxzoom() {
+    if (reader == null) {
+      throw new UnsupportedOperationException("This archive was opened for writing");
+    }
+    return reader.getHeader().maxZoom();
+  }
+
+  /**
    * Reads a tile, or returns {@code null} when the archive does not hold it.
    *
    * <p>
