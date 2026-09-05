@@ -72,6 +72,7 @@ import railway_line from "./layers/railway/line.js";
 import attraction_line from "./layers/attraction/line.js";
 import highway_bridge_outline from "./layers/highway/bridge_outline.js";
 import highway_bridge_line from "./layers/highway/bridge_line.js";
+import highway_oneway from "./layers/highway/oneway.js";
 import highway_label from "./layers/highway/label.js";
 import aeroway_line from "./layers/aeroway/line.js";
 import route_ferry from "./layers/route/ferry.js";
@@ -185,6 +186,10 @@ export default {
         attraction_line,
         highway_bridge_outline,
         highway_bridge_line,
+        // Below the street names, which is what decides the collisions between them: a symbol in a
+        // layer drawn later is placed first and keeps the space. An arrow says something about a
+        // street the reader has already found by its name, so it is the arrow that gives way.
+        highway_oneway,
         highway_label,
         aeroway_line,
         route_ferry,

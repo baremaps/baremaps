@@ -187,6 +187,8 @@ export default {
     highwayMotorwayOutlineColor: motorwayCasing,
     highwayMotorwayTunnelLineColor: motorwayTunnel,
     highwayMotorwayTunnelOutlineColor: 'rgb(198, 200, 205)',
+    highwayOnewayTextColor: inkFaint,
+    highwayOnewayTextHaloColor: halo,
     highwayOutlinePedestrianBridgeLineColor: 'rgb(210, 212, 216)',
     highwayPedestrianBridgeLineColor: 'rgb(240, 239, 234)',
     highwayPedestrianLineColor: 'rgb(242, 240, 234)',

@@ -97,6 +97,8 @@ export default {
     highwayMotorwayOutlineColor: "rgb(179,117,131)",
     highwayMotorwayTunnelLineColor: "rgb(218,196,200)",
     highwayMotorwayTunnelOutlineColor: "rgb(179,117,131)",
+    highwayOnewayTextColor: "rgb(112,112,112)",
+    highwayOnewayTextHaloColor: "rgba(255,255,255,0.9)",
     highwayOutlinePedestrianBridgeLineColor: "rgb(165,165,164)",
     highwayOutlineWidth: [5,0.5,16,1,22,1],
     highwayPedestrianBridgeLineColor: "rgb(195,195,202)",
