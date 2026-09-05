@@ -15,6 +15,7 @@
 package com.baremaps.tilestore.raster;
 
 import com.baremaps.dem.ContourTracer;
+import com.baremaps.maplibre.map.MapSpec;
 import com.baremaps.maplibre.vectortile.Feature;
 import com.baremaps.maplibre.vectortile.Layer;
 import com.baremaps.tilestore.TileCoord;
@@ -23,7 +24,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import org.locationtech.jts.geom.util.AffineTransformation;
 
 /**
  * A {@code TileStore} that traces vector contour tiles from elevation.
@@ -37,8 +37,8 @@ import org.locationtech.jts.geom.util.AffineTransformation;
  */
 public class VectorContourTileStore extends RasterTileStore<ByteBuffer> {
 
-  /** The name of the layer the contours are encoded in. */
-  static final String LAYER = "contour";
+  /** The name of the layer the contours are encoded in, which the map format states. */
+  static final String LAYER = MapSpec.Terrain.CONTOUR;
 
   /**
    * How many intervals apart the contours a map draws more heavily are. Which contour carries a
@@ -66,8 +66,7 @@ public class VectorContourTileStore extends RasterTileStore<ByteBuffer> {
   @Override
   public ByteBuffer read(TileCoord tileCoord) throws TileStoreException {
     try {
-      var grid = elevation.read(tileCoord, TILE_SIZE, TRACE_BUFFER);
-      return encodeLayers(List.of(layer(grid, tileCoord.z())));
+      return encodeLayers(List.of(layer(grid(tileCoord), tileCoord.z())));
     } catch (TileStoreException e) {
       throw e;
     } catch (Exception e) {
@@ -78,17 +77,14 @@ public class VectorContourTileStore extends RasterTileStore<ByteBuffer> {
   /**
    * Traces the contours of an elevation grid into a vector tile layer.
    *
-   * @param grid the elevation grid, including the border
+   * @param grid the elevation the tile is traced from, including the border
    * @param zoom the zoom level the tile is produced at, which sets the interval
    * @return the layer
    */
-  static Layer layer(double[] grid, int zoom) {
-    var gridSize = TILE_SIZE + 2 * TRACE_BUFFER;
-    var tracer = new ContourTracer(grid, gridSize, gridSize);
-    // Move the border out of the way, then scale the grid to the extent of the vector tile.
-    var toTileExtent = AffineTransformation
-        .translationInstance(-TRACE_BUFFER, -TRACE_BUFFER)
-        .scale((double) TILE_EXTENT / TILE_SIZE, (double) TILE_EXTENT / TILE_SIZE);
+  static Layer layer(Grid grid, int zoom) {
+    var values = grid.values();
+    var tracer = new ContourTracer(values, grid.side(), grid.side());
+    var toTileExtent = grid.toTileExtent();
 
     // Only the levels the grid actually crosses are traced. Walking the whole range of terrestrial
     // elevations instead would sweep the grid two thousand times at the zoom levels where the
@@ -96,7 +92,7 @@ public class VectorContourTileStore extends RasterTileStore<ByteBuffer> {
     var interval = interval(zoom);
     var min = Double.MAX_VALUE;
     var max = -Double.MAX_VALUE;
-    for (var value : grid) {
+    for (var value : values) {
       min = Math.min(min, value);
       max = Math.max(max, value);
     }

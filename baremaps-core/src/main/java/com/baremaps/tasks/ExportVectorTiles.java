@@ -21,13 +21,14 @@ import com.baremaps.maplibre.map.MapCompiler;
 import com.baremaps.maplibre.map.MapSpec;
 import com.baremaps.maplibre.style.Style;
 import com.baremaps.maplibre.tileset.Tileset;
-import com.baremaps.maplibre.tileset.TilesetQuery;
 import com.baremaps.postgres.utils.PostgresUtils;
 import com.baremaps.tilestore.*;
 import com.baremaps.tilestore.file.FileTileStore;
 import com.baremaps.tilestore.mbtiles.MBTilesStore;
 import com.baremaps.tilestore.pmtiles.PMTilesStore;
 import com.baremaps.tilestore.postgres.PostgresTileStore;
+import com.baremaps.tilestore.raster.VectorTerrainTileStore;
+import com.baremaps.tilestore.vector.VectorTileMerger;
 import com.baremaps.utils.SqliteUtils;
 import com.baremaps.workflow.Task;
 import com.baremaps.workflow.WorkflowContext;
@@ -116,10 +117,12 @@ public class ExportVectorTiles implements Task {
     var objectMapper = objectMapper();
     Tileset tilesetObject;
     Style styleObject;
+    MapSpec.Terrain terrain = null;
     if (map != null) {
       var spec = objectMapper.readValue(configReader.read(this.map), MapSpec.class);
       tilesetObject = MapCompiler.tileset(spec);
       styleObject = MapCompiler.style(spec);
+      terrain = spec.terrain();
     } else {
       tilesetObject = objectMapper.readValue(configReader.read(this.tileset), Tileset.class);
       styleObject = objectMapper.readValue(configReader.read(this.style), Style.class);
@@ -128,7 +131,7 @@ public class ExportVectorTiles implements Task {
     writeViewer(objectMapper, tilesetObject, styleObject);
 
     var datasource = context.getDataSource(tilesetObject.getDatabase());
-    try (var sourceTileStore = sourceTileStore(tilesetObject, datasource);
+    try (var sourceTileStore = sourceTileStore(tilesetObject, datasource, terrain);
         var targetTileStore = targetTileStore(tilesetObject)) {
       TileStoreUtils.copy(sourceTileStore, targetTileStore, envelope(tilesetObject),
           tilesetObject.getMinzoom(), tilesetObject.getMaxzoom(), BATCH_SIZE);
@@ -164,10 +167,20 @@ public class ExportVectorTiles implements Task {
     return new Envelope(bounds.get(0), bounds.get(2), bounds.get(1), bounds.get(3));
   }
 
-  private TileStore<ByteBuffer> sourceTileStore(Tileset tileset, DataSource datasource)
-      throws SQLException {
+  /**
+   * The tiles that are exported: the ones the queries answer with, carrying the shading and the
+   * contours traced from elevation when the map declares terrain. An archive of a map holds
+   * everything that map draws, so the terrain is traced into it here rather than left to a server
+   * the archive will not be read through.
+   */
+  private TileStore<ByteBuffer> sourceTileStore(Tileset tileset, DataSource datasource,
+      MapSpec.Terrain terrain) throws SQLException, TileStoreException {
     var postgresVersion = PostgresUtils.getPostgresVersion(datasource);
-    return new PostgresTileStore(datasource, tileset, postgresVersion);
+    var tiles = new PostgresTileStore(datasource, tileset, postgresVersion);
+    if (terrain == null) {
+      return tiles;
+    }
+    return new VectorTileMerger(List.of(tiles, VectorTerrainTileStore.of(terrain)));
   }
 
   private TileStore<ByteBuffer> targetTileStore(Tileset source)
@@ -213,14 +226,10 @@ public class ExportVectorTiles implements Task {
                   Map<String, Object> map = new HashMap<>();
                   map.put("id", layer.getId());
                   map.put("description", layer.getDescription());
-                  map.put(
-                      "minzoom",
-                      layer.getQueries().stream().mapToInt(TilesetQuery::getMinzoom).min()
-                          .getAsInt());
-                  map.put(
-                      "maxzoom",
-                      layer.getQueries().stream().mapToInt(TilesetQuery::getMaxzoom).max()
-                          .getAsInt());
+                  // The range the layer covers, which it already states: a layer traced rather
+                  // than queried has the range and none of the queries to read it off.
+                  map.put("minzoom", layer.getMinzoom());
+                  map.put("maxzoom", layer.getMaxzoom());
                   return map;
                 })
             .toList();

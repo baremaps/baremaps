@@ -24,14 +24,13 @@ import com.baremaps.maplibre.tilejson.TileJSON;
 import com.baremaps.maplibre.tileset.Tileset;
 import com.baremaps.tilestore.TileStore;
 import com.baremaps.tilestore.TileStoreException;
-import com.baremaps.tilestore.pmtiles.PMTilesStore;
-import com.baremaps.tilestore.raster.TerrariumElevationReader;
 import com.baremaps.tilestore.raster.VectorTerrainTileStore;
+import com.baremaps.tilestore.vector.VectorTileMerger;
 import com.baremaps.utils.ObjectMapperUtils;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Resolves the style and the tileset a command works with, from either a map specification or the
@@ -85,27 +84,32 @@ final class MapInput {
   }
 
   /**
-   * Opens the tiles a terrain declaration is served from: the elevation archive it names, traced
-   * into shading and contours as the tiles are asked for.
+   * The tiles the terrain of a map is traced from, or null when it declares none.
    *
    * <p>
-   * The archive is opened once and kept, even by the development server, which rebuilds everything
-   * else on every request. Reopening it would reread its directories to answer one tile, and an
-   * elevation archive is the one input an edit to the map cannot change the meaning of.
+   * It is opened once and kept, even by the development server, which rebuilds everything else on
+   * every request: an elevation archive is the one input an edit to the map cannot change the
+   * meaning of, and reopening it would reread its directories to answer one tile.
    */
   static TileStore<ByteBuffer> terrainTileStore(MapSpec.Terrain terrain) throws TileStoreException {
-    var dem = Path.of(terrain.dem());
-    // A map that declares terrain and has no elevation to trace it from is refused rather than
-    // served without relief, which would look like a styling problem and be a missing file.
-    if (!Files.exists(dem)) {
-      throw new BaremapsException(String.format(
-          "The map declares terrain traced from '%s', which does not exist. "
-              + "Download an archive of terrarium tiles to that path, "
-              + "or remove the terrain block from the map.",
-          dem));
-    }
-    return new VectorTerrainTileStore(new TerrariumElevationReader(
-        new PMTilesStore(dem), terrain.demTileSize(), terrain.demMaxzoom()));
+    return terrain == null ? null : VectorTerrainTileStore.of(terrain);
+  }
+
+  /**
+   * The tiles a map is served from: the ones its queries answer with, carrying the shading and the
+   * contours traced from elevation when it has any.
+   *
+   * <p>
+   * One tile and not two, because the map has one source: a client asks for a place once and is
+   * given everything the map draws there. The terrain is traced as it is asked for rather than
+   * written into the database the queries read, so the two meet here.
+   *
+   * @param tiles the tiles the queries answer with
+   * @param terrain the tiles the terrain is traced into, or null
+   */
+  static TileStore<ByteBuffer> tileStore(TileStore<ByteBuffer> tiles,
+      TileStore<ByteBuffer> terrain) {
+    return terrain == null ? tiles : new VectorTileMerger(List.of(tiles, terrain));
   }
 
   /**

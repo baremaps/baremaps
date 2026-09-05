@@ -17,6 +17,7 @@ package com.baremaps.tilestore.raster;
 import com.baremaps.dem.ContourTracer;
 import com.baremaps.dem.ElevationUtils;
 import com.baremaps.dem.HillshadeCalculator;
+import com.baremaps.maplibre.map.MapSpec;
 import com.baremaps.maplibre.vectortile.Feature;
 import com.baremaps.maplibre.vectortile.Layer;
 import com.baremaps.tilestore.TileCoord;
@@ -26,7 +27,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.locationtech.jts.geom.Polygon;
-import org.locationtech.jts.geom.util.AffineTransformation;
 
 /**
  * A {@code TileStore} that calculates vector hillshade tiles from elevation data.
@@ -38,8 +38,8 @@ import org.locationtech.jts.geom.util.AffineTransformation;
  */
 public class VectorHillshadeTileStore extends RasterTileStore<ByteBuffer> {
 
-  /** The name of the layer the shading is encoded in. */
-  static final String LAYER = "hillshade";
+  /** The name of the layer the shading is encoded in, which the map format states. */
+  static final String LAYER = MapSpec.Terrain.HILLSHADE;
 
   // The levels of the lit and of the shaded side, from the faintest to the strongest, paired with
   // the category a client styles them by.
@@ -72,8 +72,7 @@ public class VectorHillshadeTileStore extends RasterTileStore<ByteBuffer> {
   @Override
   public ByteBuffer read(TileCoord tileCoord) throws TileStoreException {
     try {
-      var grid = elevation.read(tileCoord, TILE_SIZE, TRACE_BUFFER);
-      return encodeLayers(List.of(layer(grid, tileCoord.z())));
+      return encodeLayers(List.of(layer(grid(tileCoord), tileCoord.z())));
     } catch (TileStoreException e) {
       throw e;
     } catch (Exception e) {
@@ -84,32 +83,29 @@ public class VectorHillshadeTileStore extends RasterTileStore<ByteBuffer> {
   /**
    * Shades an elevation grid and traces the result into a vector tile layer.
    *
-   * @param grid the elevation grid, including the border
-   * @param zoom the zoom level the tile is produced at, which sets the size of a pixel
+   * @param grid the elevation the tile is traced from, including the border
+   * @param zoom the zoom level the tile is produced at, which sets the size of a sample
    * @return the layer
    */
-  static Layer layer(double[] grid, int zoom) {
-    var gridSize = TILE_SIZE + 2 * TRACE_BUFFER;
+  static Layer layer(Grid grid, int zoom) {
+    var side = grid.side();
     var shaded = new HillshadeCalculator(
-        ElevationUtils.clampGrid(grid, 0, 10000),
-        gridSize,
-        gridSize,
-        HillshadeCalculator.getResolution(zoom) / 2)
+        ElevationUtils.clampGrid(grid.values(), 0, 10000),
+        side,
+        side,
+        grid.cellSize(zoom))
             .calculate(ALTITUDE, AZIMUTH);
 
     var features = new ArrayList<Feature>();
-    addContours(shaded, gridSize, LIT_LEVELS, features);
-    addContours(HillshadeCalculator.invert(shaded), gridSize, SHADED_LEVELS, features);
+    addContours(shaded, grid, LIT_LEVELS, features);
+    addContours(HillshadeCalculator.invert(shaded), grid, SHADED_LEVELS, features);
     return new Layer(LAYER, TILE_EXTENT, features);
   }
 
-  private static void addContours(double[] grid, int gridSize, int[][] levels,
+  private static void addContours(double[] shaded, Grid grid, int[][] levels,
       List<Feature> features) {
-    var tracer = new ContourTracer(grid, gridSize, gridSize);
-    // Move the border out of the way, then scale the grid to the extent of the vector tile.
-    var toTileExtent = AffineTransformation
-        .translationInstance(-TRACE_BUFFER, -TRACE_BUFFER)
-        .scale((double) TILE_EXTENT / TILE_SIZE, (double) TILE_EXTENT / TILE_SIZE);
+    var tracer = new ContourTracer(shaded, grid.side(), grid.side());
+    var toTileExtent = grid.toTileExtent();
     for (int[] level : levels) {
       var category = level[1];
       for (var polygon : tracer.tracePolygons(level[0])) {

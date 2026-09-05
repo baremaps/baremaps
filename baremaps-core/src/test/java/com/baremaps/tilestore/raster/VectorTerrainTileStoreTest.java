@@ -16,6 +16,7 @@ package com.baremaps.tilestore.raster;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.baremaps.dem.ElevationUtils;
@@ -67,9 +68,14 @@ class VectorTerrainTileStoreTest {
 
     try (var tiles = new PMTilesStore(archive);
         var elevation = new TerrariumElevationReader(tiles, TILE_SIZE, ZOOM);
-        var store = new VectorTerrainTileStore(elevation)) {
+        var store = new VectorTerrainTileStore(elevation, ZOOM, ZOOM + 1)) {
       // The tile below the one the archive holds, so that the source is read at its own resolution.
       var tile = decode(store.read(new TileCoord(2, 2, ZOOM + 1)));
+
+      // The terrain is traced over the zoom levels it is declared for and nowhere else: a tile
+      // outside them carries the rest of the map and no relief.
+      assertNull(store.read(new TileCoord(1, 1, ZOOM - 1)));
+      assertNull(store.read(new TileCoord(4, 4, ZOOM + 2)));
 
       var names = tile.getLayers().stream().map(layer -> layer.getName()).toList();
       assertEquals(List.of("hillshade", "contour"), names);
@@ -89,6 +95,34 @@ class VectorTerrainTileStoreTest {
         var level = Integer.parseInt((String) feature.getTags().get("level"));
         assertTrue(level >= 1 && level <= 6, "one of the six shading levels, not " + level);
       }
+    }
+  }
+
+  /**
+   * Past the depth of the archive, the grid a tile is traced from stops getting finer.
+   *
+   * <p>
+   * There is nothing further to read: every extra sample is interpolated from the same values, and
+   * tracing it draws the shape of the archive's pixels onto the hill. Halving the grid with every
+   * level instead keeps the tracing at the resolution the data has, which is the relief a client
+   * stretching a shallower tile used to show.
+   */
+  @Test
+  void stopsRefiningTheGridPastTheArchive() throws Exception {
+    var archive = directory.resolve("terrain.pmtiles");
+    write(archive);
+
+    try (var tiles = new PMTilesStore(archive);
+        var elevation = new TerrariumElevationReader(tiles, TILE_SIZE, ZOOM);
+        var store = new VectorTerrainTileStore(elevation, 0, 20)) {
+      // At and above the level the archive holds, the whole grid is worth asking for.
+      assertEquals(TILE_SIZE, store.grid(new TileCoord(1, 1, ZOOM)).size());
+      assertEquals(TILE_SIZE, store.grid(new TileCoord(2, 2, ZOOM + 1)).size());
+      // Below it, the archive halves what it has to say per tile, and so does the grid.
+      assertEquals(TILE_SIZE / 2, store.grid(new TileCoord(4, 4, ZOOM + 2)).size());
+      assertEquals(TILE_SIZE / 4, store.grid(new TileCoord(8, 8, ZOOM + 3)).size());
+      // The border covers the same ground whatever the grid is.
+      assertEquals(4, store.grid(new TileCoord(8, 8, ZOOM + 3)).buffer());
     }
   }
 

@@ -288,4 +288,91 @@ class MapCompilerTest {
     assertEquals(20, source.maxzoom());
     assertFalse(source.featureIds());
   }
+
+  /** A map that declares terrain, drawing its shading and its contours. */
+  private static MapSpec terrain(String layers) {
+    return read("""
+        {"name":"test","source":{"minzoom":0,"maxzoom":16,"attribution":"OSM"},
+         "terrain":{"dem":"dem.pmtiles","minzoom":4,"attribution":"Mapterhorn"},
+         "layers":[%s]}
+        """.formatted(layers));
+  }
+
+  private static final String HILLSHADE =
+      "{\"id\":\"h\",\"type\":\"fill\",\"sourceLayer\":\"hillshade\","
+          + "\"paint\":{\"fill-color\":[\"get\",\"level\"]}}";
+
+  /**
+   * The terrain travels in the tiles the queries answer with, so the style has the one source and
+   * the layers that draw the relief read it like the others.
+   */
+  @Test
+  void mergesTheTerrainIntoTheOneSource() {
+    var style = MapCompiler.style(terrain(building("") + "," + HILLSHADE));
+    assertEquals(Set.of("baremaps"), style.getSources().keySet());
+    for (var layer : style.getLayers()) {
+      assertEquals("baremaps", layer.getSource());
+    }
+  }
+
+  /** A layer drawing the terrain starts where the tracing starts, not where a query does. */
+  @Test
+  void startsATerrainLayerWhereTheTracingStarts() {
+    var style = MapCompiler.style(terrain(building("") + "," + HILLSHADE));
+    assertEquals(4, style.getLayers().get(1).getMinzoom());
+  }
+
+  /**
+   * The tileset describes the tiles, and the tiles carry the traced layers: they are described with
+   * the attributes the style reads off them and with no query, there being nothing to query.
+   */
+  @Test
+  void describesTheTracedLayersInTheTileset() {
+    var tileset = MapCompiler.tileset(terrain(building("") + "," + HILLSHADE));
+    var hillshade = MapCompiler.layers(tileset).get("hillshade");
+    assertTrue(hillshade.getQueries().isEmpty());
+    assertEquals(Set.of("level"), hillshade.getFields().keySet());
+    assertEquals(4, hillshade.getMinzoom());
+    assertEquals(16, hillshade.getMaxzoom());
+    // A traced layer nothing draws is not advertised.
+    assertNull(MapCompiler.layers(tileset).get("contour"));
+  }
+
+  /** One source, so one attribution: the data the queries answer with and the elevation. */
+  @Test
+  void creditsTheElevationAlongsideTheData() {
+    assertEquals("OSM Mapterhorn",
+        MapCompiler.tileset(terrain(building("") + "," + HILLSHADE)).getAttribution());
+  }
+
+  /** The terrain is traced from elevation, so a layer drawing it has no query to declare. */
+  @Test
+  void refusesAQueryOnATracedLayer() {
+    var spec = terrain(building("") + ",{\"id\":\"h\",\"type\":\"fill\","
+        + "\"sourceLayer\":\"hillshade\",\"sourceQueries\":[{\"from\":\"osm_hillshade\"}]}");
+    var error = assertThrows(IllegalArgumentException.class, () -> MapCompiler.tileset(spec));
+    assertTrue(error.getMessage().contains("traced from elevation"), error.getMessage());
+  }
+
+  /**
+   * The terrain used to be a source of its own, which the layers drawing it named. There is one
+   * source now, so a layer naming one names something the style does not have.
+   */
+  @Test
+  void refusesALayerThatNamesASource() {
+    var spec = terrain(building("") + ",{\"id\":\"h\",\"type\":\"fill\","
+        + "\"source\":\"terrain\",\"sourceLayer\":\"hillshade\"}");
+    var error = assertThrows(IllegalArgumentException.class, () -> MapCompiler.style(spec));
+    assertTrue(error.getMessage().contains("every layer reads the one source"), error.getMessage());
+  }
+
+  /**
+   * The terrain travels in the source, so it is traced as deep as that source goes: stopping
+   * shallower would leave the deepest tiles with no relief and no second pyramid to stretch one
+   * from.
+   */
+  @Test
+  void tracesTheTerrainAsDeepAsTheTilesGo() {
+    assertEquals(16, terrain("").terrain().maxzoom());
+  }
 }

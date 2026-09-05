@@ -28,7 +28,6 @@ import theme from "../../theme.js";
 export default asLayerObject({
     id: 'terrain_contour',
     type: 'line',
-    source: 'terrain',
     sourceLayer: 'contour',
     minzoom: 12,
     directives: withSortKeys([

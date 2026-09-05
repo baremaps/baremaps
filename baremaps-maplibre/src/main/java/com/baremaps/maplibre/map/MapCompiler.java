@@ -71,29 +71,23 @@ public final class MapCompiler {
     var sources = new LinkedHashMap<String, StyleSource>();
     sources.put(source.id(), vector);
 
-    // The terrain is a second source because it is not a second query: it is traced from an
-    // elevation archive rather than selected from the database, so it has a tileset of nothing and
-    // reaches the style directly.
-    if (spec.terrain() != null) {
-      var terrain = spec.terrain();
-      sources.put(terrain.id(), new StyleSource()
-          .setType("vector")
-          .setTiles(terrain.tiles())
-          .setBounds(terrain.bounds())
-          .setMinzoom(terrain.minzoom())
-          .setMaxzoom(terrain.maxzoom())
-          .setAttribution(terrain.attribution()));
-    }
-
     var floors = floors(spec);
     var layers = new ArrayList<StyleLayer>();
     for (var layer : spec.layers()) {
+      // There is one source and every layer reads it, so a layer that names one is naming
+      // something the style no longer has: the terrain used to be a source of its own and now
+      // travels in this one.
+      if (layer.getSource() != null) {
+        throw new IllegalArgumentException(String.format(
+            "The layer '%s' names the source '%s'; every layer reads the one source, "
+                + "which the map declares as 'source'.",
+            layer.getId(), layer.getSource()));
+      }
       layers.add(new StyleLayer()
           .setId(layer.getId())
           .setType(layer.getType())
           .setFilter(layer.getFilter())
-          // Every layer reads the one source, so no layer says so.
-          .setSource(layer.getSource() == null ? source.id() : layer.getSource())
+          .setSource(source.id())
           .setSourceLayer(layer.getSourceLayer())
           .setLayout(layer.getLayout())
           .setMinzoom(minzoom(layer, floors))
@@ -134,9 +128,9 @@ public final class MapCompiler {
       if (layer.getSourceLayer() == null) {
         continue;
       }
-      // A layer reading the terrain reads tiles traced from elevation, so its features begin where
-      // that source begins rather than where a query does.
-      if (terrain != null && terrain.id().equals(layer.getSource())) {
+      // A layer drawing the terrain draws what is traced from elevation, so its features begin
+      // where the tracing does rather than where a query does.
+      if (terrain != null && MapSpec.Terrain.LAYERS.contains(layer.getSourceLayer())) {
         floors.merge(layer.getSourceLayer(), terrain.minzoom(), Math::min);
       } else if (layer.getSourceQueries() != null) {
         var floor = layer.getSourceQueries().stream()
@@ -208,9 +202,11 @@ public final class MapCompiler {
       }
     }
 
+    layers.addAll(terrainLayers(spec, demand));
+
     var tileset = new Tileset()
         .setName(spec.name())
-        .setAttribution(source.attribution())
+        .setAttribution(attribution(spec))
         .setBounds(source.bounds())
         .setCenter(center(spec))
         .setMinzoom(minzoom)
@@ -220,6 +216,63 @@ public final class MapCompiler {
         .setVectorLayers(layers);
     tileset.setDatabase(spec.database());
     return tileset;
+  }
+
+  /**
+   * The layers the terrain contributes to the tiles: traced from elevation rather than queried, so
+   * they carry no query, and described here because the tileset describes the tiles rather than the
+   * database.
+   *
+   * <p>
+   * A terrain layer nothing draws is left out. What the tracer produces is fixed, but a tileset
+   * that advertised a layer no style reads would be describing tiles by what could be in them.
+   */
+  private static List<TilesetLayer> terrainLayers(MapSpec spec,
+      Map<Integer, Map<String, Demand.Attributes>> demand) {
+    var terrain = spec.terrain();
+    if (terrain == null) {
+      return List.of();
+    }
+    var minzoom = Math.max(terrain.minzoom(), spec.source().minzoom());
+    var maxzoom = Math.min(terrain.maxzoom(), spec.source().maxzoom());
+    var layers = new ArrayList<TilesetLayer>();
+    for (var id : MapSpec.Terrain.LAYERS) {
+      var fields = new LinkedHashMap<String, String>();
+      var drawn = false;
+      for (int zoom = minzoom; zoom <= maxzoom; zoom++) {
+        var attributes = demand.get(zoom).get(id);
+        if (attributes == null) {
+          continue;
+        }
+        drawn = true;
+        attributes.keys().forEach(key -> fields.put(key, "String"));
+      }
+      if (drawn) {
+        layers.add(new TilesetLayer()
+            .setId(id)
+            .setFields(fields)
+            .setMinzoom(minzoom)
+            .setMaxzoom(maxzoom));
+      }
+    }
+    return layers;
+  }
+
+  /**
+   * What the tiles are attributed to: the data the queries answer with, and the elevation the
+   * terrain is traced from when the map has any. They travel in one source, so they are credited
+   * together.
+   */
+  private static String attribution(MapSpec spec) {
+    var source = spec.source().attribution();
+    var terrain = spec.terrain() == null ? null : spec.terrain().attribution();
+    if (source == null || source.isBlank()) {
+      return terrain;
+    }
+    if (terrain == null || terrain.isBlank()) {
+      return source;
+    }
+    return source + " " + terrain;
   }
 
   /**
@@ -282,18 +335,18 @@ public final class MapCompiler {
     var queries = new LinkedHashMap<String, List<MapSpec.Query>>();
     var declaredBy = new HashMap<String, String>();
 
-    var terrain = spec.terrain() == null ? null : spec.terrain().id();
+    var terrain = spec.terrain();
     for (var layer : spec.layers()) {
       var id = layer.getSourceLayer();
       if (id == null) {
         continue;
       }
-      // A layer reading the terrain reads tiles that are computed rather than queried, so it
+      // A layer drawing the terrain draws a source layer that is traced rather than queried, so it
       // neither declares a query nor leaves one owing.
-      if (terrain != null && terrain.equals(layer.getSource())) {
+      if (terrain != null && MapSpec.Terrain.LAYERS.contains(id)) {
         if (layer.getSourceQueries() != null) {
           throw new IllegalArgumentException(String.format(
-              "The layer '%s' reads the terrain, which is traced from elevation, "
+              "The layer '%s' draws the terrain, which is traced from elevation, "
                   + "so it cannot declare source-queries.",
               layer.getId()));
         }

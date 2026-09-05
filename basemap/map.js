@@ -19,7 +19,7 @@
  * The document has three parts and every property belongs to exactly one of them. How the map
  * presents itself is the style specification's own vocabulary, spelled its way. Where its tiles
  * come from is `source`, which is that specification's vector source. What the tiles are built out
- * of is `database` and `schema`, which the browser never sees. Then the layers.
+ * of is `database`, `schema` and `terrain`, which the browser never sees. Then the layers.
  *
  * A layer says how it is drawn and, for one layer per source layer, where its features come from;
  * everything else is worked out. Every layer reads the one source, so no layer names it. The
@@ -104,7 +104,8 @@ export default {
     glyphs: "https://www.baremaps.com/assets/fonts/{fontstack}/{range}.pbf",
 
     // The tiles the layers read, described the way the style specification describes a vector
-    // source. There is one, and every layer reads it, so no layer names it.
+    // source. There is one, and every layer reads it, so no layer names it. The relief and the
+    // contours travel in it too, traced from the elevation declared below.
     source: {
         url: `${config.host}/tiles.json`,
         tiles: [`${config.host}/tiles/{z}/{x}/{y}.mvt`],
@@ -114,16 +115,15 @@ export default {
         attribution: '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a>',
     },
 
-    // The elevation the relief and the contours are traced from, and the tiles they are served as.
-    // One declaration and not two: the tiles the browser reads are the archive, traced. Nothing
-    // about this reaches the database, and a map that declares no terrain has neither.
+    // The elevation the relief and the contours are traced from. Not a second source: the tiles
+    // above carry the traced shading and contours beside the layers the database answers with, so
+    // a place arrives once, with its roads. Nothing about this reaches the database, and a map
+    // that declares no terrain has none. Traced from zoom 4, below which relief is noise, and as
+    // deep as the tiles go, there being no second pyramid left to stretch a shallower tile from.
     terrain: {
         dem: config.dem,
         demMaxzoom: config.demMaxzoom,
-        tiles: [`${config.host}/terrain/{z}/{x}/{y}.mvt`],
-        bounds: config.bounds,
         minzoom: 4,
-        maxzoom: 14,
         attribution: '\u00a9 <a href="https://mapterhorn.com/">Mapterhorn</a>',
     },
 

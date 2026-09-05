@@ -66,29 +66,22 @@ public class Dev implements Callable<Integer> {
     var datasource = PostgresUtils.createDataSourceFromObject(tileset().getDatabase());
     var postgresVersion = PostgresUtils.getPostgresVersion(datasource);
 
-    var server = new WebServer(host, port)
-        // A specification is one file, so both watches land on it.
-        .resource(new ChangeResource(
-            mapPath != null ? mapPath : tilesetPath,
-            mapPath != null ? mapPath : stylePath))
-        .resource("/tiles", new VectorTileResource(
-            () -> new PostgresTileStore(datasource, tileset(), postgresVersion)))
-        .resource(new StyleResource(this::style))
-        .resource(new TilesetResource(this::tileset));
-
-    // The terrain is traced from elevation rather than queried, so it is served from here rather
-    // than through the tileset, and only by a map that declares one.
-    var terrain = MapInput.terrain(configReader, mapPath);
-    if (terrain == null) {
-      return run(server);
+    // The terrain is traced from elevation rather than queried, so it is merged into the tiles
+    // here rather than produced by the tileset. It is opened once, outside the supplier below,
+    // because the archive it reads cannot be changed by an edit to the map.
+    try (var terrainTileStore =
+        MapInput.terrainTileStore(MapInput.terrain(configReader, mapPath))) {
+      var server = new WebServer(host, port)
+          // A specification is one file, so both watches land on it.
+          .resource(new ChangeResource(
+              mapPath != null ? mapPath : tilesetPath,
+              mapPath != null ? mapPath : stylePath))
+          .resource("/tiles", new VectorTileResource(() -> MapInput.tileStore(
+              new PostgresTileStore(datasource, tileset(), postgresVersion), terrainTileStore)))
+          .resource(new StyleResource(this::style))
+          .resource(new TilesetResource(this::tileset));
+      server.files("/static", "viewer.html").assets(assetsPath).run();
     }
-    try (var terrainTileStore = MapInput.terrainTileStore(terrain)) {
-      return run(server.resource("/terrain", new VectorTileResource(() -> terrainTileStore)));
-    }
-  }
-
-  private int run(WebServer server) throws Exception {
-    server.files("/static", "viewer.html").assets(assetsPath).run();
     return 0;
   }
 

@@ -250,6 +250,18 @@ public class TerrariumElevationReader implements ElevationReader {
     }
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>
+   * The archive holds one tile of {@code tileSize} pixels per tile at its deepest level, and half
+   * as many pixels across for every level below that.
+   */
+  @Override
+  public int resolution(int zoom) {
+    return (int) Math.clamp(((long) tileSize << maxzoom) >> zoom, 1, Integer.MAX_VALUE);
+  }
+
   private static int log2(int value) {
     return Integer.numberOfTrailingZeros(value);
   }

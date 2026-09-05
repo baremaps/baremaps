@@ -75,24 +75,19 @@ public class Serve implements Callable<Integer> {
     var datasource = PostgresUtils.createDataSourceFromObject(tileset.getDatabase());
     var postgresVersion = PostgresUtils.getPostgresVersion(datasource);
 
-    var terrain = MapInput.terrain(configReader, mapPath);
-
-    try (var tileStore = new PostgresTileStore(datasource, tileset, postgresVersion);
-        var tileCache = new VectorTileCache(tileStore, CaffeineSpec.parse(cache));
-        var terrainTileStore = terrain == null ? null : MapInput.terrainTileStore(terrain);
-        // Tracing a terrain tile costs far more than reading one from the database, so it is worth
-        // caching even though its input never changes.
-        var terrainCache = terrainTileStore == null ? null
-            : new VectorTileCache(terrainTileStore, CaffeineSpec.parse(cache))) {
-      var server = new WebServer(host, port)
+    // The queries and, when the map declares terrain, the elevation it is traced from, merged
+    // into the one tile the map is served as. The cache holds that tile: what is expensive is
+    // producing either half, and a reader asks for both together.
+    try (var terrainTileStore = MapInput.terrainTileStore(MapInput.terrain(configReader, mapPath));
+        var tileStore = MapInput.tileStore(
+            new PostgresTileStore(datasource, tileset, postgresVersion), terrainTileStore);
+        var tileCache = new VectorTileCache(tileStore, CaffeineSpec.parse(cache))) {
+      new WebServer(host, port)
           .resource("/tiles", new VectorTileResource(() -> tileCache))
           .resource(new StyleResource(() -> style))
           .resource(new TileJSONResource(() -> tileJSON))
-          .resource(new SearchResource(datasource));
-      if (terrainCache != null) {
-        server.resource("/terrain", new VectorTileResource(() -> terrainCache));
-      }
-      server.files("/static", "server.html").assets(assetsPath).run();
+          .resource(new SearchResource(datasource))
+          .files("/static", "server.html").assets(assetsPath).run();
     }
     return 0;
   }

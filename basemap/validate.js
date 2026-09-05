@@ -43,28 +43,25 @@ import {simulate, DICHROMACY, ANOMALY} from './utils/vision.js';
 const source = map.source ?? {};
 const id = source.id ?? 'baremaps';
 const sources = {[id]: {type: 'vector', url: source.url}};
-// The terrain is a second source, traced from elevation rather than queried, so a layer naming it
-// has to find it here or the specification check below reports a source that does not exist.
-if (map.terrain) {
-    sources[map.terrain.id ?? 'terrain'] = {
-        type: 'vector',
-        tiles: map.terrain.tiles,
-        minzoom: map.terrain.minzoom,
-        maxzoom: map.terrain.maxzoom,
-        attribution: map.terrain.attribution,
-    };
-}
+
+/**
+ * The source layers the terrain contributes to those tiles, traced from elevation rather than
+ * queried. Named here as `MapSpec.Terrain.LAYERS` names them in the compiler: they are the layers
+ * that owe no query, and a layer drawing one starts where the tracing starts.
+ */
+const TERRAIN_LAYERS = ['hillshade', 'contour'];
+const terrainLayers = map.terrain ? TERRAIN_LAYERS : [];
+
 /**
  * The zoom each source layer's features begin at, read off the queries it is declared with.
  * MapCompiler gives a layer that names no minzoom the one belonging to what it reads, so the same
  * is done here for the checks below to see the style MapLibre is served.
  */
 const floors = {};
-const terrainId = map.terrain ? (map.terrain.id ?? 'terrain') : null;
 for (const layer of map.layers) {
     if (!layer.sourceLayer) continue;
     let floor;
-    if (terrainId && layer.source === terrainId) {
+    if (terrainLayers.includes(layer.sourceLayer)) {
         floor = map.terrain.minzoom ?? 0;
     } else if (layer.sourceQueries) {
         floor = Math.min(...layer.sourceQueries.map((query) => query.minzoom ?? 0));
@@ -86,7 +83,7 @@ const style = {
         ({
             ...layer,
             'source-layer': sourceLayer,
-            source: layer.source ?? id,
+            source: id,
             minzoom: layer.minzoom ?? (floors[sourceLayer] || undefined),
         })),
 };
@@ -940,15 +937,20 @@ async function checkSpec() {
 function checkSources() {
     const declared = new Map();
     const read = new Set();
-    const terrain = map.terrain ? (map.terrain.id ?? 'terrain') : null;
     for (const layer of map.layers) {
+        // There is one source and every layer reads it, so naming one names something the style
+        // does not have: the terrain used to be a source of its own and now travels in this one.
+        if (layer.source) {
+            error('source', `${layer.id}: names the source ${layer.source}, ` +
+                'but every layer reads the one the map declares as source');
+        }
         const id = layer.sourceLayer;
         if (!id) continue;
-        // A layer reading the terrain reads tiles that are traced from elevation rather than
-        // queried, so it neither declares a query nor leaves one owing.
-        if (terrain && layer.source === terrain) {
+        // A layer drawing the terrain draws a source layer that is traced from elevation rather
+        // than queried, so it neither declares a query nor leaves one owing.
+        if (terrainLayers.includes(id)) {
             if (layer.sourceQueries) {
-                error('source', `${layer.id}: reads the terrain, so it cannot declare source-queries`);
+                error('source', `${layer.id}: draws the terrain, so it cannot declare source-queries`);
             }
             continue;
         }

@@ -47,4 +47,25 @@ public interface ElevationReader extends AutoCloseable {
    * @throws TileStoreException if the elevation cannot be read
    */
   double[] read(TileCoord tileCoord, int tileSizePx, int tileBufferPx) throws TileStoreException;
+
+  /**
+   * How many pixels across a tile at this zoom the elevation has values of its own for.
+   *
+   * <p>
+   * A source runs out of detail at some depth, and past it every extra sample asked for is
+   * interpolated from the same few values. What is read back is smooth but it is not finer, and a
+   * caller that traces the grid rather than displaying it can tell: a shade follows the gradient,
+   * and interpolation breaks the gradient at the edge of every real pixel. So a caller asks how
+   * much there is to have before asking for it.
+   *
+   * <p>
+   * A source that cannot say offers as much as it is asked for, which is what a caller reading a
+   * grid to display it wants anyway.
+   *
+   * @param zoom the zoom level
+   * @return the side, in pixels, of the finest grid worth asking for over one tile
+   */
+  default int resolution(int zoom) {
+    return Integer.MAX_VALUE;
+  }
 }

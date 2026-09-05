@@ -122,7 +122,8 @@ export default {
     database: 'jdbc:postgresql://localhost:5432/baremaps',
     schema: ['queries/initialize.sql', /* ... */],
 
-    // The elevation the relief and the contours are traced from, if the map has any.
+    // The elevation the relief and the contours in those tiles are traced from, if the map
+    // has any.
     terrain: {dem: 'data/mapterhorn.pmtiles', /* ... */},
 
     // The layers, bottom to top.
@@ -139,8 +140,9 @@ identifier and identifiers compress badly. These properties used to sit at the
 top level, where they read as properties of the map rather than of its tiles; a
 map that still declares them there is refused rather than quietly ignored.
 
-`terrain` is the one exception to there being a single source, because it is the
-one thing the layers read that no query produces. It is described under
+`terrain` is not a second source. The relief and the contours are traced from
+elevation rather than answered by a query, but they travel in the same tiles as
+everything else, so a place arrives once with its roads. It is described under
 [Terrain](#terrain).
 
 A layer is a MapLibre style layer that also says where its features come from:
@@ -396,24 +398,29 @@ and `--style` instead of `--map`.
 ## Terrain
 
 The relief and the elevation contours are traced from a digital elevation model rather than
-queried from the database, so they are declared once, beside the source rather than inside it:
+queried from the database, so they are declared beside the source rather than inside it:
 
 ```
 terrain: {
     dem: 'data/mapterhorn.pmtiles',
     demMaxzoom: 12,
-    tiles: [`${config.host}/terrain/{z}/{x}/{y}.mvt`],
     minzoom: 4,
-    maxzoom: 14,
     attribution: '© Mapterhorn',
 },
 ```
 
-One declaration and not two, because the tiles the browser reads at `tiles` are the archive at
-`dem`, traced. `dem` names an archive of [terrarium][terrarium] encoded raster tiles, which is what
+This is not a second source. The tiles the browser reads carry `hillshade` and `contour` beside the
+layers the database answers with, so the relief of a place arrives with its roads, in one request,
+at the same zoom, through one style source. What this block says is where they are traced from and
+over which zoom levels, none of which the browser sees.
+
+`dem` names an archive of [terrarium][terrarium] encoded raster tiles, which is what
 [Mapterhorn][mapterhorn] publishes; `demMaxzoom` is the deepest level it holds, and `demTileSize`
-the side of one of its tiles, which defaults to 512 because that is what Mapterhorn ships. The
-remaining members mean what they mean in a style source and are written out to it unchanged.
+the side of one of its tiles, which defaults to 512 because that is what Mapterhorn ships.
+`minzoom` is the first zoom the terrain is traced at, below which relief is noise, and `maxzoom`
+defaults to the source's: a tile that carries no terrain has none, there being no second pyramid
+left for a client to stretch a shallower tile from. `attribution` is added to the source's, the
+tiles being one thing to credit.
 
 Download the archive, or an extract of it, to the path `dem` names:
 
@@ -427,14 +434,14 @@ has to match what was extracted: past it the archive is sampled beyond its resol
 smooth rather than wrong, and below it the detail is downloaded and never read. A map that declares
 terrain and finds no archive at that path is refused rather than served without relief.
 
-Two layers read it, and they name the source because they are the only ones that do not read the
-database:
+Two layers read it, and they read it as they read anything else: the source layers `hillshade` and
+`contour` are the two the terrain contributes to the tiles, and the compiler knows them by name as
+the ones that owe no query.
 
 ```
 export default asLayerObject({
     id: 'terrain_hillshade',
     type: 'fill',
-    source: 'terrain',
     sourceLayer: 'hillshade',
     // ...
 });
@@ -455,9 +462,11 @@ known and not by a filter in the style. The intervals are chosen for steep groun
 is how far apart the contours land on the screen, and on a mountain face the same interval draws
 them far closer together than it does on a hillside.
 
-Both are traced from a single elevation grid when a tile is asked for, which is why they arrive as
-two layers of one tile rather than as two sources. `map dev` traces them per request, `map serve`
-caches them alongside the vector tiles.
+Both are traced from a single elevation grid when a tile is asked for, and merged into the tile the
+queries answer with. `map dev` traces them per request, `map serve` caches the merged tile, and
+`map export` traces them into the archive it writes, so an exported map carries its own relief.
+Tracing is what a terrain tile costs, and the merge is what a client no longer pays: one request
+per place instead of two, and no zoom range that only half the map has.
 
 The elevation can also be previewed on its own, from an archive or from a GeoTIFF, without a
 database:

@@ -29,7 +29,6 @@ import theme from "../../theme.js";
 export default asLayerObject({
     id: 'terrain_hillshade',
     type: 'fill',
-    source: 'terrain',
     sourceLayer: 'hillshade',
     paint: {
         // The levels abut, and antialiasing every shared edge draws a seam along all of them.

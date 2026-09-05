@@ -31,8 +31,8 @@ import java.util.Map;
  * presents itself is the style specification's own vocabulary, spelled its way: {@code name},
  * {@code center}, {@code zoom}, {@code sprite}, {@code glyphs}. Where its tiles come from is
  * {@link Source}, which is that specification's vector source with one baremaps member added. What
- * the tiles are built out of is {@code database} and {@code schema}, which the browser never sees.
- * Then the layers.
+ * the tiles are built out of is {@code database}, {@code schema} and {@link Terrain}, which the
+ * browser never sees. Then the layers.
  *
  * <p>
  * A layer says how it is drawn and, for one layer per source layer, where its features come from.
@@ -53,7 +53,8 @@ import java.util.Map;
  * @param sprite the URL of the icon sprite
  * @param glyphs the URL template of the fonts
  * @param source the tiles the layers read
- * @param terrain the elevation the map is shaded and contoured from, if it is
+ * @param terrain the elevation the shading and the contours in those tiles are traced from, if the
+ *        map has any
  * @param database the database the queries are run against
  * @param schema the sql that has to run before the layers' own, in order: the extensions and
  *        functions the queries rely on, and the tables the sources are read out of
@@ -106,6 +107,13 @@ public record MapSpec(
     // A map with no source block still has a source, made of the defaults, so that nothing
     // downstream has to ask whether it is there.
     source = source == null ? new Source(null, null, null, null, null, null, null, null) : source;
+    // The terrain travels in that source, so a terrain that names no deepest level is traced as
+    // deep as the tiles go. Left shallower it would simply stop: the layers that read it have no
+    // second source to overzoom for them.
+    if (terrain != null && terrain.maxzoom() == null) {
+      terrain = new Terrain(terrain.dem(), terrain.demTileSize(), terrain.demMaxzoom(),
+          terrain.minzoom(), source.maxzoom(), terrain.attribution());
+    }
   }
 
   /**
@@ -155,57 +163,66 @@ public record MapSpec(
   }
 
   /**
-   * The elevation the map is shaded and contoured from.
+   * The elevation the shading and the contours are traced from.
    *
    * <p>
-   * This is one declaration and not two because the archive and the source are two ends of the same
-   * thing: the tiles the browser reads at {@code tiles} are the archive at {@code dem}, traced. A
-   * map that named them separately could name an archive nothing served and a source nothing
-   * produced, and would be right about neither.
+   * This is not a second source. The tiles the browser reads carry the {@code hillshade} and
+   * {@code contour} layers beside the ones the database answers with, so the shading and the
+   * contours of a place arrive with its roads, in one request, at the same zoom, from one style
+   * source. What this block says is where they are traced from and over which zoom levels, none of
+   * which the browser sees.
    *
    * <p>
-   * The archive holds terrarium encoded raster tiles, which is what Mapterhorn publishes; the tiles
-   * the layers read hold the {@code hillshade} and {@code contour} layers traced from it. Nothing
-   * about this reaches the database, and a map that declares no terrain has none: the source is not
-   * emitted and the tiles are not served.
+   * The archive holds terrarium encoded raster tiles, which is what Mapterhorn publishes. Nothing
+   * about this reaches the database, and a map that declares no terrain has none: the layers below
+   * {@link #LAYERS} are then left with nothing to draw, which is reported as any other source layer
+   * nothing produces would be.
    *
-   * @param id the name the style refers to the terrain tiles by; defaults to {@code terrain}
    * @param dem the path of the archive of terrarium tiles the terrain is traced from
    * @param demTileSize the side of a tile of that archive, in pixels; defaults to 512, which is
    *        what Mapterhorn publishes
    * @param demMaxzoom the deepest level that archive holds; defaults to 12, and a map that has a
    *        deeper archive says so rather than losing the detail
-   * @param tiles the URL templates the traced tiles are served from
-   * @param bounds the extent the terrain covers
-   * @param minzoom the lowest zoom level terrain tiles are produced for; defaults to 0
-   * @param maxzoom the highest zoom level terrain tiles are produced for; defaults to 14, past
-   *        which the browser stretches the deepest tile rather than tracing contours a meter apart
-   * @param attribution the attribution shown for the elevation data
+   * @param minzoom the lowest zoom level the terrain is traced at; defaults to 0
+   * @param maxzoom the highest zoom level it is traced at; defaults to the source's, because a tile
+   *        that carries no terrain has none to be stretched from a shallower one
+   * @param attribution the attribution shown for the elevation, which is added to the source's
    */
   public record Terrain(
-      @JsonProperty("id") String id,
       @JsonProperty("dem") String dem,
       @JsonProperty("demTileSize") Integer demTileSize,
       @JsonProperty("demMaxzoom") Integer demMaxzoom,
-      @JsonProperty("tiles") List<String> tiles,
-      @JsonProperty("bounds") List<Double> bounds,
       @JsonProperty("minzoom") Integer minzoom,
       @JsonProperty("maxzoom") Integer maxzoom,
       @JsonProperty("attribution") String attribution) {
 
-    private static final String DEFAULT_ID = "terrain";
+    /**
+     * The layer the shading is traced into, as six nested regions from the faintest to the
+     * strongest.
+     */
+    public static final String HILLSHADE = "hillshade";
+
+    /** The layer the elevation contours are traced into, as lines. */
+    public static final String CONTOUR = "contour";
+
+    /**
+     * The source layers the terrain contributes to the tiles.
+     *
+     * <p>
+     * They are named here, in the format, rather than only where they are traced, because this is
+     * what tells the compiler that a layer reading them is not a layer owing a query. The tracer
+     * takes its layer names from here for the two to stay one fact.
+     */
+    public static final List<String> LAYERS = List.of(HILLSHADE, CONTOUR);
+
     private static final int DEFAULT_DEM_TILE_SIZE = 512;
     private static final int DEFAULT_DEM_MAXZOOM = 12;
     private static final int DEFAULT_MINZOOM = 0;
-    private static final int DEFAULT_MAXZOOM = 14;
 
     public Terrain {
-      id = id == null ? DEFAULT_ID : id;
       demTileSize = demTileSize == null ? DEFAULT_DEM_TILE_SIZE : demTileSize;
       demMaxzoom = demMaxzoom == null ? DEFAULT_DEM_MAXZOOM : demMaxzoom;
-      tiles = tiles == null ? List.of() : tiles;
       minzoom = minzoom == null ? DEFAULT_MINZOOM : minzoom;
-      maxzoom = maxzoom == null ? DEFAULT_MAXZOOM : maxzoom;
       if (dem == null) {
         throw new IllegalArgumentException(
             "A map that declares terrain says where the elevation comes from, as 'terrain.dem'.");

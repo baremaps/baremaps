@@ -17,7 +17,6 @@ package com.baremaps.config;
 import static com.baremaps.testing.TestFiles.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,6 +28,8 @@ import com.baremaps.utils.ObjectMapperUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 public class TileSetTest {
@@ -52,25 +53,25 @@ public class TileSetTest {
 
     assertEquals("jdbc:postgresql://localhost:5432/baremaps?&user=baremaps&password=baremaps",
         tileSet.getDatabase());
-    // The terrain is traced from elevation rather than queried, so its layers belong to the style
-    // and not to the tileset: they are counted out of both sides of the comparison below.
-    var terrain = spec.terrain() == null ? null : spec.terrain().id();
-    var queried = spec.layers().stream()
+    // The terrain is traced from elevation rather than queried, so it travels in the same tiles as
+    // a layer the tileset describes and no query produces.
+    var terrainLayers = spec.terrain() == null ? List.<String>of() : MapSpec.Terrain.LAYERS;
+    var sourceLayers = spec.layers().stream()
         .filter(layer -> layer.getSourceLayer() != null)
-        .filter(layer -> terrain == null || !terrain.equals(layer.getSource()))
-        .map(com.baremaps.maplibre.map.MapLayer::getSourceLayer);
-    var sourceLayers = queried.distinct().toList();
+        .filter(layer -> !terrainLayers.contains(layer.getSourceLayer()))
+        .map(com.baremaps.maplibre.map.MapLayer::getSourceLayer)
+        .distinct().toList();
     // The source layers follow the paint order, so the first one painted comes first.
     assertEquals(sourceLayers.get(0), tileJSON.getVectorLayers().get(0).id());
-    assertEquals(sourceLayers.size(), tileSet.getVectorLayers().size());
+    assertEquals(sourceLayers.size() + terrainLayers.size(), tileSet.getVectorLayers().size());
 
-    // The style reads the terrain from its own source, which the tileset knows nothing about.
-    if (terrain != null) {
-      assertTrue(MapCompiler.style(spec).getSources().containsKey(terrain));
-      for (var layer : tileSet.getVectorLayers()) {
-        assertNotEquals("hillshade", layer.getId());
-        assertNotEquals("contour", layer.getId());
-      }
+    // Every layer reads the one source, the ones drawing the terrain included.
+    assertEquals(Set.of("baremaps"), MapCompiler.style(spec).getSources().keySet());
+    for (var id : terrainLayers) {
+      var layer = tileSet.getVectorLayers().stream()
+          .filter(vectorLayer -> vectorLayer.getId().equals(id))
+          .findFirst().orElseThrow();
+      assertTrue(layer.getQueries().isEmpty(), id);
     }
 
     // Nothing in the style draws with a feature identifier, so the queries do not select one.

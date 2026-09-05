@@ -28,7 +28,6 @@ import theme from "../../theme.js";
 export default {
     id: 'terrain_contour_label',
     type: 'symbol',
-    source: 'terrain',
     sourceLayer: 'contour',
     minzoom: 13,
     filter: ['==', ['get', 'index'], 'yes'],
